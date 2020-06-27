@@ -42,7 +42,7 @@ import design_baselines.dev as dev
 # create a design problem using a curated dataset
 p = fct.AntMorphology()
 
-# create a design problem using a curated dataset
+# create an algorithm for solving design problems
 a = dev.ForwardModel(p)
 
 # sample designs from the dataset
