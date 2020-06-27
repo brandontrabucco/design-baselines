@@ -24,10 +24,10 @@ pip install -e ./design-baselines/design-bench
 You can instantiate a design problem using the factory module.
 
 ```python
-import design_bench.factory as fty
+import design_bench.factory as fct
 
 # create a design problem using a curated dataset
-p = fty.AntMorphology()
+p = fct.AntMorphology()
 
 # sample designs from the dataset
 design = p.sample(n=1)
@@ -36,11 +36,11 @@ design = p.sample(n=1)
 You can find samples that solve a design problem using an algorithm.
 
 ```python
-import design_bench.factory as fty
+import design_bench.factory as fct
 import design_baselines.dev as dev
 
 # create a design problem using a curated dataset
-p = fty.AntMorphology()
+p = fct.AntMorphology()
 
 # create a design problem using a curated dataset
 a = dev.ForwardModel(p)
@@ -50,8 +50,6 @@ design = a.solve()
 ```
 
 ## Contributing
-
-    is_offline, is_batched, design_space, score
 
 New design problems can be added to the `design-bench` repository in the factory module. These design problems can have both continuous and discrete components, and  must implement the abstract methods found in the base `DesignProblem` class. In particular, these methods are `is_offline`, `is_batched`, `design_space`, and `score.`
 
