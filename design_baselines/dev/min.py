@@ -73,8 +73,8 @@ class MIN(Algorithm):
         layers.append(tf.keras.layers.Activation('sigmoid'))
         self.discriminator = tf.keras.Sequential(layers)
 
-        g_optim = tf.keras.optimizers.Adam()
-        d_optim = tf.keras.optimizers.Adam()
+        g_optim = tf.keras.optimizers.Adam(learning_rate=0.000001)
+        d_optim = tf.keras.optimizers.Adam(learning_rate=0.000001)
 
         for i in range(training_iterations):
 
@@ -83,39 +83,39 @@ class MIN(Algorithm):
 
             # train the generator
 
-            with tf.GradientTape() as g_tape:
+            if i % 5 == 0:
 
-                noise = tf.random.normal([batch_size, self.latent_dim])
-                x = design.score
-                if design.condition is not None:
+                with tf.GradientTape() as g_tape:
 
-                    if design.condition.is_continuous:
-                        x = tf.concat([x, design.condition.cont], axis=-1)
+                    x = design.score
+                    if design.condition is not None:
 
-                    if design.condition.is_discrete:
-                        z = tf.one_hot(design.condition.disc, self.discrete_size)
-                        z = tf.reshape(z, [tf.shape(z)[0],
-                                           tf.shape(z)[1] * self.discrete_size])
-                        x = tf.concat([x, z], axis=-1)
+                        if design.condition.is_continuous:
+                            x = tf.concat([x, design.condition.cont], axis=-1)
 
-                sample = self.generator(tf.concat([x, noise], axis=-1),
-                                        training=True) * self.scale + self.shift
-                fake_validity = self.discriminator(
-                    tf.concat([sample, x], axis=-1), training=True)
+                        if design.condition.is_discrete:
+                            z = tf.one_hot(design.condition.disc, self.discrete_size)
+                            z = tf.reshape(z, [tf.shape(z)[0],
+                                               tf.shape(z)[1] * self.discrete_size])
+                            x = tf.concat([x, z], axis=-1)
 
-                loss = -tf.reduce_mean(tf.math.log(1.0 - fake_validity))
-                print(f"g iteration {i} loss {loss.numpy()}")
+                    noise = tf.random.normal([batch_size, self.latent_dim])
+                    sample = self.generator(tf.concat([x, noise], axis=-1),
+                                            training=True) * self.scale + self.shift
+                    fake_validity = self.discriminator(
+                        tf.concat([sample, x], axis=-1), training=True)
 
-            grads = g_tape.gradient(
-                loss, self.generator.trainable_variables)
-            g_optim.apply_gradients(
-                zip(grads, self.generator.trainable_variables))
+                    loss = tf.reduce_mean(tf.math.log(1.0 - fake_validity))
+
+                grads = g_tape.gradient(
+                    loss, self.generator.trainable_variables)
+                g_optim.apply_gradients(
+                    zip(grads, self.generator.trainable_variables))
 
             # train the discriminator
 
             with tf.GradientTape() as d_tape:
 
-                noise = tf.random.normal([batch_size, self.latent_dim])
                 x = design.score
                 if design.condition is not None:
 
@@ -128,6 +128,7 @@ class MIN(Algorithm):
                                            tf.shape(z)[1] * self.discrete_size])
                         x = tf.concat([x, z], axis=-1)
 
+                noise = tf.random.normal([batch_size, self.latent_dim])
                 sample = self.generator(tf.concat([x, noise], axis=-1),
                                         training=True) * self.scale + self.shift
                 fake_validity = self.discriminator(
@@ -135,16 +136,20 @@ class MIN(Algorithm):
                 real_validity = self.discriminator(
                     tf.concat([design.cont, x], axis=-1), training=True)
 
-                loss = tf.reduce_mean(tf.math.log(real_validity) +
-                                      tf.math.log(1.0 - fake_validity))
-                print(f"d iteration {i} loss {loss.numpy()}")
+                loss = -tf.reduce_mean(tf.math.log(real_validity) +
+                                       tf.math.log(1.0 - fake_validity))
+                fake_acc = tf.reduce_mean(tf.cast(fake_validity < 0.5, tf.float32))
+                real_acc = tf.reduce_mean(tf.cast(real_validity > 0.5, tf.float32))
+                print(f"d iteration {i} fake {fake_acc.numpy()} real {real_acc.numpy()}")
 
             grads = d_tape.gradient(
                 loss, self.discriminator.trainable_variables)
             d_optim.apply_gradients(
                 zip(grads, self.discriminator.trainable_variables))
 
-    def solve(self, condition: Container = None) -> Design:
+    def solve(self,
+              score: np.ndarray = None,
+              condition: Container = None) -> Design:
         """
         Solve the design problem by conditioning on inputs and finding a
         design that maximizes the design problem score
@@ -156,8 +161,9 @@ class MIN(Algorithm):
             For example, conditioning on an attribute like color
         """
 
-        noise = tf.random.normal([1, self.latent_dim])
-        x = condition.score
+        assert score is not None
+
+        x = score
         if condition is not None:
 
             if condition.is_continuous:
@@ -169,11 +175,12 @@ class MIN(Algorithm):
                                    tf.shape(z)[1] * self.discrete_size])
                 x = tf.concat([x, z], axis=-1)
 
+        noise = tf.random.normal([1, self.latent_dim])
         sample = self.generator(tf.concat([x, noise], axis=-1),
                                 training=True) * self.scale + self.shift
 
         design = self.design_problem.design_space.sample(n=1)
         design.cont = sample.numpy()
-        design.score = condition.score
+        design.score = score
         design.condition = condition
         return design
