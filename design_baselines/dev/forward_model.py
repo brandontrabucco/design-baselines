@@ -21,7 +21,7 @@ class ForwardModel(Algorithm):
                  num_layers=2,
                  hidden_size=512,
                  batch_size=32,
-                 training_iterations=10000):
+                 training_iterations=2000):
         """
         Create a general interface for optimizations algorithms that solve
         model-based optimization problems
