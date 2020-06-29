@@ -21,7 +21,8 @@ class ForwardModel(Algorithm):
                  num_layers=2,
                  hidden_size=512,
                  batch_size=32,
-                 training_iterations=2000):
+                 training_iterations=2000,
+                 discrete_size=1000):
         """
         Create a general interface for optimizations algorithms that solve
         model-based optimization problems
@@ -36,7 +37,10 @@ class ForwardModel(Algorithm):
         Algorithm.__init__(self,
                            design_problem,
                            num_layers=num_layers,
-                           hidden_size=hidden_size)
+                           hidden_size=hidden_size,
+                           batch_size=batch_size,
+                           training_iterations=training_iterations,
+                           discrete_size=discrete_size)
 
         assert self.design_problem.is_continuous
 
@@ -61,7 +65,10 @@ class ForwardModel(Algorithm):
                         x = tf.concat([x, design.condition.cont], axis=-1)
 
                     if design.condition.is_discrete:
-                        x = [x, design.condition.disc]
+                        z = tf.one_hot(design.condition.disc, self.discrete_size)
+                        z = tf.reshape(z, [tf.shape(z)[0],
+                                           tf.shape(z)[1] * self.discrete_size])
+                        x = tf.concat([x, z], axis=-1)
 
                 loss = tf.reduce_mean(
                     tf.keras.losses.logcosh(
@@ -101,7 +108,10 @@ class ForwardModel(Algorithm):
                         x = tf.concat([x, design.condition.cont], axis=-1)
 
                     if design.condition.is_discrete:
-                        x = [x, design.condition.disc]
+                        z = tf.one_hot(design.condition.disc, self.discrete_size)
+                        z = tf.reshape(z, [tf.shape(z)[0],
+                                           tf.shape(z)[1] * self.discrete_size])
+                        x = tf.concat([x, z], axis=-1)
 
                 loss = -tf.reduce_mean(self.m(x))
 
