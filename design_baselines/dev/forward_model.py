@@ -1,6 +1,7 @@
 from design_baselines.core import Algorithm
 from design_bench.core import DesignProblem, Design, Container
 import tensorflow as tf
+import numpy as np
 
 
 class ForwardModel(Algorithm):
@@ -20,7 +21,7 @@ class ForwardModel(Algorithm):
                  num_layers=2,
                  hidden_size=512,
                  batch_size=32,
-                 training_iterations=1000):
+                 training_iterations=10000):
         """
         Create a general interface for optimizations algorithms that solve
         model-based optimization problems
@@ -49,6 +50,7 @@ class ForwardModel(Algorithm):
         optim = tf.keras.optimizers.Adam()
         for i in range(training_iterations):
             design = self.design_problem.sample(n=batch_size)
+            design.score = np.nan_to_num(design.score)
 
             with tf.GradientTape() as tape:
 
