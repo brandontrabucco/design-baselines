@@ -1,6 +1,5 @@
 from design_baselines.core import Algorithm
-from design_bench.core import DesignProblem, Design
-from typing import Any
+from design_bench.core import DesignProblem, Design, Container
 import tensorflow as tf
 
 
@@ -21,7 +20,7 @@ class ForwardModel(Algorithm):
                  num_layers=2,
                  hidden_size=512,
                  batch_size=32,
-                 training_iterations=10000):
+                 training_iterations=1000):
         """
         Create a general interface for optimizations algorithms that solve
         model-based optimization problems
@@ -50,12 +49,21 @@ class ForwardModel(Algorithm):
         optim = tf.keras.optimizers.Adam()
         for i in range(training_iterations):
             design = self.design_problem.sample(n=batch_size)
-            print(design.cont[0].tolist())
 
             with tf.GradientTape() as tape:
+
+                x = design.cont
+                if design.condition is not None:
+
+                    if design.condition.is_continuous:
+                        x = tf.concat([x, design.condition.cont], axis=-1)
+
+                    if design.condition.is_discrete:
+                        x = [x, design.condition.disc]
+
                 loss = tf.reduce_mean(
                     tf.keras.losses.logcosh(
-                        design.score, self.m(design.cont)))
+                        design.score, self.m(x)))
                 print(f"iteration {i} loss {loss.numpy()}")
 
             grads = tape.gradient(
@@ -63,7 +71,7 @@ class ForwardModel(Algorithm):
             optim.apply_gradients(
                 zip(grads, self.m.trainable_variables))
 
-    def solve(self, inputs: Any = None) -> Design:
+    def solve(self, condition: Container = None) -> Design:
         """
         Solve the design problem by conditioning on inputs and finding a
         design that maximizes the design problem score
@@ -76,17 +84,42 @@ class ForwardModel(Algorithm):
         """
 
         design = self.design_problem.design_space.sample(n=1)
-        x = tf.Variable(tf.convert_to_tensor(design.cont))
+        design.condition = condition
+        design.cont = tf.Variable(tf.convert_to_tensor(design.cont))
 
         optim = tf.keras.optimizers.Adam()
         for i in range(100):
 
             with tf.GradientTape() as tape:
+
+                x = design.cont
+                if design.condition is not None:
+
+                    if design.condition.is_continuous:
+                        x = tf.concat([x, design.condition.cont], axis=-1)
+
+                    if design.condition.is_discrete:
+                        x = [x, design.condition.disc]
+
                 loss = -tf.reduce_mean(self.m(x))
 
-            grads = tape.gradient(loss, [x])
-            optim.apply_gradients(zip(grads, [x]))
+            grads = tape.gradient(loss, [design.cont])
+            optim.apply_gradients(zip(grads, [design.cont]))
+
+            design.cont.assign(tf.clip_by_value(
+                design.cont,
+                self.design_problem.design_space.lower,
+                self.design_problem.design_space.upper))
+
+        x = design.cont
+        if design.condition is not None:
+
+            if design.condition.is_continuous:
+                x = tf.concat([x, design.condition.cont], axis=-1)
+
+            if design.condition.is_discrete:
+                x = [x, design.condition.disc]
 
         design.cont = x.numpy()
-        design.score = self.m(design.cont).numpy()
+        design.score = self.m(x).numpy()
         return design
