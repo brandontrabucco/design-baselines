@@ -19,7 +19,9 @@ class ForwardModel(Algorithm):
     def __init__(self,
                  design_problem: DesignProblem,
                  num_layers=2,
-                 hidden_size=512):
+                 hidden_size=512,
+                 batch_size=32,
+                 training_iterations=10000):
         """
         Create a general interface for optimizations algorithms that solve
         model-based optimization problems
@@ -46,13 +48,15 @@ class ForwardModel(Algorithm):
         self.m = tf.keras.Sequential(layers)
 
         optim = tf.keras.optimizers.Adam()
-        for i in range(1000):
-            design = self.design_problem.sample(n=32)
+        for i in range(training_iterations):
+            design = self.design_problem.sample(n=batch_size)
+            print(design.cont[0].tolist())
 
             with tf.GradientTape() as tape:
                 loss = tf.reduce_mean(
                     tf.keras.losses.logcosh(
                         design.score, self.m(design.cont)))
+                print(f"iteration {i} loss {loss.numpy()}")
 
             grads = tape.gradient(
                 loss, self.m.trainable_variables)
@@ -78,7 +82,7 @@ class ForwardModel(Algorithm):
         for i in range(100):
 
             with tf.GradientTape() as tape:
-                loss = -tf.reduce_mean(self.m(design.cont))
+                loss = -tf.reduce_mean(self.m(x))
 
             grads = tape.gradient(loss, [x])
             optim.apply_gradients(zip(grads, [x]))

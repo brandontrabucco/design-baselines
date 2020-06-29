@@ -1,5 +1,4 @@
-from design_bench.core import DesignProblem, Design
-from typing import Any
+from design_bench.core import DesignProblem, Design, Container
 import abc
 
 
@@ -45,7 +44,7 @@ class Algorithm(abc.ABC):
         return self.design_problem.is_fused
 
     @abc.abstractmethod
-    def solve(self, inputs: Any = None) -> Design:
+    def solve(self, condition: Container = None) -> Design:
         """
         Solve the design problem by conditioning on inputs and finding a
         design that maximizes the design problem score
