@@ -112,6 +112,7 @@ class ForwardModel(Algorithm):
                 self.design_problem.design_space.upper))
 
         x = design.cont
+        design.cont = x.numpy()
         if design.condition is not None:
 
             if design.condition.is_continuous:
@@ -120,6 +121,5 @@ class ForwardModel(Algorithm):
             if design.condition.is_discrete:
                 x = [x, design.condition.disc]
 
-        design.cont = x.numpy()
         design.score = self.m(x).numpy()
         return design
