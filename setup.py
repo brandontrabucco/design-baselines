@@ -3,6 +3,8 @@ from setuptools import setup
 
 
 REQUIRED_PACKAGES = ['tensorflow==2.2',
+                     'torch==1.2.0',
+                     'torchvision==0.4.0',
                      'matplotlib']
 
 

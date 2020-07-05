@@ -51,7 +51,7 @@ class ForwardModel(Algorithm):
         layers.append(tf.keras.layers.Dense(1))
         self.m = tf.keras.Sequential(layers)
 
-        optim = tf.keras.optimizers.Adam()
+        optim = tf.keras.optimizers.Adam(learning_rate=0.0001)
         for i in range(training_iterations):
             design = self.design_problem.sample(n=batch_size)
             design.score = np.nan_to_num(design.score)
