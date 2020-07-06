@@ -1,55 +1,41 @@
 from design_baselines.core import Algorithm
 from design_bench.core import DesignProblem, Design, Container
+import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
 
 
-class DenseInputLayer(nn.Module):
+class DenseConditionalGenerator(nn.Module):
 
-    def __init__(self, input_size, hidden_size):
-        super(DenseInputLayer, self).__init__()
-        self.lin = nn.Linear(input_size, hidden_size)
-        self.emb = nn.Embedding(num_embeddings, embedding_size)
-
-    def forward(self, *xs):
-        emb = self.emb(xs[1])
-        return torch.cat((self.lin(xs[0]), emb), dim=1), emb
-
-
-class DenseResBlock(nn.Module):
-
-    def __init__(self, input_size, hidden_size, embedding_size=None):
-        super(DenseResBlock, self).__init__()
-        self.bn0 = nn.BatchNorm1d(input_size),
-        self.relu0 = nn.ReLU(),
-        self.lin0 = nn.Linear(input_size, hidden_size),
-        self.bn1 = nn.BatchNorm1d(hidden_size),
-        self.relu1 = nn.ReLU(),
-        self.lin1 = nn.Linear(hidden_size, input_size)
-
-    def forward(self, *xs):
-
-        h = self.
-
-        return xs[0] + self.model(x)
-
-
-class ConvResBlock(nn.Module):
-
-    def __init__(self, input_size, hidden_size):
-        super(ConvResBlock, self).__init__()
+    def __init__(self, latent_size, hidden_size, output_size):
+        super(DenseConditionalGenerator, self).__init__()
         self.model = nn.Sequential(
-            nn.BatchNorm2d(input_size),
+            nn.Linear(latent_size + 1, hidden_size),
+            nn.LayerNorm(hidden_size),
             nn.ReLU(),
-            nn.Conv2d(input_size, hidden_size, 3, padding=1),
-            nn.BatchNorm2d(hidden_size),
+            nn.Linear(hidden_size, hidden_size),
+            nn.LayerNorm(hidden_size),
             nn.ReLU(),
-            nn.Conv2d(hidden_size, input_size, 3, padding=1))
+            nn.Linear(hidden_size, output_size),
+            nn.Tanh())
 
-    def forward(self, x):
-        return x + self.model(x)
+    def forward(self, z, y):
+        return self.model(torch.cat([z, y], dim=1))
+
+
+class DenseConditionalDiscriminator(nn.Module):
+
+    def __init__(self, input_size, hidden_size):
+        super(DenseConditionalDiscriminator, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(input_size + 1, hidden_size),
+            nn.LeakyReLU(negative_slope=0.2),
+            nn.Linear(hidden_size, hidden_size),
+            nn.LeakyReLU(negative_slope=0.2),
+            nn.Linear(hidden_size, 1))
+
+    def forward(self, x, y):
+        return self.model(torch.cat([x, y], dim=1))
 
 
 class LSGAN(Algorithm):
@@ -93,18 +79,68 @@ class LSGAN(Algorithm):
         assert self.design_problem.is_continuous
 
         # sample bounds for the generator
-        self.shift = (self.design_problem.design_space.upper +
-                      self.design_problem.design_space.lower) / 2
-        self.scale = (self.design_problem.design_space.upper -
-                      self.design_problem.design_space.lower) / 2
+        self.shift = torch.FloatTensor(
+            self.design_problem.design_space.upper[np.newaxis] +
+            self.design_problem.design_space.lower[np.newaxis]
+        ).cuda() / 2
+        self.scale = torch.FloatTensor(
+            self.design_problem.design_space.upper[np.newaxis] -
+            self.design_problem.design_space.lower[np.newaxis]
+        ).cuda() / 2
 
-        generator = nn.Sequential(
-            nn.Linear(1 + latent_dim, hidden_size),
-            DenseResBlock(hidden_size, hidden_size * 2),
-            DenseResBlock(hidden_size, hidden_size * 2),
-            DenseResBlock(hidden_size, hidden_size * 2),
-            nn.Linear(hidden_size, self.shift.size),
-        )
+        self.G = DenseConditionalGenerator(latent_dim, hidden_size, self.shift.shape[1])
+        self.D = DenseConditionalDiscriminator(self.shift.shape[1], hidden_size)
+
+        self.G.cuda()
+        self.D.cuda()
+
+        self.G.train()
+        self.D.train()
+
+        self.G_optim = torch.optim.Adam(
+            self.G.parameters(), lr=2e-5, betas=(0.5, 0.999))
+        self.D_optim = torch.optim.Adam(
+            self.D.parameters(), lr=2e-5, betas=(0.5, 0.999))
+
+        # Train
+
+        for i in range(training_iterations):
+            design = self.design_problem.sample(n=batch_size)
+            design.score = np.nan_to_num(design.score)
+
+            x = torch.FloatTensor(design.cont).cuda()
+            y = torch.FloatTensor(design.score).cuda()
+
+            d_real = self.D(x, y).mean()
+
+            real_p = 0.5 * ((self.D(x, y) - 1) ** 2).mean()
+
+            fake_x = self.G(torch.randn(x.shape[0], self.latent_dim).cuda(), y)
+            fake_x = fake_x * self.scale + self.shift
+
+            d_fake = self.D(fake_x, y).mean()
+
+            fake_p = 0.5 * (self.D(fake_x, y) ** 2).mean()
+
+            D_loss = real_p + fake_p
+
+            self.D.zero_grad()
+            D_loss.backward()
+            self.D_optim.step()
+
+            fake_x = self.G(torch.randn(x.shape[0], self.latent_dim).cuda(), y)
+            fake_x = fake_x * self.scale + self.shift
+
+            fake_p = 0.5 * ((self.D(fake_x, y) - 1) ** 2).mean()
+
+            G_loss = fake_p
+
+            self.G.zero_grad()
+            G_loss.backward()
+            self.G_optim.step()
+
+            print(f"i {i} : G Loss {G_loss} : D Loss {D_loss} : "
+                  f"D(x) {d_real} : D(G(z)) {d_fake}")
 
     def solve(self,
               score: np.ndarray = None,
@@ -122,24 +158,14 @@ class LSGAN(Algorithm):
 
         assert score is not None
 
-        x = score
-        if condition is not None:
+        self.G.eval()
 
-            if condition.is_continuous:
-                x = tf.concat([x, condition.cont], axis=-1)
-
-            if condition.is_discrete:
-                z = tf.one_hot(condition.disc, self.discrete_size)
-                z = tf.reshape(z, [tf.shape(z)[0],
-                                   tf.shape(z)[1] * self.discrete_size])
-                x = tf.concat([x, z], axis=-1)
-
-        noise = tf.random.normal([1, self.latent_dim])
-        sample = self.generator(tf.concat([x, noise], axis=-1),
-                                training=True) * self.scale + self.shift
+        x = torch.randn(score.shape[0], self.latent_dim).cuda()
+        y = torch.FloatTensor(score).cuda()
+        sample = self.G(x, y) * self.scale + self.shift
 
         design = self.design_problem.design_space.sample(n=1)
-        design.cont = sample.numpy()
+        design.cont = sample.cpu().detach().numpy()
         design.score = score
         design.condition = condition
         return design
