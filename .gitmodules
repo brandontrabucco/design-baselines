@@ -1,3 +1,6 @@
 [submodule "design-bench"]
 	path = design-bench
 	url = git@github.com:brandontrabucco/design-bench.git
+[submodule "morphing-agents"]
+	path = morphing-agents
+	url = http://github.com/brandontrabucco/morphing-agents.git
