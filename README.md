@@ -17,6 +17,7 @@ You can install the baselines benchmarks with the following command.
 git clone github.com/brandontrabucco/design-baselines.git
 pip install -e ./design-baselines
 pip install -e ./design-baselines/design-bench
+pip install -e ./design-baselines/morphing-agents
 ```
 
 ## Usage

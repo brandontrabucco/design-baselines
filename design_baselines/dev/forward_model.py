@@ -21,7 +21,7 @@ class ForwardModel(Algorithm):
                  num_layers=2,
                  hidden_size=512,
                  batch_size=32,
-                 training_iterations=2000,
+                 training_iterations=10000,
                  discrete_size=1000):
         """
         Create a general interface for optimizations algorithms that solve
@@ -51,7 +51,7 @@ class ForwardModel(Algorithm):
         layers.append(tf.keras.layers.Dense(1))
         self.m = tf.keras.Sequential(layers)
 
-        optim = tf.keras.optimizers.Adam(learning_rate=0.0001)
+        optim = tf.keras.optimizers.Adam(learning_rate=0.00001)
         for i in range(training_iterations):
             design = self.design_problem.sample(n=batch_size)
             design.score = np.nan_to_num(design.score)
