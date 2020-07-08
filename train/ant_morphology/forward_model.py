@@ -8,9 +8,9 @@ import os
 if __name__ == "__main__":
 
     designs = []
-    for i in range(10):
+    for i in range(3):
         alg = dev.ForwardModel(fct.AntMorphology())
-        for j in range(10):
+        for j in range(3):
             x = alg.solve().cont[0]
             designs.append([
                 LEG(*x[:15]), LEG(*x[15:30]), LEG(*x[30:45]), LEG(*x[45:60])])

@@ -8,9 +8,9 @@ import os
 if __name__ == "__main__":
 
     designs = []
-    for i in range(10):
+    for i in range(3):
         alg = dev.ForwardModel(fct.DKittyMorphology())
-        for j in range(10):
+        for j in range(3):
             x = alg.solve().cont[0]
             designs.append([
                 LEG(*x[:14]), LEG(*x[14:28]), LEG(*x[28:42]), LEG(*x[42:56])])
