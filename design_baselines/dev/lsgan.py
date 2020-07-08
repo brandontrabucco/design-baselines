@@ -52,11 +52,10 @@ class LSGAN(Algorithm):
 
     def __init__(self,
                  design_problem: DesignProblem,
-                 hidden_size=512,
+                 hidden_size=256,
                  batch_size=32,
-                 training_iterations=2000,
-                 discrete_size=1000,
-                 latent_dim=256):
+                 training_iterations=20000,
+                 latent_dim=32):
         """
         Create a general interface for optimizations algorithms that solve
         model-based optimization problems
@@ -73,7 +72,6 @@ class LSGAN(Algorithm):
                            hidden_size=hidden_size,
                            batch_size=batch_size,
                            training_iterations=training_iterations,
-                           discrete_size=discrete_size,
                            latent_dim=latent_dim)
 
         assert self.design_problem.is_continuous
@@ -81,12 +79,10 @@ class LSGAN(Algorithm):
         # sample bounds for the generator
         self.shift = torch.FloatTensor(
             self.design_problem.design_space.upper[np.newaxis] +
-            self.design_problem.design_space.lower[np.newaxis]
-        ).cuda() / 2
+            self.design_problem.design_space.lower[np.newaxis]).cuda() / 2
         self.scale = torch.FloatTensor(
             self.design_problem.design_space.upper[np.newaxis] -
-            self.design_problem.design_space.lower[np.newaxis]
-        ).cuda() / 2
+            self.design_problem.design_space.lower[np.newaxis]).cuda() / 2
 
         self.G = DenseConditionalGenerator(latent_dim, hidden_size, self.shift.shape[1])
         self.D = DenseConditionalDiscriminator(self.shift.shape[1], hidden_size)
@@ -98,9 +94,9 @@ class LSGAN(Algorithm):
         self.D.train()
 
         self.G_optim = torch.optim.Adam(
-            self.G.parameters(), lr=2e-5, betas=(0.5, 0.999))
+            self.G.parameters(), lr=2e-4, betas=(0.5, 0.999))
         self.D_optim = torch.optim.Adam(
-            self.D.parameters(), lr=2e-5, betas=(0.5, 0.999))
+            self.D.parameters(), lr=2e-4, betas=(0.5, 0.999))
 
         # Train
 
