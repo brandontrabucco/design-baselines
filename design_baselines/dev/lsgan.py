@@ -85,7 +85,7 @@ class LSGAN(Algorithm):
             self.design_problem.design_space.lower[np.newaxis]).cuda() / 2
 
         self.G = DenseConditionalGenerator(latent_dim, hidden_size, self.shift.shape[1])
-        self.D = DenseConditionalDiscriminator(self.shift.shape[1], hidden_size)
+        self.D = DenseConditionalDiscriminator(self.shift.shape[1], 4)
 
         self.G.cuda()
         self.D.cuda()
@@ -107,14 +107,14 @@ class LSGAN(Algorithm):
             x = torch.FloatTensor(design.cont).cuda()
             y = torch.FloatTensor(design.score).cuda()
 
-            d_real = self.D(x, y).mean()
+            d_real = (self.D(x, y) > 0.5).type(torch.FloatTensor).mean()
 
             real_p = 0.5 * ((self.D(x, y) - 1) ** 2).mean()
 
             fake_x = self.G(torch.randn(x.shape[0], self.latent_dim).cuda(), y)
             fake_x = fake_x * self.scale + self.shift
 
-            d_fake = self.D(fake_x, y).mean()
+            d_fake = (self.D(fake_x, y) < 0.5).type(torch.FloatTensor).mean()
 
             fake_p = 0.5 * (self.D(fake_x, y) ** 2).mean()
 

@@ -11,7 +11,7 @@ if __name__ == "__main__":
     designs = []
     for i in range(3):
         alg = dev.LSGAN(fct.AntMorphology())
-        for j in range(3):
+        for j in range(1):
             x = alg.solve(score=np.array([[1000.0]])).cont[0]
             designs.append([
                 LEG(*x[:15]), LEG(*x[15:30]), LEG(*x[30:45]), LEG(*x[45:60])])

@@ -51,7 +51,7 @@ class ForwardModel(Algorithm):
         layers.append(tf.keras.layers.Dense(1))
         self.m = tf.keras.Sequential(layers)
 
-        optim = tf.keras.optimizers.Adam(learning_rate=0.00001)
+        optim = tf.keras.optimizers.Adam(learning_rate=0.0001)
         for i in range(training_iterations):
             design = self.design_problem.sample(n=batch_size)
             design.score = np.nan_to_num(design.score)
@@ -97,7 +97,7 @@ class ForwardModel(Algorithm):
         design.cont = tf.Variable(tf.convert_to_tensor(design.cont))
 
         optim = tf.keras.optimizers.Adam()
-        for i in range(100):
+        for i in range(10):
 
             with tf.GradientTape() as tape:
 

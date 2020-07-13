@@ -6,7 +6,7 @@ import numpy as np
 
 if __name__ == "__main__":
 
-    p = fct.DogMorphology()
+    p = fct.DogMorphology(curated=True)
 
     df = pd.DataFrame.from_dict(
         {
@@ -19,5 +19,20 @@ if __name__ == "__main__":
     plt.xlabel("Average Return")
     plt.ylabel("Number of Examples")
     plt.title("Coverage of Dog Morphology")
-    plt.savefig('dog_dataset.png')
+    plt.savefig('dog_dataset_curated.png')
+
+    p = fct.DogMorphology(curated=False)
+
+    df = pd.DataFrame.from_dict(
+        {
+            #"robot": p._robots,
+            "score": np.nan_to_num(p._scores[:, 0]),
+        }
+    )
+
+    df.hist(bins=100, column='score')
+    plt.xlabel("Average Return")
+    plt.ylabel("Number of Examples")
+    plt.title("Coverage of Dog Morphology")
+    plt.savefig('dog_dataset_uniform.png')
 
