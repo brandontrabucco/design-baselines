@@ -51,7 +51,8 @@ class LSGAN(Algorithm):
     """
 
     def __init__(self,
-                 design_problem: DesignProblem,
+                 training_dp: DesignProblem,
+                 validation_dp: DesignProblem,
                  hidden_size=256,
                  batch_size=32,
                  training_iterations=20000,
@@ -62,27 +63,31 @@ class LSGAN(Algorithm):
 
         Arguments:
 
-        design_problem: DesignProblem
+        training_dp: DesignProblem
             A specific design problem that will be solved using the algorithm
             implemented in this class
+        validation_dp: DesignProblem
+            A specific design problem that will be used for validation in
+            order to prevent overfitting
         """
 
         Algorithm.__init__(self,
-                           design_problem,
+                           training_dp,
+                           validation_dp,
                            hidden_size=hidden_size,
                            batch_size=batch_size,
                            training_iterations=training_iterations,
                            latent_dim=latent_dim)
 
-        assert self.design_problem.is_continuous
+        assert self.training_dp.is_continuous
 
         # sample bounds for the generator
         self.shift = torch.FloatTensor(
-            self.design_problem.design_space.upper[np.newaxis] +
-            self.design_problem.design_space.lower[np.newaxis]).cuda() / 2
+            self.training_dp.design_space.upper[np.newaxis] +
+            self.training_dp.design_space.lower[np.newaxis]).cuda() / 2
         self.scale = torch.FloatTensor(
-            self.design_problem.design_space.upper[np.newaxis] -
-            self.design_problem.design_space.lower[np.newaxis]).cuda() / 2
+            self.training_dp.design_space.upper[np.newaxis] -
+            self.training_dp.design_space.lower[np.newaxis]).cuda() / 2
 
         self.G = DenseConditionalGenerator(latent_dim, hidden_size, self.shift.shape[1])
         self.D = DenseConditionalDiscriminator(self.shift.shape[1], 4)
@@ -101,7 +106,7 @@ class LSGAN(Algorithm):
         # Train
 
         for i in range(training_iterations):
-            design = self.design_problem.sample(n=batch_size)
+            design = self.training_dp.sample(n=batch_size)
             design.score = np.nan_to_num(design.score)
 
             x = torch.FloatTensor(design.cont).cuda()
@@ -160,7 +165,7 @@ class LSGAN(Algorithm):
         y = torch.FloatTensor(score).cuda()
         sample = self.G(x, y) * self.scale + self.shift
 
-        design = self.design_problem.design_space.sample(n=1)
+        design = self.training_dp.design_space.sample(n=1)
         design.cont = sample.cpu().detach().numpy()
         design.score = score
         design.condition = condition

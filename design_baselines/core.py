@@ -15,7 +15,8 @@ class Algorithm(abc.ABC):
     """
 
     def __init__(self,
-                 design_problem: DesignProblem,
+                 training_dp: DesignProblem,
+                 validation_dp: DesignProblem,
                  **kwargs):
         """
         Create a general interface for optimizations algorithms that solve
@@ -23,25 +24,29 @@ class Algorithm(abc.ABC):
 
         Arguments:
 
-        design_problem: DesignProblem
+        training_dp: DesignProblem
             A specific design problem that will be solved using the algorithm
             implemented in this class
+        validation_dp: DesignProblem
+            A specific design problem that will be used for validation in
+            order to prevent overfitting
         """
 
-        self.design_problem = design_problem
+        self.training_dp = training_dp
+        self.validation_dp = validation_dp
         self.__dict__.update(kwargs)
 
     @property
     def is_continuous(self) -> bool:
-        return self.design_problem.is_continuous
+        return self.training_dp.is_continuous
 
     @property
     def is_discrete(self) -> bool:
-        return self.design_problem.is_discrete
+        return self.training_dp.is_discrete
 
     @property
     def is_fused(self) -> bool:
-        return self.design_problem.is_fused
+        return self.training_dp.is_fused
 
     @abc.abstractmethod
     def solve(self, condition: Container = None) -> Design:
