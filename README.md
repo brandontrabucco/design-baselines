@@ -7,6 +7,7 @@ In particular, we provide the following family of design problems:
 * ROBEL D'Kitty Morphology Design
 * MuJoCo Ant Morphology Design 
 * MuJoCo Dog Morphology Design 
+* MuJoCo Hopper Policy Optimization 
 * Fluorescent Protein Design
 
 ## Setup
