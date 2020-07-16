@@ -6,11 +6,13 @@ import numpy as np
 
 if __name__ == "__main__":
 
-    p = fct.ControllerOptimization()
+    training_dp = fct.ControllerOptimization(
+        data_files=("replay_buffer_0_50000.hdf5",
+                    "replay_buffer_100000_150000.hdf5"))
 
     df = pd.DataFrame.from_dict(
         {
-            "score": np.nan_to_num(p._traj_return),
+            "score": np.nan_to_num(training_dp._traj_return),
         }
     )
 
@@ -20,7 +22,8 @@ if __name__ == "__main__":
     plt.title("Coverage of Hopper Controller Weights")
     plt.savefig('hopper_controller_dataset.png')
 
-    designs = p.sample(n=5)
-    s = p.score(designs)
+    designs = training_dp.sample(n=5)
+    print(designs.cont.max(), designs.cont.min())
+    s = training_dp.score(designs)
 
     print(s, designs.score)

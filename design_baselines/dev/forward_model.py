@@ -27,7 +27,11 @@ class ForwardModel(Algorithm):
                  num_sgd_steps=10,
                  discrete_size=1000,
                  init_from_dataset=True,
+                 conservative_noise_std=0.1,
+                 conservative_lambda=10.0,
+                 conservative_weight=0.0,
                  add_noise=False,
+                 noise_std=0.01,
                  label_interpolation=True):
         """
         Create a general interface for optimizations algorithms that solve
@@ -54,7 +58,11 @@ class ForwardModel(Algorithm):
                            num_sgd_steps=num_sgd_steps,
                            discrete_size=discrete_size,
                            init_from_dataset=init_from_dataset,
+                           conservative_noise_std=conservative_noise_std,
+                           conservative_lambda=conservative_lambda,
+                           conservative_weight=conservative_weight,
                            add_noise=add_noise,
+                           noise_std=noise_std,
                            label_interpolation=label_interpolation)
 
         assert self.training_dp.is_continuous
@@ -82,8 +90,14 @@ class ForwardModel(Algorithm):
             design2.score = np.nan_to_num(design2.score)
 
             if self.add_noise:
-                design1.cont += self.training_dp.design_space.sample(n=batch_size) * 0.05
-                design2.cont += self.training_dp.design_space.sample(n=batch_size) * 0.05
+                ub = self.training_dp.design_space.upper
+                lb = self.training_dp.design_space.lower
+                scale = (ub - lb) / 2
+
+                design1.cont += tf.random.normal(
+                    design1.cont.shape) * scale * self.noise_std
+                design2.cont += tf.random.normal(
+                    design1.cont.shape) * scale * self.noise_std
 
             with tf.GradientTape() as tape:
 
@@ -119,7 +133,25 @@ class ForwardModel(Algorithm):
                     x = x1
                     label = design1.score
 
-                loss = tf.reduce_mean(
+                if hasattr(design1, 'reweighting_weights'):
+                    if self.label_interpolation:
+                        reweighting_weights = design1.reweighting_weights * a + \
+                                              design2.reweighting_weights * (1 - a)
+                    else:
+                        reweighting_weights = design1.reweighting_weights
+                else:
+                    reweighting_weights = 1
+
+                x_ns = x + tf.random.normal(x.shape) * self.conservative_noise_std
+                d_ns = tf.linalg.norm(x - x_ns, axis=-1, keepdims=True)
+                loss_ns = tf.reduce_mean(
+                    reweighting_weights *
+                    tf.keras.losses.logcosh(
+                        design1.score - d_ns * conservative_lambda,
+                        self.m(x)))
+
+                loss = loss_ns * self.conservative_weight + tf.reduce_mean(
+                    reweighting_weights *
                     tf.keras.losses.logcosh(label, self.m(x)))
                 rms = tf.reduce_mean((
                     label -
@@ -156,7 +188,13 @@ class ForwardModel(Algorithm):
                                        tf.shape(z)[1] * self.discrete_size])
                     x = tf.concat([x, z], axis=-1)
 
+            if hasattr(design, 'reweighting_weights'):
+                reweighting_weights = design.reweighting_weights
+            else:
+                reweighting_weights = 1
+
             loss = tf.reduce_mean(
+                reweighting_weights *
                 tf.keras.losses.logcosh(design.score, self.m(x)))
             rms = tf.reduce_mean((
                 design.score -
@@ -193,7 +231,7 @@ class ForwardModel(Algorithm):
         design.condition = condition
         design.cont = tf.Variable(tf.convert_to_tensor(design.cont))
 
-        optim = tf.keras.optimizers.Adam()
+        optim = tf.keras.optimizers.Adam(learning_rate=0.001)
         for i in range(self.num_sgd_steps):
 
             with tf.GradientTape() as tape:
