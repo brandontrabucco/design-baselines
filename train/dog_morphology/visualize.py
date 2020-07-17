@@ -6,11 +6,10 @@ import numpy as np
 
 if __name__ == "__main__":
 
-    p = fct.DogMorphology(curated=True)
+    p = fct.DogMorphology(centered=True)
 
     df = pd.DataFrame.from_dict(
         {
-            #"robot": p._robots,
             "score": np.nan_to_num(p._scores[:, 0]),
         }
     )
@@ -21,11 +20,10 @@ if __name__ == "__main__":
     plt.title("Coverage of Dog Morphology")
     plt.savefig('dog_dataset_curated.png')
 
-    p = fct.DogMorphology(curated=False)
+    p = fct.DogMorphology(centered=False)
 
     df = pd.DataFrame.from_dict(
         {
-            #"robot": p._robots,
             "score": np.nan_to_num(p._scores[:, 0]),
         }
     )

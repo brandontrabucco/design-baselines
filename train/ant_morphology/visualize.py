@@ -6,11 +6,10 @@ import numpy as np
 
 if __name__ == "__main__":
 
-    p = fct.AntMorphology(curated=True)
+    p = fct.AntMorphology(centered=True)
 
     df = pd.DataFrame.from_dict(
         {
-            #"robot": p._robots,
             "score": np.nan_to_num(p._scores[:, 0]),
         }
     )
@@ -21,11 +20,10 @@ if __name__ == "__main__":
     plt.title("Coverage of Ant Morphology")
     plt.savefig('ant_dataset_curated.png')
 
-    p = fct.AntMorphology(curated=False)
+    p = fct.AntMorphology(centered=False)
 
     df = pd.DataFrame.from_dict(
         {
-            #"robot": p._robots,
             "score": np.nan_to_num(p._scores[:, 0]),
         }
     )

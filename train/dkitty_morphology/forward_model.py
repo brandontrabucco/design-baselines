@@ -10,8 +10,8 @@ if __name__ == "__main__":
 
     designs = []
     for i in range(3):
-        alg = dev.ForwardModel(fct.DKittyMorphology(curated=True),
-                               fct.DKittyMorphology(curated=False),
+        alg = dev.ForwardModel(fct.DKittyMorphology(centered=True),
+                               fct.DKittyMorphology(centered=False),
                                num_layers=2,
                                hidden_size=512,
                                batch_size=32,

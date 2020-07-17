@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     df = pd.DataFrame.from_dict(
         {
-            "score": np.nan_to_num(training_dp._traj_return),
+            "score": np.nan_to_num(training_dp._undiscounted_return),
         }
     )
 

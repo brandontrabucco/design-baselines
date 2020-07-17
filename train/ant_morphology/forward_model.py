@@ -12,12 +12,12 @@ if __name__ == "__main__":
     for i in range(3):
 
         # there are 100 samples, hold out 20
-        training_dp = fct.AntMorphology(curated=True)
+        training_dp = fct.AntMorphology(centered=True)
         training_dp._robots = training_dp._robots[20:]
         training_dp._scores = training_dp._scores[20:]
 
         # these 20 samples become the validation set
-        validation_dp = fct.AntMorphology(curated=True)
+        validation_dp = fct.AntMorphology(centered=True)
         validation_dp._robots = validation_dp._robots[:20]
         validation_dp._scores = validation_dp._scores[:20]
 

@@ -6,7 +6,7 @@ import numpy as np
 
 if __name__ == "__main__":
 
-    p = fct.DKittyMorphology(curated=False)
+    p = fct.DKittyMorphology(centered=False)
 
     df = pd.DataFrame.from_dict(
         {
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     plt.title("Coverage of DKitty Morphology")
     plt.savefig('dkitty_dataset_uniform.png')
 
-    p = fct.DKittyMorphology(curated=True)
+    p = fct.DKittyMorphology(centered=True)
 
     df = pd.DataFrame.from_dict(
         {
