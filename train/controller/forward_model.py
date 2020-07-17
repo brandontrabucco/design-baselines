@@ -7,7 +7,10 @@ import seaborn as sns
 sns.set(style="darkgrid")
 
 
-STEPS = list(range(100))
+STEPS = list(range(0, 20, 1)) + \
+        list(range(20, 40, 2)) + \
+        list(range(40, 100, 4)) + \
+        list(range(100, 200, 10))
 
 
 if __name__ == "__main__":
@@ -26,7 +29,7 @@ if __name__ == "__main__":
                     "replay_buffer_150000_200000.hdf5"))
 
     variants = {
-        "Weak Conservative": dict(
+        "Lambda = 1": dict(
             num_layers=3,
             hidden_size=2048,
             batch_size=512,
@@ -41,7 +44,7 @@ if __name__ == "__main__":
             add_noise=False,
             noise_std=0.01,
             label_interpolation=False),
-        "Strong Conservative": dict(
+        "Lambda = 100": dict(
             num_layers=3,
             hidden_size=2048,
             batch_size=512,
@@ -56,7 +59,22 @@ if __name__ == "__main__":
             add_noise=False,
             noise_std=0.01,
             label_interpolation=False),
-        "Optimistic": dict(
+        "Lambda = 10": dict(
+            num_layers=3,
+            hidden_size=2048,
+            batch_size=512,
+            training_iterations=1000,
+            init_lr=0.001,
+            num_sgd_steps=10,
+            discrete_size=1000,
+            init_from_dataset=True,
+            conservative_noise_std=0.1,
+            conservative_lambda=10.0,
+            conservative_weight=1.0,
+            add_noise=False,
+            noise_std=0.01,
+            label_interpolation=False),
+        "Original": dict(
             num_layers=3,
             hidden_size=2048,
             batch_size=512,
