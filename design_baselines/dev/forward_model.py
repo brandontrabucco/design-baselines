@@ -125,7 +125,7 @@ class ForwardModel(Algorithm):
                                              tf.shape(z2)[1] * self.discrete_size])
                         x2 = tf.concat([x2, z2], axis=-1)
 
-                a = tf.random.uniform([batch_size, 1])
+                a = tf.random.uniform([x1.shape[0], 1])
                 if self.label_interpolation:
                     x = x1 * a + x2 * (1 - a)
                     label = design1.score * a + design2.score * (1 - a)
@@ -150,7 +150,7 @@ class ForwardModel(Algorithm):
                         design1.score - d_ns * conservative_lambda,
                         self.m(x)))
 
-                loss = loss_ns * self.conservative_weight + tf.reduce_mean(
+                loss = tf.reduce_mean(
                     reweighting_weights *
                     tf.keras.losses.logcosh(label, self.m(x)))
                 rms = tf.reduce_mean((
@@ -169,7 +169,9 @@ class ForwardModel(Algorithm):
                       f"rms {rms.numpy()} "
                       f"std {std.numpy()}")
 
-            grads = tape.gradient(loss, self.m.trainable_variables)
+                total_loss = loss_ns * self.conservative_weight + loss
+
+            grads = tape.gradient(total_loss, self.m.trainable_variables)
             optim.apply_gradients(zip(grads, self.m.trainable_variables))
             optim.lr.assign(self.init_lr * (1 - (i + 1) / training_iterations))
 
@@ -212,7 +214,7 @@ class ForwardModel(Algorithm):
                   f"rms {rms.numpy()} "
                   f"std {std.numpy()}")
 
-    def solve(self, condition: Container = None) -> Design:
+    def solve(self, condition: Container = None, n: int = 1) -> Design:
         """
         Solve the design problem by conditioning on inputs and finding a
         design that maximizes the design problem score
@@ -225,9 +227,9 @@ class ForwardModel(Algorithm):
         """
 
         if self.init_from_dataset:
-            design = self.training_dp.sample(n=1)
+            design = self.training_dp.sample(n=n)
         else:
-            design = self.training_dp.design_space.sample(n=1)
+            design = self.training_dp.design_space.sample(n=n)
         design.condition = condition
         design.cont = tf.Variable(tf.convert_to_tensor(design.cont))
 

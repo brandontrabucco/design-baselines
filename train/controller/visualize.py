@@ -26,4 +26,24 @@ if __name__ == "__main__":
     print(designs.cont.max(), designs.cont.min())
     s = training_dp.score(designs)
 
+    print(s, designs.score, training_dp._size)
+
+    training_dp = fct.HopperController()
+
+    df = pd.DataFrame.from_dict(
+        {
+            "score": np.nan_to_num(training_dp._scores[:, 0]),
+        }
+    )
+
+    df.hist(bins=100, column='score')
+    plt.xlabel("Trajectory Return")
+    plt.ylabel("Number of Examples")
+    plt.title("Coverage of Hopper Controller Weights")
+    plt.savefig('hopper_controller_dataset2.png')
+
+    designs = training_dp.sample(n=5)
+    print(designs.cont.max(), designs.cont.min())
+    s = training_dp.score(designs)
+
     print(s, designs.score)

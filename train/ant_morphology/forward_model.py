@@ -1,62 +1,122 @@
-from morphing_agents.mujoco.ant.elements import LEG
+from collections import defaultdict
 import design_baselines.dev as dev
 import design_bench.factory as fct
-import pickle as pkl
-import os
 import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+sns.set(style="darkgrid")
+
+
+STEPS = list(range(0, 2000, 10))
 
 
 if __name__ == "__main__":
 
-    designs = []
-    for i in range(3):
+    name_to_scores = defaultdict(list)
+    df = pd.DataFrame(columns=['SGD Steps',
+                               'Average Return',
+                               'Type'])
 
-        # there are 100 samples, hold out 20
-        training_dp = fct.AntMorphology(centered=True)
-        training_dp._robots = training_dp._robots[20:]
-        training_dp._scores = training_dp._scores[20:]
+    training_dp = fct.AntMorphology(centered=True)
+    validation_dp = fct.AntMorphology(centered=True)
 
-        # these 20 samples become the validation set
-        validation_dp = fct.AntMorphology(centered=True)
-        validation_dp._robots = validation_dp._robots[:20]
-        validation_dp._scores = validation_dp._scores[:20]
+    variants = {
+        "Lambda = 1": dict(
+            num_layers=3,
+            hidden_size=512,
+            batch_size=128,
+            training_iterations=5000,
+            init_lr=0.001,
+            num_sgd_steps=10,
+            discrete_size=1000,
+            init_from_dataset=True,
+            conservative_noise_std=0.01,
+            conservative_lambda=1.0,
+            conservative_weight=1.0,
+            add_noise=False,
+            noise_std=0.01,
+            label_interpolation=False),
+        "Lambda = 100": dict(
+            num_layers=3,
+            hidden_size=512,
+            batch_size=128,
+            training_iterations=5000,
+            init_lr=0.001,
+            num_sgd_steps=10,
+            discrete_size=1000,
+            init_from_dataset=True,
+            conservative_noise_std=0.01,
+            conservative_lambda=100.0,
+            conservative_weight=1.0,
+            add_noise=False,
+            noise_std=0.01,
+            label_interpolation=False),
+        "Lambda = 10": dict(
+            num_layers=3,
+            hidden_size=512,
+            batch_size=128,
+            training_iterations=5000,
+            init_lr=0.001,
+            num_sgd_steps=10,
+            discrete_size=1000,
+            init_from_dataset=True,
+            conservative_noise_std=0.01,
+            conservative_lambda=10.0,
+            conservative_weight=1.0,
+            add_noise=False,
+            noise_std=0.01,
+            label_interpolation=False),
+        "Original": dict(
+            num_layers=3,
+            hidden_size=512,
+            batch_size=128,
+            training_iterations=5000,
+            init_lr=0.001,
+            num_sgd_steps=10,
+            discrete_size=1000,
+            init_from_dataset=True,
+            conservative_noise_std=0.0,
+            conservative_lambda=0.0,
+            conservative_weight=0.0,
+            add_noise=False,
+            noise_std=0.01,
+            label_interpolation=False),
+    }
 
-        alg = dev.ForwardModel(training_dp,
-                               validation_dp,
-                               num_layers=2,
-                               hidden_size=512,
-                               batch_size=32,
-                               training_iterations=10000,
-                               init_lr=0.0001,
-                               num_sgd_steps=10,
-                               discrete_size=1000,
-                               init_from_dataset=True)
+    for name, kwargs in variants.items():
+
+        alg = dev.ForwardModel(training_dp, validation_dp, **kwargs)
 
         plt.clf()
         plt.plot(alg.training_losses, label="Training")
-        plt.plot(alg.validation_losses, label="Validation")
-        plt.title("Model Loss")
+        #plt.plot(alg.validation_losses, label="Validation")
+        plt.title("Ant Morphology Model Loss")
         plt.ylabel("Logcosh Loss")
         plt.xlabel("Training Iteration")
         plt.legend()
-        plt.savefig(f"losses_{i}_ant_forward_model.png")
+        plt.savefig(f"losses_ant_morphology_fm_{name}.png")
 
         plt.clf()
         plt.plot(alg.training_rms, label="Training Model Error")
         plt.plot(alg.training_std, label="Training Dataset")
-        plt.plot(alg.validation_rms, label="Validation Model Error")
-        plt.plot(alg.validation_std, label="Validation Dataset")
-        plt.title("Model Error")
+        #plt.plot(alg.validation_rms, label="Validation Model Error")
+        #plt.plot(alg.validation_std, label="Validation Dataset")
+        plt.title("Ant Morphology Model Error")
         plt.ylabel("Standard Deviation")
         plt.xlabel("Training Iteration")
         plt.legend()
-        plt.savefig(f"std_{i}_ant_forward_model.png")
+        plt.savefig(f"std_ant_morphology_fm_{name}.png")
 
-        for j in range(3):
-            x = alg.solve().cont[0]
-            designs.append([
-                LEG(*x[:15]), LEG(*x[15:30]), LEG(*x[30:45]), LEG(*x[45:60])])
+        for n in STEPS:
+            alg.num_sgd_steps = n
+            design = alg.solve(n=500)
+            for i in range(100):
+                df = df.append({'SGD Steps': n,
+                                'Average Return': design.score[i, 0],
+                                'Type': name},
+                               ignore_index=True)
 
-    os.makedirs("designs/ant/", exist_ok=True)
-    with open('designs/ant/forward_model.pkl', 'wb') as f:
-        pkl.dump(designs, f)
+    plt.clf()
+    sns.lineplot(x="SGD Steps", y="Average Return", hue='Type', data=df)
+    plt.title("Ant Morphology Optimization")
+    plt.savefig("ant_morphology_fm_conservative.png")
