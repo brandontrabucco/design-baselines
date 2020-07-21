@@ -23,26 +23,22 @@ def cli():
 @click.option('--solver-samples', type=click.INT, default=[10], multiple=True)
 @click.option('--solver-steps', type=click.INT, default=[100], multiple=True)
 @click.option('--evaluate-interval', type=click.INT, default=[1], multiple=True)
-@click.option('--sc/--no-sc', default=[False], multiple=True)
-@click.option('--sc-noise_std', type=click.FLOAT, default=[0.3], multiple=True)
+@click.option('--sc-noise-std', type=click.FLOAT, default=[0.3], multiple=True)
 @click.option('--sc-lambda', type=click.FLOAT, default=[10.0], multiple=True)
 @click.option('--sc-weight', type=click.FLOAT, default=[1.0], multiple=True)
-@click.option('--cs/--no-cs', default=[False], multiple=True)
 @click.option('--cs-noise-std', type=click.FLOAT, default=[0.3], multiple=True)
 @click.option('--cs-weight', type=click.FLOAT, default=[1.0], multiple=True)
-@click.option('--fgsm/--no-fgsm', default=[False], multiple=True)
 @click.option('--fgsm-lambda', type=click.FLOAT, default=[0.01], multiple=True)
-@click.option('--fgsm-per-epoch', type=click.INT, default=[1], multiple=True)
-@click.option('--online/--not-online', default=[False], multiple=True)
+@click.option('--fgsm-interval', type=click.INT, default=[1], multiple=True)
 @click.option('--online-noise-std', type=click.FLOAT, default=[0.3], multiple=True)
 @click.option('--online-steps', type=click.INT, default=[8], multiple=True)
 def train(local_dir, cpus, gpus, num_parallel,
           init_lr, num_epochs, hidden_size,
           solver_lr, solver_samples, solver_steps, evaluate_interval,
-          sc, sc_noise_std, sc_lambda, sc_weight,
-          cs, cs_noise_std, cs_weight,
-          fgsm, fgsm_lambda, fgsm_per_epoch,
-          online, online_noise_std, online_steps):
+          sc_noise_std, sc_lambda, sc_weight,
+          cs_noise_std, cs_weight,
+          fgsm_lambda, fgsm_interval,
+          online_noise_std, online_steps):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
     """
@@ -57,17 +53,13 @@ def train(local_dir, cpus, gpus, num_parallel,
         "solver_samples": tune.grid_search(list(solver_samples)),
         "solver_steps": tune.grid_search(list(solver_steps)),
         "evaluate_interval": tune.grid_search(list(evaluate_interval)),
-        "use_sc": tune.grid_search(list(sc)),
         "sc_noise_std": tune.grid_search(list(sc_noise_std)),
         "sc_lambda": tune.grid_search(list(sc_lambda)),
         "sc_weight": tune.grid_search(list(sc_weight)),
-        "use_cs": tune.grid_search(list(cs)),
         "cs_noise_std": tune.grid_search(list(cs_noise_std)),
         "cs_weight": tune.grid_search(list(cs_weight)),
-        "use_fgsm": tune.grid_search(list(fgsm)),
         "fgsm_lambda": tune.grid_search(list(fgsm_lambda)),
-        "fgsm_per_epoch": tune.grid_search(list(fgsm_per_epoch)),
-        "use_online": tune.grid_search(list(online)),
+        "fgsm_interval": tune.grid_search(list(fgsm_interval)),
         "online_noise_std": tune.grid_search(list(online_noise_std)),
         "online_steps": tune.grid_search(list(online_steps))},
         resources_per_trial={

@@ -82,11 +82,9 @@ def step_function(optim,
                   X,
                   y,
                   w=None,
-                  use_sc=False,
                   sc_noise_std=0.3,
                   sc_lambda=10.0,
                   sc_weight=1.0,
-                  use_cs=False,
                   cs_noise_std=0.3,
                   cs_weight=1.0):
     """Perform a step of gradient descent on a forward model using a few
@@ -98,7 +96,7 @@ def step_function(optim,
         loss = tf.reduce_mean(
             tf.keras.losses.mean_squared_error(y, model(X)) * w)
 
-        if use_sc:
+        if sc_noise_std > 0.0:
 
             # add a self-correcting term during optimization on the training set
             X_sc = X + tf.random.normal(X.shape) * sc_noise_std
@@ -107,7 +105,7 @@ def step_function(optim,
                 tf.keras.losses.mean_squared_error(
                     y - sc_lambda * d_sc, model(X_sc)) * w)
 
-        if use_cs:
+        if cs_noise_std > 0.0:
 
             # add a conservative term during optimization on the training set
             X_cs = X + tf.random.normal(X.shape) * cs_noise_std

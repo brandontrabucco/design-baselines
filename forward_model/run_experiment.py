@@ -20,39 +20,29 @@ def run_experiment(config):
     """
 
     local_dir = config.get('local_dir', './data')
-    tf.io.gfile.makedirs(local_dir)
-
     init_lr = config.get('init_lr', 0.0001)
     num_epochs = config.get('num_epochs', 100)
     hidden_size = config.get('hidden_size', 2048)
-
     solver_lr = config.get('solver_lr', 0.1)
     solver_samples = config.get('solver_samples', 10)
     solver_steps = config.get('solver_steps', 201)
     evaluate_interval = config.get('evaluate_interval', 10)
-
-    use_sc = config.get('use_sc', False)
     sc_noise_std = config.get('sc_noise_std', 0.1)
     sc_lambda = config.get('sc_lambda', 10.0)
     sc_weight = config.get('sc_weight', 1.0)
-
-    use_cs = config.get('use_cs', False)
     cs_noise_std = config.get('cs_noise_std', 0.1)
     cs_weight = config.get('cs_weight', 1.0)
-
-    use_fgsm = config.get('use_fgsm', False)
     fgsm_lambda = config.get('fgsm_lambda', 0.001)
-    fgsm_per_epoch = config.get('fgsm_per_epoch', 1)
-
-    use_online = config.get('use_online', False)
+    fgsm_interval = config.get('fgsm_interval', 1)
     online_noise_std = config.get('online_noise_std', 0.1)
     online_steps = config.get('online_steps', 8)
 
+    tf.io.gfile.makedirs(local_dir)
     data = ControllerDataset()
-    input_size = data.robots.shape[1]
 
     model = tf.keras.Sequential([
-        tfkl.Dense(hidden_size, use_bias=True, input_shape=(input_size,)),
+        tfkl.Dense(hidden_size, use_bias=True,
+                   input_shape=(data.robots.shape[1],)),
         tfkl.Activation('relu'),
         tfkl.Dense(hidden_size, use_bias=True),
         tfkl.Activation('relu'),
@@ -73,22 +63,24 @@ def run_experiment(config):
         'Self-Correcting Weight',
         'Conservative Noise STD',
         'Conservative Weight',
+        'FGSM Lambda',
+        'FGSM Interval',
+        'Online Noise STD',
+        'Online SGD Steps',
         'Type'])
 
     iteration = 0
-
+    mse = tf.keras.losses.mean_squared_error
     optim = tf.keras.optimizers.Adam(learning_rate=init_lr)
+
     for epoch in range(num_epochs):
         optim.lr.assign(init_lr * (1 - epoch / num_epochs))
-
         for X, y, w in data.train:
             loss = step_function(
                 optim, model, X, y, w=w[:, 0],
-                use_sc=use_sc,
                 sc_noise_std=sc_noise_std,
                 sc_lambda=sc_lambda,
                 sc_weight=sc_weight,
-                use_cs=use_cs,
                 cs_noise_std=cs_noise_std,
                 cs_weight=cs_weight)
 
@@ -107,11 +99,13 @@ def run_experiment(config):
                 'Self-Correcting Weight': sc_weight,
                 'Conservative Noise STD': cs_noise_std,
                 'Conservative Weight': cs_weight,
+                'FGSM Lambda': fgsm_lambda,
+                'FGSM Interval': fgsm_interval,
+                'Online Noise STD': online_noise_std,
+                'Online SGD Steps': online_steps,
                 'Type': 'Training'}, ignore_index=True)
 
             iteration += 1
-
-        mse = tf.keras.losses.mean_squared_error
 
         loss = 0.0
         num_examples = 0
@@ -127,8 +121,7 @@ def run_experiment(config):
             'Mean Squared Error': loss,
             'Type': 'Validation'}, ignore_index=True)
 
-        if use_fgsm and epoch % fgsm_per_epoch == 0:
-
+        if fgsm_lambda > 0.0 and epoch % fgsm_interval == 0:
             for X, y, w in data.train.take(1):
 
                 # use the fast gradient sign method to find adversarial examples
@@ -164,14 +157,17 @@ def run_experiment(config):
         'Self-Correcting Weight',
         'Conservative Noise STD',
         'Conservative Weight',
+        'FGSM Lambda',
+        'FGSM Interval',
+        'Online Noise STD',
+        'Online SGD Steps',
         'Type'])
 
     # solve the model-based optimization problem
     for n in range(solver_steps):
 
-        if use_online:
-
-            # train the forward model by sampling around the current solution
+        # train the forward model by sampling around the current solution
+        if online_steps > 0:
             for i in range(online_steps):
 
                 # sample new x around the current solution
@@ -181,11 +177,9 @@ def run_experiment(config):
                 # train the forward model on these new x
                 step_function(
                     optim, model, x_online, y_online, w=1,
-                    use_sc=use_sc,
                     sc_noise_std=sc_noise_std,
                     sc_lambda=sc_lambda,
                     sc_weight=sc_weight,
-                    use_cs=use_cs,
                     cs_noise_std=cs_noise_std,
                     cs_weight=cs_weight)
 
@@ -198,7 +192,6 @@ def run_experiment(config):
         if n % evaluate_interval == 0:
             real_s = data.score(x)[:, 0]
             for i in range(x.shape[0]):
-
                 df = df.append({
                     'SGD Steps': n,
                     'Average Return': real_s[i],
@@ -214,8 +207,11 @@ def run_experiment(config):
                     'Self-Correcting Weight': sc_weight,
                     'Conservative Noise STD': cs_noise_std,
                     'Conservative Weight': cs_weight,
+                    'FGSM Lambda': fgsm_lambda,
+                    'FGSM Interval': fgsm_interval,
+                    'Online Noise STD': online_noise_std,
+                    'Online SGD Steps': online_steps,
                     'Type': 'Oracle'}, ignore_index=True)
-
                 df = df.append({
                     'SGD Steps': n,
                     'Average Return': predict_s[i].numpy(),
@@ -231,13 +227,17 @@ def run_experiment(config):
                     'Self-Correcting Weight': sc_weight,
                     'Conservative Noise STD': cs_noise_std,
                     'Conservative Weight': cs_weight,
+                    'FGSM Lambda': fgsm_lambda,
+                    'FGSM Interval': fgsm_interval,
+                    'Online Noise STD': online_noise_std,
+                    'Online SGD Steps': online_steps,
                     'Type': 'FM'}, ignore_index=True)
 
         grads = tape.gradient(loss, [x])
         solver_optim.apply_gradients(zip(grads, [x]))
         print(f"Solver Step {n}")
 
-    import time
-    milliseconds = int(round(time.time() * 1000))
-    loss_df.to_csv(os.path.join(local_dir, f'loss_{milliseconds}.csv'))
-    df.to_csv(os.path.join(local_dir, f'eval_{milliseconds}.csv'))
+    loss_path = os.path.join(local_dir, f'loss.csv')
+    eval_path = os.path.join(local_dir, f'eval.csv')
+    loss_df.to_csv(loss_path, mode='a', header=not os.path.exists(loss_path))
+    df.to_csv(eval_path, mode='a', header=not os.path.exists(eval_path))
