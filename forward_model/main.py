@@ -65,3 +65,139 @@ def train(local_dir, cpus, gpus, num_parallel,
         resources_per_trial={
             'cpu': cpus // num_parallel,
             'gpu': gpus / num_parallel})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='./data')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+def sweep_sc(local_dir, cpus, gpus, num_parallel):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+    """
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    tune.run(run_experiment, config={
+        "local_dir": local_dir,
+        "init_lr": tune.grid_search([0.0001]),
+        "num_epochs": tune.grid_search([100]),
+        "hidden_size": tune.grid_search([2048]),
+        "solver_lr": tune.grid_search([0.001]),
+        "solver_samples": tune.grid_search([32]),
+        "solver_steps": tune.grid_search([100]),
+        "evaluate_interval": tune.grid_search([1]),
+        "sc_noise_std": tune.grid_search([0.5, 0.1, 0.05, 0.01]),
+        "sc_lambda": tune.grid_search([50.0, 10.0, 5.0, 1.0]),
+        "sc_weight": tune.grid_search([5.0, 1.0, 0.5, 0.1]),
+        "cs_noise_std": tune.grid_search([0.0]),
+        "cs_weight": tune.grid_search([0.0]),
+        "fgsm_lambda": tune.grid_search([0.0]),
+        "fgsm_interval": tune.grid_search([1]),
+        "online_noise_std": tune.grid_search([0.0]),
+        "online_steps": tune.grid_search([0])},
+        resources_per_trial={
+            'cpu': cpus // num_parallel,
+            'gpu': gpus / num_parallel})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='./data')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+def sweep_cs(local_dir, cpus, gpus, num_parallel):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+    """
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    tune.run(run_experiment, config={
+        "local_dir": local_dir,
+        "init_lr": tune.grid_search([0.0001]),
+        "num_epochs": tune.grid_search([100]),
+        "hidden_size": tune.grid_search([2048]),
+        "solver_lr": tune.grid_search([0.001]),
+        "solver_samples": tune.grid_search([32]),
+        "solver_steps": tune.grid_search([100]),
+        "evaluate_interval": tune.grid_search([1]),
+        "sc_noise_std": tune.grid_search([0.0]),
+        "sc_lambda": tune.grid_search([0.0]),
+        "sc_weight": tune.grid_search([0.0]),
+        "cs_noise_std": tune.grid_search([5.0, 1.0, 0.5, 0.1, 0.05, 0.01, 0.005, 0.001]),
+        "cs_weight": tune.grid_search([5.0, 1.0, 0.5, 0.1]),
+        "fgsm_lambda": tune.grid_search([0.0]),
+        "fgsm_interval": tune.grid_search([1]),
+        "online_noise_std": tune.grid_search([0.0]),
+        "online_steps": tune.grid_search([0])},
+        resources_per_trial={
+            'cpu': cpus // num_parallel,
+            'gpu': gpus / num_parallel})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='./data')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+def sweep_fgsm(local_dir, cpus, gpus, num_parallel):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+    """
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    tune.run(run_experiment, config={
+        "local_dir": local_dir,
+        "init_lr": tune.grid_search([0.0001]),
+        "num_epochs": tune.grid_search([100]),
+        "hidden_size": tune.grid_search([2048]),
+        "solver_lr": tune.grid_search([0.001]),
+        "solver_samples": tune.grid_search([32]),
+        "solver_steps": tune.grid_search([100]),
+        "evaluate_interval": tune.grid_search([1]),
+        "sc_noise_std": tune.grid_search([0.0]),
+        "sc_lambda": tune.grid_search([0.0]),
+        "sc_weight": tune.grid_search([0.0]),
+        "cs_noise_std": tune.grid_search([0.0]),
+        "cs_weight": tune.grid_search([0.0]),
+        "fgsm_lambda": tune.grid_search([0.5, 0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]),
+        "fgsm_interval": tune.grid_search([50, 10, 5, 1]),
+        "online_noise_std": tune.grid_search([0.0]),
+        "online_steps": tune.grid_search([0])},
+        resources_per_trial={
+            'cpu': cpus // num_parallel,
+            'gpu': gpus / num_parallel})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='./data')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+def sweep_online(local_dir, cpus, gpus, num_parallel):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+    """
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    tune.run(run_experiment, config={
+        "local_dir": local_dir,
+        "init_lr": tune.grid_search([0.0001]),
+        "num_epochs": tune.grid_search([100]),
+        "hidden_size": tune.grid_search([2048]),
+        "solver_lr": tune.grid_search([0.001]),
+        "solver_samples": tune.grid_search([32]),
+        "solver_steps": tune.grid_search([100]),
+        "evaluate_interval": tune.grid_search([1]),
+        "sc_noise_std": tune.grid_search([0.0]),
+        "sc_lambda": tune.grid_search([0.0]),
+        "sc_weight": tune.grid_search([0.0]),
+        "cs_noise_std": tune.grid_search([0.0]),
+        "cs_weight": tune.grid_search([0.0]),
+        "fgsm_lambda": tune.grid_search([0.0]),
+        "fgsm_interval": tune.grid_search([1]),
+        "online_noise_std": tune.grid_search([0.5, 0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]),
+        "online_steps": tune.grid_search([50, 10, 5, 1])},
+        resources_per_trial={
+            'cpu': cpus // num_parallel,
+            'gpu': gpus / num_parallel})
