@@ -2,8 +2,8 @@ from forward_model.data import PolicyWeightsDataset
 from forward_model.perturbations import PGD
 from forward_model.trainers import Conservative
 from forward_model.logger import Logger
+from tensorflow_probability import distributions as tfpd
 import tensorflow.keras.layers as tfkl
-import tensorflow_probability.distributions as tfpd
 import tensorflow as tf
 import os
 
@@ -98,7 +98,7 @@ def conservative_mbo(config):
         "prediction", forward_model(
             x_var), tf.cast(0, tf.int64))
 
-    for i in range(config['solver_steps']):
+    for i in range(1, config['solver_steps'] + 1):
 
         optim.minimize(
             lambda: -forward_model(x_var), [x_var])

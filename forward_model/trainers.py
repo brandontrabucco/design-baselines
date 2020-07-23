@@ -33,7 +33,6 @@ class Conservative(tf.Module):
         self.optim = optim(**optimizer_kwargs)
         self.optimizer_kwargs = optimizer_kwargs
 
-    @tf.function
     def train(self,
               dataset):
         """Train a conservative forward model and collect negative
@@ -67,7 +66,6 @@ class Conservative(tf.Module):
                 zip(grads, self.forward_model.trainable_variables))
         return total_loss
 
-    @tf.function
     def validate(self,
                  dataset):
         """Validate a conservative forward model using a validation dataset

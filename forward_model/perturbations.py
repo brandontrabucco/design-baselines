@@ -30,7 +30,6 @@ class Gaussian(Perturbation):
         super().__init__()
         self.std = std
 
-    @tf.function
     def __call__(self,
                  original_x):
         """Samples perturbed values for x using a fast gradient sign method
@@ -72,7 +71,6 @@ class FGSM(Perturbation):
         self.forward_model = forward_model
         self.epsilon = epsilon
 
-    @tf.function
     def __call__(self,
                  original_x):
         """Samples perturbed values for x using a fast gradient sign method
@@ -148,7 +146,6 @@ class PGD(Perturbation):
         if self.clip_two_norm is not None:
             return self.clip_two_norm
 
-    @tf.function
     def project(self,
                 original_x,
                 x_var):
@@ -175,7 +172,6 @@ class PGD(Perturbation):
             delta = tf.clip_by_value(delta, -self.epsilon, self.epsilon)
         return delta + original_x
 
-    @tf.function
     def __call__(self,
                  original_x):
         """Samples perturbed values for x using projected gradient descent

@@ -91,7 +91,6 @@ class PolicyWeightsDataset(object):
 
         return self.x.shape[1],
 
-    @tf.function
     def score(self, x):
         """Assign a score to a large set of wrights provided by
         performing a rollout in an environment
@@ -111,9 +110,8 @@ class PolicyWeightsDataset(object):
         y.set_shape(x.get_shape()[:1])
         return y
 
-    @tf.function
     def score_backend_tf(self, x):
-        """Assign a score to a single set of wrights provided by
+        """Assign a score to a single set of weights provided by
         performing a rollout in an environment
 
         Args:
@@ -178,4 +176,4 @@ class PolicyWeightsDataset(object):
             act = policy(obs[np.newaxis])[0]
             obs, rew, done, info = env.step(act)
             path_returns += rew
-        return np.array(path_returns)
+        return np.array(path_returns).astype(np.float32)

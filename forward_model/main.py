@@ -36,16 +36,16 @@ def conservative(local_dir, cpus, gpus, num_parallel):
     ray.init(num_cpus=cpus, num_gpus=gpus)
     tune.run(conservative_mbo, config={
         "logging_dir": local_dir,
-        "epochs": tune.grid_search([100]),
+        "epochs": tune.grid_search([500]),
         "hidden_size": tune.grid_search([2048]),
         "batch_size": tune.grid_search([128]),
         "forward_model_lr": tune.grid_search([0.0001]),
-        "conservative_weight": tune.grid_search([1.0]),
+        "conservative_weight": tune.grid_search([0.0, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0]),
         "perturbation_lr": tune.grid_search([0.001]),
         "perturbation_steps": tune.grid_search([100]),
-        "solver_samples": tune.grid_search([32]),
+        "solver_samples": tune.grid_search([128]),
         "solver_lr": tune.grid_search([0.001]),
         "solver_steps": tune.grid_search([100])},
         resources_per_trial={
             'cpu': cpus // num_parallel,
-            'gpu': gpus / num_parallel})
+            'gpu': gpus / num_parallel - 0.01})
