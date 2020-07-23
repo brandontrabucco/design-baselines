@@ -105,7 +105,7 @@ class PolicyWeightsDataset(object):
                 self.x[self.val_size:],
                 self.y[self.val_size:],
                 get_weights(self.y[self.val_size:])))
-            val = tf.data.Dataset.from_tensor_slices((
+            validate = tf.data.Dataset.from_tensor_slices((
                 self.x[:self.val_size],
                 self.y[:self.val_size],
                 get_weights(self.y[:self.val_size])))
@@ -115,31 +115,18 @@ class PolicyWeightsDataset(object):
             train = tf.data.Dataset.from_tensor_slices((
                 self.x[self.val_size:],
                 self.y[self.val_size:]))
-            val = tf.data.Dataset.from_tensor_slices((
+            validate = tf.data.Dataset.from_tensor_slices((
                 self.x[:self.val_size],
                 self.y[:self.val_size]))
 
         train = train.shuffle(self.x.shape[0] - self.val_size)
-        val = val.shuffle(self.val_size)
+        validate = validate.shuffle(self.val_size)
 
         train = train.batch(self.batch_size)
-        val = val.batch(self.batch_size)
+        validate = validate.batch(self.batch_size)
 
         self.train = train.prefetch(tf.data.experimental.AUTOTUNE)
-        self.val = val.prefetch(tf.data.experimental.AUTOTUNE)
-
-    @property
-    def input_shape(self):
-        """Return the number of weights and biases in the design
-        space of the policy
-
-        Returns:
-
-        n: int
-            the number of weights in a single data point
-        """
-
-        return self.x.shape[1],
+        self.validate = validate.prefetch(tf.data.experimental.AUTOTUNE)
 
     def score(self, x):
         """Assign a score to a large set of wrights provided by
@@ -227,3 +214,29 @@ class PolicyWeightsDataset(object):
             obs, rew, done, info = env.step(act)
             path_returns += rew
         return np.array(path_returns).astype(np.float32)
+
+    @property
+    def input_shape(self):
+        """Return the number of weights and biases in the design
+        space of the policy
+
+        Returns:
+
+        shape: list
+            the shape of a single data point in the dataset
+        """
+
+        return self.x.shape[1],
+
+    @property
+    def input_size(self):
+        """Return the number of weights and biases in the design
+        space of the policy
+
+        Returns:
+
+        n: int
+            the number of weights in a single data point
+        """
+
+        return np.prod(self.input_shape)

@@ -49,3 +49,42 @@ def conservative(local_dir, cpus, gpus, num_parallel):
         resources_per_trial={
             'cpu': cpus // num_parallel,
             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='data')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+def model_inversion(local_dir, cpus, gpus, num_parallel):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    """
+
+    from forward_model.algorithms import model_inversion
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    tune.run(model_inversion, config={
+        "logging_dir": local_dir,
+        "epochs": tune.grid_search([100]),
+        "batch_size": tune.grid_search([32]),
+        "hidden_size": tune.grid_search([2048]),
+        "latent_size": tune.grid_search([32]),
+        "model_lr": tune.grid_search([0.0002]),
+        "beta_1": tune.grid_search([0.5]),
+        "beta_2": tune.grid_search([0.999]),
+        "solver_samples": tune.grid_search([32])},
+        resources_per_trial={
+            'cpu': cpus // num_parallel,
+            'gpu': gpus / num_parallel - 0.01})

@@ -78,4 +78,4 @@ def get_weights(scores):
     weights = provable_dist[
         np.minimum(bin_indices, 19)] / (hist_prob + 1e-7)
     weights = np.clip(weights, a_min=0.0, a_max=5.0)
-    return weights[:, np.newaxis]
+    return weights.astype(np.float32)

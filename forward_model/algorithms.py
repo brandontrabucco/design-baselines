@@ -1,6 +1,7 @@
 from forward_model.data import PolicyWeightsDataset
 from forward_model.perturbations import PGD
 from forward_model.trainers import Conservative
+from forward_model.trainers import ModelInversion
 from forward_model.logger import Logger
 from tensorflow_probability import distributions as tfpd
 import tensorflow.keras.layers as tfkl
@@ -61,14 +62,11 @@ def conservative_mbo(config):
     # train and validate the neural network models
 
     for e in range(config['epochs']):
-
-        logger.record(
-            "train", trainer.train(
-                data.train), tf.cast(e, tf.int64))
-
-        logger.record(
-            "validate", trainer.validate(
-                data.val), tf.cast(e, tf.int64))
+        step = tf.cast(e, tf.int64)
+        for name, loss in trainer.train(data.train).items():
+            logger.record(name, loss, step)
+        for name, loss in trainer.validate(data.validate).items():
+            logger.record(name, loss, step)
 
     # save the trained forward model
 
@@ -110,3 +108,87 @@ def conservative_mbo(config):
         logger.record(
             "prediction", forward_model(
                 x_var), tf.cast(i, tf.int64))
+
+
+def model_inversion(config):
+    """Train a forward model and perform model based optimization
+    using a conservative objective function
+
+    Args:
+
+    config: dict
+        a dictionary of hyper parameters such as the learning rate
+    """
+
+    # create the dataset and logger
+
+    logging_dir = config['logging_dir']
+    logger = Logger(logging_dir)
+
+    data = PolicyWeightsDataset(
+        obs_dim=11,
+        action_dim=3,
+        hidden_dim=64,
+        val_size=200,
+        batch_size=config['batch_size'],
+        env_name='Hopper-v2',
+        seed=0,
+        x_file='hopper_controller_X.txt',
+        y_file='hopper_controller_y.txt',
+        include_weights=True)
+
+    # create the neural net models and optimizers
+
+    latent_size = config['latent_size']
+    hdim = config['hidden_size']
+
+    generator = tf.keras.Sequential([
+        tfkl.Dense(hdim, use_bias=True, input_shape=(latent_size + 1,)),
+        tfkl.ReLU(),
+        tfkl.Dense(hdim, use_bias=True),
+        tfkl.ReLU(),
+        tfkl.Dense(data.input_size, use_bias=True)])
+
+    discriminator = tf.keras.Sequential([
+        tfkl.Dense(hdim, use_bias=True, input_shape=(data.input_size + 1,)),
+        tfkl.LeakyReLU(alpha=0.2),
+        tfkl.Dense(hdim, use_bias=True),
+        tfkl.LeakyReLU(alpha=0.2),
+        tfkl.Dense(1, use_bias=True)])
+
+    trainer = ModelInversion(
+        generator,
+        discriminator,
+        latent_size=latent_size,
+        optim=tf.keras.optimizers.Adam,
+        learning_rate=config['model_lr'],
+        beta_1=config['beta_1'],
+        beta_2=config['beta_2'])
+
+    # train and validate the neural network models
+
+    for e in range(config['epochs']):
+        step = tf.cast(e, tf.int64)
+        for name, loss in trainer.train(data.train).items():
+            logger.record(name, loss, step)
+        for name, loss in trainer.validate(data.validate).items():
+            logger.record(name, loss, step)
+
+    # save the trained forward model
+
+    generator.save(
+        os.path.join(logging_dir, "generator"))
+    discriminator.save(
+        os.path.join(logging_dir, "discriminator"))
+
+    # sample for the best y using the generator
+
+    max_y = tf.tile(tf.reduce_max(
+        data.y, keepdims=True), [config['solver_samples'], 1])
+    max_x = generator(tf.concat([
+        tf.random.normal([max_y.shape[0], latent_size]), max_y], 1))
+
+    logger.record(
+        "score", data.score(max_x), tf.cast(0, tf.int64))
+    logger.record(
+        "prediction", max_y, tf.cast(0, tf.int64))
