@@ -1,3 +1,4 @@
+from forward_model.utils import get_weights
 import tensorflow as tf
 import numpy as np
 import tensorflow.keras.layers as tfkl
@@ -7,12 +8,69 @@ import os
 
 class PolicyWeightsDataset(object):
 
+    def __init__(self,
+                 obs_dim=11,
+                 action_dim=3,
+                 hidden_dim=64,
+                 val_size=200,
+                 batch_size=32,
+                 env_name='Hopper-v2',
+                 seed=0,
+                 x_file='hopper_controller_X.txt',
+                 y_file='hopper_controller_y.txt',
+                 include_weights=False):
+        """Load static datasets of weights and their corresponding
+        expected returns from the disk
+
+        Args:
+
+        obs_dim: int
+            the number of channels in the environment observations
+        action_dim: int
+            the number of channels in the environment actions
+        hidden_dim: int
+            the number of channels in policy hidden layers
+        val_size: int
+            the number of samples in the validation set
+        batch_size: int
+            the batch size when training
+        env_name: str
+            the name of the gym.Env to use when collecting rollouts
+        seed: int
+            the random seed that controls the dataset shuffle
+        x_file: str
+            the name of the dataset file to be loaded for x
+        y_file: str
+            the name of the dataset file to be loaded for y
+        include_weights: bool
+            whether to build a dataset that includes sample weights for MIN
+        """
+
+        self.obs_dim = obs_dim
+        self.action_dim = action_dim
+        self.hidden_dim = hidden_dim
+        self.val_size = val_size
+        self.batch_size = batch_size
+        self.env_name = env_name
+
+        self.load_resources(seed=seed, x_file=x_file, y_file=y_file)
+        self.build(include_weights=include_weights)
+
     def load_resources(self,
                        seed=0,
                        x_file='hopper_controller_X.txt',
                        y_file='hopper_controller_y.txt'):
         """Load static datasets of weights and their corresponding
         expected returns from the disk
+
+        Args:
+
+        seed: int
+            the random seed that controls the dataset shuffle
+        x_file: str
+            the name of the dataset file to be loaded for x
+        y_file: str
+            the name of the dataset file to be loaded for y
         """
 
         np.random.seed(seed)
@@ -30,15 +88,36 @@ class PolicyWeightsDataset(object):
         self.x = x[indices]
         self.y = y[indices]
 
-    def build(self):
+    def build(self,
+              include_weights=False):
         """Load static datasets of weights and their corresponding
         expected returns from the disk
+
+        Args:
+
+        include_weights: bool
+            whether to build a dataset that includes sample weights for MIN
         """
 
-        train = tf.data.Dataset.from_tensor_slices((
-            self.x[self.val_size:], self.y[self.val_size:]))
-        val = tf.data.Dataset.from_tensor_slices((
-            self.x[:self.val_size], self.y[:self.val_size]))
+        if include_weights:
+
+            train = tf.data.Dataset.from_tensor_slices((
+                self.x[self.val_size:],
+                self.y[self.val_size:],
+                get_weights(self.y[self.val_size:])))
+            val = tf.data.Dataset.from_tensor_slices((
+                self.x[:self.val_size],
+                self.y[:self.val_size],
+                get_weights(self.y[:self.val_size])))
+
+        else:
+
+            train = tf.data.Dataset.from_tensor_slices((
+                self.x[self.val_size:],
+                self.y[self.val_size:]))
+            val = tf.data.Dataset.from_tensor_slices((
+                self.x[:self.val_size],
+                self.y[:self.val_size]))
 
         train = train.shuffle(self.x.shape[0] - self.val_size)
         val = val.shuffle(self.val_size)
@@ -48,35 +127,6 @@ class PolicyWeightsDataset(object):
 
         self.train = train.prefetch(tf.data.experimental.AUTOTUNE)
         self.val = val.prefetch(tf.data.experimental.AUTOTUNE)
-
-    def __init__(self,
-                 obs_dim=11,
-                 action_dim=3,
-                 hidden_dim=64,
-                 val_size=200,
-                 batch_size=32,
-                 env_name='Hopper-v2',
-                 seed=0,
-                 x_file='hopper_controller_X.txt',
-                 y_file='hopper_controller_y.txt'):
-        """Load static datasets of weights and their corresponding
-        expected returns from the disk
-        """
-
-        self.obs_dim = obs_dim
-        self.action_dim = action_dim
-        self.hidden_dim = hidden_dim
-        self.val_size = val_size
-        self.batch_size = batch_size
-        self.env_name = env_name
-
-        self.x = None
-        self.y = None
-        self.train = None
-        self.val = None
-
-        self.load_resources(seed=seed, x_file=x_file, y_file=y_file)
-        self.build()
 
     @property
     def input_shape(self):
@@ -106,7 +156,7 @@ class PolicyWeightsDataset(object):
             a vector of returns for policies whose weights are x[i]
         """
 
-        y = tf.map_fn(self.score_backend_tf, x)
+        y = tf.map_fn(self.score_backend_tf, x, parallel_iterations=1)
         y.set_shape(x.get_shape()[:1])
         return y
 
