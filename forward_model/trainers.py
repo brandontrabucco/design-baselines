@@ -1,3 +1,4 @@
+from forward_model.utils import spearman
 import tensorflow as tf
 
 
@@ -50,11 +51,15 @@ class Conservative(tf.Module):
         """
 
         total_loss = tf.zeros([0])
+        rank = tf.zeros([0])
         for X, y in dataset:
 
             with tf.GradientTape() as tape:
-                loss = tf.keras.losses.mse(y, self.forward_model(X))
+                pred = self.forward_model(X)
+                loss = tf.keras.losses.mse(y, pred)
                 total_loss = tf.concat([total_loss, loss], 0)
+                rank = tf.concat([rank, spearman(y[:, 0], pred[:, 0])], 0)
+
                 perturb = tf.stop_gradient(
                     self.perturbation_distribution(X))
                 loss = tf.reduce_mean(
@@ -67,7 +72,8 @@ class Conservative(tf.Module):
             self.optim.apply_gradients(
                 zip(grads, self.forward_model.trainable_variables))
 
-        return {"forward_train": total_loss}
+        return {"loss_train": total_loss,
+                "rank_correlation_train": rank}
 
     def validate(self,
                  dataset):
@@ -86,10 +92,16 @@ class Conservative(tf.Module):
         """
 
         total_loss = tf.zeros([0])
+        rank = tf.zeros([0])
         for X, y in dataset:
-            loss = tf.keras.losses.mse(y, self.forward_model(X))
+
+            pred = self.forward_model(X)
+            loss = tf.keras.losses.mse(y, pred)
             total_loss = tf.concat([total_loss, loss], 0)
-        return {"forward_val": total_loss}
+            rank = tf.concat([rank, spearman(y[:, 0], pred[:, 0])], 0)
+
+        return {"loss_validate": total_loss,
+                "rank_correlation_validate": rank}
 
 
 class ModelInversion(tf.Module):
@@ -123,7 +135,6 @@ class ModelInversion(tf.Module):
         self.discriminator_optim = optim(**optimizer_kwargs)
         self.optimizer_kwargs = optimizer_kwargs
 
-
     def train(self,
               dataset):
         """Train a conservative forward model and collect negative
@@ -141,21 +152,24 @@ class ModelInversion(tf.Module):
         """
 
         d_loss = tf.zeros([0])
+        real_accuracy = tf.zeros([0])
         g_loss = tf.zeros([0])
+        fake_accuracy = tf.zeros([0])
         for X, y, w in dataset:
 
             with tf.GradientTape() as tape:
-                real_loss = w * tf.keras.losses.mse(
-                    tf.ones_like(y),
-                    self.discriminator(tf.concat([X, y], 1)))
+                real_p = self.discriminator(tf.concat([X, y], 1))
+                real_loss = w * tf.keras.losses.mse(tf.ones_like(y), real_p)
                 X_fake = self.generator(tf.concat([
-                    tf.random.normal([X.shape[0], self.latent_size]),
-                    y], 1))
-                fake_loss = w * tf.keras.losses.mse(
-                    tf.zeros_like(y),
-                    self.discriminator(tf.concat([X_fake, y], 1)))
+                    tf.random.normal([X.shape[0], self.latent_size]), y], 1))
+                fake_p = self.discriminator(tf.concat([X_fake, y], 1))
+                fake_loss = w * tf.keras.losses.mse(tf.zeros_like(y), fake_p)
                 loss = real_loss + fake_loss
                 d_loss = tf.concat([d_loss, loss], 0)
+                real_accuracy = tf.concat([
+                    real_accuracy, tf.cast(real_p[:, 0] > 0.5, tf.float32)], 0)
+                fake_accuracy = tf.concat([
+                    fake_accuracy, tf.cast(fake_p[:, 0] < 0.5, tf.float32)], 0)
                 loss = tf.reduce_mean(loss)
 
             grads = tape.gradient(
@@ -165,8 +179,7 @@ class ModelInversion(tf.Module):
 
             with tf.GradientTape() as tape:
                 X_fake = self.generator(tf.concat([
-                    tf.random.normal([X.shape[0], self.latent_size]),
-                    y], 1))
+                    tf.random.normal([X.shape[0], self.latent_size]), y], 1))
                 fake_loss = w * tf.keras.losses.mse(
                     tf.ones_like(y),
                     self.discriminator(tf.concat([X_fake, y], 1)))
@@ -180,7 +193,9 @@ class ModelInversion(tf.Module):
                 zip(grads, self.generator.trainable_variables))
 
         return {"discriminator_train": d_loss,
-                "generator_train": g_loss}
+                "generator_train": g_loss,
+                "real_accuracy": real_accuracy,
+                "fake_accuracy": fake_accuracy}
 
     def validate(self,
                  dataset):
@@ -199,29 +214,33 @@ class ModelInversion(tf.Module):
         """
 
         d_loss = tf.zeros([0])
+        real_accuracy = tf.zeros([0])
         g_loss = tf.zeros([0])
+        fake_accuracy = tf.zeros([0])
         for X, y, w in dataset:
 
-            real_loss = tf.keras.losses.mse(
-                tf.ones_like(y),
-                self.discriminator(tf.concat([X, y], 1)))
+            real_p = self.discriminator(tf.concat([X, y], 1))
+            real_loss = w * tf.keras.losses.mse(tf.ones_like(y), real_p)
             X_fake = self.generator(tf.concat([
-                tf.random.normal([X.shape[0], self.latent_size]),
-                y], 1))
-            fake_loss = tf.keras.losses.mse(
-                tf.zeros_like(y),
-                self.discriminator(tf.concat([X_fake, y], 1)))
+                tf.random.normal([X.shape[0], self.latent_size]), y], 1))
+            fake_p = self.discriminator(tf.concat([X_fake, y], 1))
+            fake_loss = w * tf.keras.losses.mse(tf.zeros_like(y), fake_p)
             loss = real_loss + fake_loss
             d_loss = tf.concat([d_loss, loss], 0)
+            real_accuracy = tf.concat([
+                real_accuracy, tf.cast(real_p[:, 0] > 0.5, tf.float32)], 0)
+            fake_accuracy = tf.concat([
+                fake_accuracy, tf.cast(fake_p[:, 0] < 0.5, tf.float32)], 0)
 
             X_fake = self.generator(tf.concat([
-                tf.random.normal([X.shape[0], self.latent_size]),
-                y], 1))
-            fake_loss = tf.keras.losses.mse(
+                tf.random.normal([X.shape[0], self.latent_size]), y], 1))
+            fake_loss = w * tf.keras.losses.mse(
                 tf.ones_like(y),
                 self.discriminator(tf.concat([X_fake, y], 1)))
             loss = fake_loss
             g_loss = tf.concat([g_loss, loss], 0)
 
-        return {"discriminator_val": d_loss,
-                "generator_val": g_loss}
+        return {"discriminator_train": d_loss,
+                "generator_train": g_loss,
+                "real_accuracy": real_accuracy,
+                "fake_accuracy": fake_accuracy}

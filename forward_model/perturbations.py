@@ -90,7 +90,7 @@ class FGSM(Perturbation):
         x_var = tf.Variable(original_x)
         with tf.GradientTape() as gradient_tape:
             return original_x + self.epsilon * tf.math.sign(
-                gradient_tape.gradient(-self.forward_model(x_var), [x_var]))
+                gradient_tape.gradient( -self.forward_model(x_var), [x_var]))
 
 
 class PGD(Perturbation):

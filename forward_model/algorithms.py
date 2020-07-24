@@ -3,7 +3,6 @@ from forward_model.perturbations import PGD
 from forward_model.trainers import Conservative
 from forward_model.trainers import ModelInversion
 from forward_model.logger import Logger
-from tensorflow_probability import distributions as tfpd
 import tensorflow.keras.layers as tfkl
 import tensorflow as tf
 import os
@@ -75,14 +74,11 @@ def conservative_mbo(config):
 
     # fit an initialization distribution
 
-    loc = tf.math.reduce_mean(data.x, axis=0, keepdims=True)
-    scale_diag = tf.math.reduce_std(data.x - loc, axis=0)
+    values, indices = tf.math.top_k(
+        data.y[:, 0], k=config['solver_samples'])
 
-    d = tfpd.MultivariateNormalDiag(
-        loc=loc[0], scale_diag=scale_diag)
-
-    x_var = tf.Variable(d.sample(
-        sample_shape=config['solver_samples']))
+    x_var = tf.Variable(
+        tf.gather(data.x, indices, axis=0))
     optim = tf.keras.optimizers.SGD(
         learning_rate=config['solver_lr'])
 
@@ -132,7 +128,7 @@ def model_inversion(config):
         val_size=200,
         batch_size=config['batch_size'],
         env_name='Hopper-v2',
-        seed=0,
+        seed=config['seed'],
         x_file='hopper_controller_X.txt',
         y_file='hopper_controller_y.txt',
         include_weights=True)
