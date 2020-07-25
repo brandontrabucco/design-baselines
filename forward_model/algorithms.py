@@ -92,52 +92,41 @@ def conservative_mbo(config):
 
     # perform gradient based optimization to find x
 
-    logger.record(
-        "score", data.score(
-            x_var), tf.cast(0, tf.int64))
+    score = data.score(x_var)
+    prediction = forward_model(x_var)
 
     logger.record(
-        "prediction", forward_model(
-            x_var), tf.cast(0, tf.int64))
-
+        "score", score, tf.cast(0, tf.int64))
     logger.record(
-        "best/score", data.score(
-            x_var)[0], tf.cast(0, tf.int64))
-
+        "prediction", prediction, tf.cast(0, tf.int64))
     logger.record(
-        "best/prediction", forward_model(
-            x_var)[0], tf.cast(0, tf.int64))
+        "best/score", score[0], tf.cast(0, tf.int64))
+    logger.record(
+        "best/prediction", prediction[0], tf.cast(0, tf.int64))
 
     for i in range(1, config['solver_steps'] + 1):
 
         with tf.GradientTape() as gradient_tape:
-            loss = -tf.reduce_sum(forward_model(x_var))
+            loss = -forward_model(x_var)
         grads = gradient_tape.gradient(loss, x_var)
         optim.apply_gradients([[grads, x_var]])
 
-        logger.record(
-            "gradient_norm", tf.linalg.norm(
-                grads, axis=1), tf.cast(i, tf.int64))
+        gradient_norm = tf.linalg.norm(grads, axis=1)
+        score = data.score(x_var)
+        prediction = forward_model(x_var)
 
         logger.record(
-            "score", data.score(
-                x_var), tf.cast(i, tf.int64))
-
+            "gradient_norm", gradient_norm, tf.cast(i, tf.int64))
         logger.record(
-            "prediction", forward_model(
-                x_var), tf.cast(i, tf.int64))
-
+            "score", score, tf.cast(i, tf.int64))
         logger.record(
-            "best/gradient_norm", tf.linalg.norm(
-                grads[0], axis=1), tf.cast(i, tf.int64))
-
+            "prediction", prediction, tf.cast(i, tf.int64))
         logger.record(
-            "best/score", data.score(
-                x_var)[0], tf.cast(i, tf.int64))
-
+            "best/gradient_norm", gradient_norm[0], tf.cast(i, tf.int64))
         logger.record(
-            "best/prediction", forward_model(
-                x_var)[0], tf.cast(i, tf.int64))
+            "best/score", score[0], tf.cast(i, tf.int64))
+        logger.record(
+            "best/prediction", prediction[0], tf.cast(i, tf.int64))
 
 
 def model_inversion(config):
