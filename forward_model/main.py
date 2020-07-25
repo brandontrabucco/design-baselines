@@ -50,7 +50,7 @@ def conservative(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_lr": tune.grid_search([0.001]),
         "solver_steps": tune.grid_search([100]),
         "conservative_weight": tune.grid_search([
-            0.0, 0.001, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0])},
+            0.0, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0])},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={
@@ -97,6 +97,46 @@ def model_inversion(local_dir, cpus, gpus, num_parallel):
             'gpu': gpus / num_parallel - 0.01})
 
 
+"""
+
+forward-model plot --file ~/fm/conservative_mbo/conservative_mbo_0_*/data/events* --name 'No Negative Samples' \
+--file ~/fm/conservative_mbo/conservative_mbo_8_*/data/events* --name 'No Negative Samples' \
+--file ~/fm/conservative_mbo/conservative_mbo_16_*/data/events* --name 'No Negative Samples' \
+--file ~/fm/conservative_mbo/conservative_mbo_24_*/data/events* --name 'No Negative Samples' \
+--file ~/fm/conservative_mbo/conservative_mbo_1_*/data/events* --name 'Lambda = 0.001' \
+--file ~/fm/conservative_mbo/conservative_mbo_9_*/data/events* --name 'Lambda = 0.001' \
+--file ~/fm/conservative_mbo/conservative_mbo_17_*/data/events* --name 'Lambda = 0.001' \
+--file ~/fm/conservative_mbo/conservative_mbo_25_*/data/events* --name 'Lambda = 0.001' \
+--file ~/fm/conservative_mbo/conservative_mbo_2_*/data/events* --name 'Lambda = 0.1' \
+--file ~/fm/conservative_mbo/conservative_mbo_10_*/data/events* --name 'Lambda = 0.1' \
+--file ~/fm/conservative_mbo/conservative_mbo_18_*/data/events* --name 'Lambda = 0.1' \
+--file ~/fm/conservative_mbo/conservative_mbo_26_*/data/events* --name 'Lambda = 0.1' \
+--file ~/fm/conservative_mbo/conservative_mbo_3_*/data/events* --name 'Lambda = 1.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_11_*/data/events* --name 'Lambda = 1.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_19_*/data/events* --name 'Lambda = 1.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_27_*/data/events* --name 'Lambda = 1.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_4_*/data/events* --name 'Lambda = 10.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_12_*/data/events* --name 'Lambda = 10.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_20_*/data/events* --name 'Lambda = 10.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_28_*/data/events* --name 'Lambda = 10.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_5_*/data/events* --name 'Lambda = 100.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_13_*/data/events* --name 'Lambda = 100.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_21_*/data/events* --name 'Lambda = 100.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_29_*/data/events* --name 'Lambda = 100.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_6_*/data/events* --name 'Lambda = 1000.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_14_*/data/events* --name 'Lambda = 1000.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_22_*/data/events* --name 'Lambda = 1000.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_30_*/data/events* --name 'Lambda = 1000.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_7_*/data/events* --name 'Lambda = 10000.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_15_*/data/events* --name 'Lambda = 10000.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_23_*/data/events* --name 'Lambda = 10000.0' \
+--file ~/fm/conservative_mbo/conservative_mbo_31_*/data/events* --name 'Lambda = 10000.0' \
+--tag 'score/max' --xlabel 'SGD Steps on X*' --ylabel 'Average Return' \
+--title 'Impath of Adversarial Negative Sampling' --out adversarial_ns.png
+
+"""
+
+
 @cli.command()
 @click.option('--file', type=str, multiple=True)
 @click.option('--name', type=str, multiple=True)
@@ -124,6 +164,13 @@ def plot(file, name, tag, xlabel, ylabel, title, out):
                                     'Type': n}, ignore_index=True)
 
     plt.clf()
-    sns.lineplot(x=xlabel, y=ylabel, hue='Type', data=df)
-    plt.title(title)
+    g = sns.relplot(x=xlabel,
+                    y=ylabel,
+                    hue='Type',
+                    data=df,
+                    kind="line",
+                    height=5,
+                    aspect=2,
+                    facet_kws={"legend_out": True})
+    g.set(title=title)
     plt.savefig(out)

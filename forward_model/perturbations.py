@@ -99,7 +99,6 @@ class PGD(Perturbation):
                  forward_model,
                  clip_two_norm=None,
                  clip_inf_norm=None,
-                 num_steps=10,
                  optim=tf.keras.optimizers.SGD,
                  **optimizer_kwargs):
         """Create a projected gradient descent module that
@@ -113,8 +112,6 @@ class PGD(Perturbation):
             if provided, specifies the maximum l2 norm of perturbations
         clip_inf_norm: float or None
             if provided, specifies the maximum infinity norm of perturbations
-        num_steps: int
-            the number of gradient descent steps to use
         optim: __class__
             the optimizer class to use such as tf.keras.optimizers.SGD
         **optimizer_kwargs: dict
@@ -126,7 +123,6 @@ class PGD(Perturbation):
         self.forward_model = forward_model
         self.clip_two_norm = clip_two_norm
         self.clip_inf_norm = clip_inf_norm
-        self.num_steps = num_steps
         self.optim = optim(**optimizer_kwargs)
         self.optimizer_kwargs = optimizer_kwargs
 
@@ -173,7 +169,8 @@ class PGD(Perturbation):
         return delta + original_x
 
     def __call__(self,
-                 original_x):
+                 original_x,
+                 num_steps=10):
         """Samples perturbed values for x using projected gradient descent
         to find adversarial examples
 
@@ -181,6 +178,8 @@ class PGD(Perturbation):
 
         original_x: tf.Tensor
             the original and central value of the tensor being optimized
+        num_steps: int
+            the number of gradient descent steps to use
 
         Returns:
 
@@ -191,7 +190,7 @@ class PGD(Perturbation):
         x_var = tf.Variable(original_x)
         for variable in self.optim.variables():
             variable.assign(tf.zeros_like(variable))
-        for step in range(self.num_steps):
+        for step in range(num_steps):
             self.optim.minimize(lambda: -self.forward_model(x_var), [x_var])
             x_var.assign(self.project(original_x, x_var))
         return tf.convert_to_tensor(x_var)

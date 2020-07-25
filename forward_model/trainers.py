@@ -35,7 +35,8 @@ class Conservative(tf.Module):
         self.optimizer_kwargs = optimizer_kwargs
 
     def train(self,
-              dataset):
+              dataset,
+              **kwargs):
         """Train a conservative forward model and collect negative
         samples using a perturbation distribution
 
@@ -61,7 +62,7 @@ class Conservative(tf.Module):
                 rank = tf.concat([rank, spearman(y[:, 0], pred[:, 0])], 0)
 
                 perturb = tf.stop_gradient(
-                    self.perturbation_distribution(X))
+                    self.perturbation_distribution(X, **kwargs))
                 loss = tf.reduce_mean(
                     loss + self.conservative_weight * (
                         self.forward_model(perturb)[:, 0] -
