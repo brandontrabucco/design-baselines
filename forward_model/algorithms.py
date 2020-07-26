@@ -1,9 +1,9 @@
 from forward_model.data import PolicyWeightsDataset
+from forward_model.data import ProteinFluorescenceDataset
 from forward_model.perturbations import GradientAscent
 from forward_model.trainers import Conservative
 from forward_model.trainers import ModelInversion
-from forward_model.nets import FullyConnected
-from forward_model.nets import Shallow
+from forward_model.nets import ShallowFullyConnected
 from forward_model.logger import Logger
 import tensorflow.keras.layers as tfkl
 import tensorflow as tf
@@ -25,38 +25,40 @@ def conservative_mbo(config):
     logging_dir = config['logging_dir']
     logger = Logger(logging_dir)
 
-    data = PolicyWeightsDataset(
-        obs_dim=11,
-        action_dim=3,
-        hidden_dim=64,
-        val_size=200,
-        batch_size=config['batch_size'],
-        env_name='Hopper-v2',
-        seed=0,
-        x_file='hopper_controller_X.txt',
-        y_file='hopper_controller_y.txt')
+    if config['dataset'] == 'PolicyWeightsDataset':
+
+        data = PolicyWeightsDataset(
+            obs_dim=11,
+            action_dim=3,
+            hidden_dim=64,
+            val_size=200,
+            batch_size=config['batch_size'],
+            env_name='Hopper-v2',
+            seed=config['seed'],
+            x_file='hopper_controller_X.txt',
+            y_file='hopper_controller_y.txt',
+            include_weights=False)
+
+    else:
+
+        data = ProteinFluorescenceDataset(
+            val_size=200,
+            batch_size=config['batch_size'],
+            seed=config['seed'],
+            include_weights=False)
 
     # create the neural net models and optimizers
 
-    """forward_model = FullyConnected(
-        data.stream_sizes, [1],
-        merged=config['hidden_size'] // 8,
-        hidden=config['hidden_size'],
-        act=tfkl.LeakyReLU,
-        batch_norm=True)"""
-
-    forward_model = Shallow(
+    forward_model = ShallowFullyConnected(
         data.input_size, 1,
         hidden=config['hidden_size'],
         act=tfkl.LeakyReLU,
         batch_norm=False)
 
-    epochs = config['epochs']
-
     perturbation = GradientAscent(
         forward_model,
         learning_rate=config['perturbation_lr'],
-        epochs=epochs,
+        epochs=config['epochs'],
         max_steps=config['perturbation_steps'])
 
     trainer = Conservative(
@@ -67,7 +69,7 @@ def conservative_mbo(config):
 
     # train and validate the neural network models
 
-    for e in range(epochs):
+    for e in range(config['epochs']):
         e = tf.cast(tf.convert_to_tensor(e), tf.int64)
         for name, loss in trainer.train(data.train, e).items():
             logger.record(name, loss, e)
@@ -78,7 +80,6 @@ def conservative_mbo(config):
 
     indices = tf.math.top_k(data.y[:, 0], k=config['solver_samples'])[1]
     original_x = tf.gather(data.x, indices, axis=0)
-
     score = data.score(original_x)
     prediction = forward_model(original_x)
 

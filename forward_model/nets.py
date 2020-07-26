@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow.keras.layers as tfkl
 
 
-class Shallow(tf.keras.Model):
+class ShallowFullyConnected(tf.keras.Model):
     """A Fully Connected Network with 5 trainable layers"""
 
     def __init__(self,
@@ -28,7 +28,7 @@ class Shallow(tf.keras.Model):
             whether to use batch normalization or remove it
         """
 
-        super(Shallow, self).__init__()
+        super(ShallowFullyConnected, self).__init__()
         self.inp_size = inp_size
         self.out_size = out_size
 

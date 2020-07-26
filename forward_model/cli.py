@@ -16,7 +16,7 @@ def cli():
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def conservative(local_dir, cpus, gpus, num_parallel, num_samples):
+def conservative_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
 
@@ -39,9 +39,59 @@ def conservative(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus, num_gpus=gpus)
     tune.run(conservative_mbo, config={
         "logging_dir": "data",
+        "dataset": "ProteinFluorescenceDataset",
         "seed": tune.randint(10000),
         "epochs": tune.grid_search([100]),
-        "hidden_size": tune.grid_search([256]),
+        "hidden_size": tune.grid_search([2048]),
+        "batch_size": tune.grid_search([128]),
+        "forward_model_lr": tune.grid_search([0.001]),
+        "perturbation_lr": tune.grid_search([1.0]),
+        "perturbation_steps": tune.grid_search([100]),
+        "solver_samples": tune.grid_search([128]),
+        "solver_lr": tune.grid_search([1.0]),
+        "solver_steps": tune.grid_search([100]),
+        "conservative_weight": tune.grid_search([
+            0.0, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0])},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={
+            'cpu': cpus // num_parallel,
+            'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='data')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def conservative_policy(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from forward_model.algorithms import conservative_mbo
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    tune.run(conservative_mbo, config={
+        "logging_dir": "data",
+        "dataset": "PolicyWeightsDataset",
+        "seed": tune.randint(10000),
+        "epochs": tune.grid_search([100]),
+        "hidden_size": tune.grid_search([2048]),
         "batch_size": tune.grid_search([128]),
         "forward_model_lr": tune.grid_search([0.001]),
         "perturbation_lr": tune.grid_search([0.001]),
