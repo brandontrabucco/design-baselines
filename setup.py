@@ -18,4 +18,4 @@ setup(
     packages=find_packages(),
     install_requires=PACKAGES,
     entry_points={
-        'console_scripts': ('forward-model=forward_model.main:cli',)})
+        'console_scripts': ('forward-model=forward_model.cli:cli',)})

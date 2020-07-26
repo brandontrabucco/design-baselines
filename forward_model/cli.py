@@ -41,9 +41,9 @@ def conservative(local_dir, cpus, gpus, num_parallel, num_samples):
         "logging_dir": "data",
         "seed": tune.randint(10000),
         "epochs": tune.grid_search([100]),
-        "hidden_size": tune.grid_search([2048]),
+        "hidden_size": tune.grid_search([256]),
         "batch_size": tune.grid_search([128]),
-        "forward_model_lr": tune.grid_search([0.0001]),
+        "forward_model_lr": tune.grid_search([0.001]),
         "perturbation_lr": tune.grid_search([0.001]),
         "perturbation_steps": tune.grid_search([100]),
         "solver_samples": tune.grid_search([128]),
@@ -97,55 +97,15 @@ def model_inversion(local_dir, cpus, gpus, num_parallel):
             'gpu': gpus / num_parallel - 0.01})
 
 
-"""
-
-forward-model plot --file ~/fm/conservative_mbo/conservative_mbo_0_*/data/events* --name 'No Negative Samples' \
---file ~/fm/conservative_mbo/conservative_mbo_8_*/data/events* --name 'No Negative Samples' \
---file ~/fm/conservative_mbo/conservative_mbo_16_*/data/events* --name 'No Negative Samples' \
---file ~/fm/conservative_mbo/conservative_mbo_24_*/data/events* --name 'No Negative Samples' \
---file ~/fm/conservative_mbo/conservative_mbo_1_*/data/events* --name 'Lambda = 0.001' \
---file ~/fm/conservative_mbo/conservative_mbo_9_*/data/events* --name 'Lambda = 0.001' \
---file ~/fm/conservative_mbo/conservative_mbo_17_*/data/events* --name 'Lambda = 0.001' \
---file ~/fm/conservative_mbo/conservative_mbo_25_*/data/events* --name 'Lambda = 0.001' \
---file ~/fm/conservative_mbo/conservative_mbo_2_*/data/events* --name 'Lambda = 0.1' \
---file ~/fm/conservative_mbo/conservative_mbo_10_*/data/events* --name 'Lambda = 0.1' \
---file ~/fm/conservative_mbo/conservative_mbo_18_*/data/events* --name 'Lambda = 0.1' \
---file ~/fm/conservative_mbo/conservative_mbo_26_*/data/events* --name 'Lambda = 0.1' \
---file ~/fm/conservative_mbo/conservative_mbo_3_*/data/events* --name 'Lambda = 1.0' \
---file ~/fm/conservative_mbo/conservative_mbo_11_*/data/events* --name 'Lambda = 1.0' \
---file ~/fm/conservative_mbo/conservative_mbo_19_*/data/events* --name 'Lambda = 1.0' \
---file ~/fm/conservative_mbo/conservative_mbo_27_*/data/events* --name 'Lambda = 1.0' \
---file ~/fm/conservative_mbo/conservative_mbo_4_*/data/events* --name 'Lambda = 10.0' \
---file ~/fm/conservative_mbo/conservative_mbo_12_*/data/events* --name 'Lambda = 10.0' \
---file ~/fm/conservative_mbo/conservative_mbo_20_*/data/events* --name 'Lambda = 10.0' \
---file ~/fm/conservative_mbo/conservative_mbo_28_*/data/events* --name 'Lambda = 10.0' \
---file ~/fm/conservative_mbo/conservative_mbo_5_*/data/events* --name 'Lambda = 100.0' \
---file ~/fm/conservative_mbo/conservative_mbo_13_*/data/events* --name 'Lambda = 100.0' \
---file ~/fm/conservative_mbo/conservative_mbo_21_*/data/events* --name 'Lambda = 100.0' \
---file ~/fm/conservative_mbo/conservative_mbo_29_*/data/events* --name 'Lambda = 100.0' \
---file ~/fm/conservative_mbo/conservative_mbo_6_*/data/events* --name 'Lambda = 1000.0' \
---file ~/fm/conservative_mbo/conservative_mbo_14_*/data/events* --name 'Lambda = 1000.0' \
---file ~/fm/conservative_mbo/conservative_mbo_22_*/data/events* --name 'Lambda = 1000.0' \
---file ~/fm/conservative_mbo/conservative_mbo_30_*/data/events* --name 'Lambda = 1000.0' \
---file ~/fm/conservative_mbo/conservative_mbo_7_*/data/events* --name 'Lambda = 10000.0' \
---file ~/fm/conservative_mbo/conservative_mbo_15_*/data/events* --name 'Lambda = 10000.0' \
---file ~/fm/conservative_mbo/conservative_mbo_23_*/data/events* --name 'Lambda = 10000.0' \
---file ~/fm/conservative_mbo/conservative_mbo_31_*/data/events* --name 'Lambda = 10000.0' \
---tag 'score/max' --xlabel 'SGD Steps on X*' --ylabel 'Average Return' \
---title 'Impath of Adversarial Negative Sampling' --out adversarial_ns.png
-
-"""
-
-
 @cli.command()
-@click.option('--file', type=str, multiple=True)
+@click.option('--dir', type=str)
 @click.option('--name', type=str, multiple=True)
 @click.option('--tag', type=str)
 @click.option('--xlabel', type=str)
 @click.option('--ylabel', type=str)
 @click.option('--title', type=str)
 @click.option('--out', type=str)
-def plot(file, name, tag, xlabel, ylabel, title, out):
+def plot(dir, name, tag, xlabel, ylabel, title, out):
 
     import tensorflow as tf
     import seaborn as sns
@@ -153,6 +113,17 @@ def plot(file, name, tag, xlabel, ylabel, title, out):
     import matplotlib.pyplot as plt
     sns.set(style='darkgrid')
 
+    import os
+    file = tf.io.gfile.glob(os.path.join(dir, '*/data/events*'))
+    ids = [int(f.split('_batch_size')[
+        0].split('conservative_mbo_')[1]) for f in file]
+
+    zipped_lists = zip(ids, file)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    ids, file = [list(tuple) for tuple in tuples]
+
+    name = list(name) * (len(file) // len(name))
     df = pd.DataFrame(columns=[xlabel, ylabel, 'Type'])
 
     for f, n in zip(file, name):

@@ -1,12 +1,13 @@
 from forward_model.data import PolicyWeightsDataset
-from forward_model.perturbations import PGD
+from forward_model.perturbations import GradientAscent
 from forward_model.trainers import Conservative
 from forward_model.trainers import ModelInversion
+from forward_model.nets import FullyConnected
+from forward_model.nets import Shallow
 from forward_model.logger import Logger
 import tensorflow.keras.layers as tfkl
 import tensorflow as tf
 import os
-import math
 
 
 def conservative_mbo(config):
@@ -37,63 +38,49 @@ def conservative_mbo(config):
 
     # create the neural net models and optimizers
 
-    hdim = config['hidden_size']
+    """forward_model = FullyConnected(
+        data.stream_sizes, [1],
+        merged=config['hidden_size'] // 8,
+        hidden=config['hidden_size'],
+        act=tfkl.LeakyReLU,
+        batch_norm=True)"""
 
-    forward_model = tf.keras.Sequential([
-        tfkl.Dense(hdim, use_bias=True, input_shape=data.input_shape),
-        tfkl.LeakyReLU(alpha=0.2),
-        tfkl.Dense(hdim, use_bias=True),
-        tfkl.LeakyReLU(alpha=0.2),
-        tfkl.Dense(1, use_bias=True)])
+    forward_model = Shallow(
+        data.input_size, 1,
+        hidden=config['hidden_size'],
+        act=tfkl.LeakyReLU,
+        batch_norm=False)
 
-    perturbation_distribution = PGD(
+    epochs = config['epochs']
+
+    perturbation = GradientAscent(
         forward_model,
-        optim=tf.keras.optimizers.SGD,
-        learning_rate=config['perturbation_lr'])
+        learning_rate=config['perturbation_lr'],
+        epochs=epochs,
+        max_steps=config['perturbation_steps'])
 
     trainer = Conservative(
-        forward_model,
-        perturbation_distribution,
+        forward_model, perturbation,
         conservative_weight=config['conservative_weight'],
         optim=tf.keras.optimizers.Adam,
         learning_rate=config['forward_model_lr'])
 
     # train and validate the neural network models
 
-    epochs = config['epochs']
-    perturbation_steps = config['perturbation_steps']
-
-    def schedule(epoch):
-        return int(math.ceil(
-            perturbation_steps * (epoch + 1) / epochs))
-
     for e in range(epochs):
-        step = tf.cast(e, tf.int64)
-        for name, loss in trainer.train(
-                data.train, num_steps=schedule(e)).items():
-            logger.record(name, loss, step)
-        for name, loss in trainer.validate(data.validate).items():
-            logger.record(name, loss, step)
-
-    # save the trained forward model
-
-    forward_model.save(
-        os.path.join(logging_dir, "forward-model"))
-
-    # fit an initialization distribution
-
-    values, indices = tf.math.top_k(
-        data.y[:, 0], k=config['solver_samples'])
-
-    x_var = tf.Variable(
-        tf.gather(data.x, indices, axis=0))
-    optim = tf.keras.optimizers.SGD(
-        learning_rate=config['solver_lr'])
+        e = tf.cast(tf.convert_to_tensor(e), tf.int64)
+        for name, loss in trainer.train(data.train, e).items():
+            logger.record(name, loss, e)
+        for name, loss in trainer.validate(data.validate, e).items():
+            logger.record(name, loss, e)
 
     # perform gradient based optimization to find x
 
-    score = data.score(x_var)
-    prediction = forward_model(x_var)
+    indices = tf.math.top_k(data.y[:, 0], k=config['solver_samples'])[1]
+    original_x = tf.gather(data.x, indices, axis=0)
+
+    score = data.score(original_x)
+    prediction = forward_model(original_x)
 
     logger.record(
         "score", score, tf.cast(0, tf.int64))
@@ -106,14 +93,15 @@ def conservative_mbo(config):
 
     for i in range(1, config['solver_steps'] + 1):
 
-        with tf.GradientTape() as gradient_tape:
-            loss = -forward_model(x_var)
-        grads = gradient_tape.gradient(loss, x_var)
-        optim.apply_gradients([[grads, x_var]])
+        with tf.GradientTape() as t:
+            t.watch(original_x)
+            prediction = forward_model(original_x)
+        grads = t.gradient(prediction, original_x)
+        original_x = original_x + grads * config['solver_lr']
 
         gradient_norm = tf.linalg.norm(grads, axis=1)
-        score = data.score(x_var)
-        prediction = forward_model(x_var)
+        score = data.score(original_x)
+        prediction = forward_model(original_x)
 
         logger.record(
             "gradient_norm", gradient_norm, tf.cast(i, tf.int64))

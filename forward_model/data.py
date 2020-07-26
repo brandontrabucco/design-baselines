@@ -78,13 +78,11 @@ class PolicyWeightsDataset(object):
         basedir = os.path.dirname(os.path.abspath(__file__))
         x = np.loadtxt(os.path.join(basedir, x_file))
         y = np.loadtxt(os.path.join(basedir, y_file))
-
         x = x.astype(np.float32)
         y = y.astype(np.float32).reshape([-1, 1])
 
         indices = np.arange(x.shape[0])
         np.random.shuffle(indices)
-
         self.x = x[indices]
         self.y = y[indices]
 
@@ -100,7 +98,6 @@ class PolicyWeightsDataset(object):
         """
 
         if include_weights:
-
             train = tf.data.Dataset.from_tensor_slices((
                 self.x[self.val_size:],
                 self.y[self.val_size:],
@@ -111,7 +108,6 @@ class PolicyWeightsDataset(object):
                 get_weights(self.y[:self.val_size])))
 
         else:
-
             train = tf.data.Dataset.from_tensor_slices((
                 self.x[self.val_size:],
                 self.y[self.val_size:]))
@@ -121,99 +117,51 @@ class PolicyWeightsDataset(object):
 
         train = train.shuffle(self.x.shape[0] - self.val_size)
         validate = validate.shuffle(self.val_size)
-
         train = train.batch(self.batch_size)
         validate = validate.batch(self.batch_size)
 
-        self.train = train.prefetch(tf.data.experimental.AUTOTUNE)
-        self.validate = validate.prefetch(tf.data.experimental.AUTOTUNE)
+        self.train = train.prefetch(
+            tf.data.experimental.AUTOTUNE)
+        self.validate = validate.prefetch(
+            tf.data.experimental.AUTOTUNE)
 
-    def score(self, x):
-        """Assign a score to a large set of wrights provided by
-        performing a rollout in an environment
-
-        Args:
-
-        x: tf.Tensor
-            a batch of designs that will be evaluated using an oracle
+    @property
+    def stream_shapes(self):
+        """Return the number of weights and biases in the design
+        space of the policy
 
         Returns:
 
-        score: tf.Tensor
-            a vector of returns for policies whose weights are x[i]
+        shape: list
+            the shape of a single data point in the dataset
         """
 
-        y = tf.map_fn(self.score_backend_tf, x, parallel_iterations=1)
-        y.set_shape(x.get_shape()[:1])
-        return y
+        return [(self.obs_dim, self.hidden_dim),
+                (self.hidden_dim,),
+                (self.hidden_dim, self.hidden_dim),
+                (self.hidden_dim,),
+                (self.hidden_dim, self.action_dim),
+                (self.action_dim,),
+                (1, self.action_dim)]
 
-    def score_backend_tf(self, x):
-        """Assign a score to a single set of weights provided by
-        performing a rollout in an environment
-
-        Args:
-
-        x: np.ndarray
-            a single design that will be evaluated using an oracle
+    @property
+    def stream_sizes(self):
+        """Return the number of weights and biases in the design
+        space of the policy
 
         Returns:
 
-        score: np.ndarray
-            a return for a policy whose weights are x
+        shape: list
+            the shape of a single data point in the dataset
         """
 
-        return tf.numpy_function(self.score_backend_np, [x], tf.float32)
-
-    def score_backend_np(self, x) -> np.ndarray:
-        """Assign a score to a single set of wrights provided by
-        performing a rollout in an environment
-
-        Args:
-
-        x: np.ndarray
-            a single design that will be evaluated using an oracle
-
-        Returns:
-
-        score: np.ndarray
-            a return for a policy whose weights are x
-        """
-
-        # make a copy of the policy and the environment
-        env = gym.make(self.env_name)
-        policy = tf.keras.Sequential([
-            tfkl.Dense(self.hidden_dim, use_bias=True, input_shape=(self.obs_dim,)),
-            tfkl.Activation('tanh'),
-            tfkl.Dense(self.hidden_dim, use_bias=True),
-            tfkl.Activation('tanh'),
-            tfkl.Dense(self.action_dim, use_bias=True)])
-
-        # extract weights from the vector design
-        weights = []
-        for s in [(self.obs_dim, self.hidden_dim),
-                  (self.hidden_dim,),
-                  (self.hidden_dim, self.hidden_dim),
-                  (self.hidden_dim,),
-                  (self.hidden_dim, self.action_dim),
-                  (self.action_dim,),
-                  (1, self.action_dim)]:
-            weights.append(x[0:np.prod(s)].reshape(s))
-            x = x[np.prod(s):]
-
-        # the final weight is logstd and is not used
-        weights.pop(-1)
-
-        # set the policy weights to those provided
-        policy.set_weights(weights)
-
-        # perform a single rollout for quick evaluation
-        obs, done = env.reset(), False
-        path_returns = 0.0
-        while not done:
-            act = policy(obs[np.newaxis])[0]
-            obs, rew, done, info = env.step(act)
-            path_returns += rew
-        return np.array(path_returns).astype(np.float32)
+        return [self.obs_dim * self.hidden_dim,
+                self.hidden_dim,
+                self.hidden_dim * self.hidden_dim,
+                self.hidden_dim,
+                self.hidden_dim * self.action_dim,
+                self.action_dim,
+                self.action_dim]
 
     @property
     def input_shape(self):
@@ -240,3 +188,84 @@ class PolicyWeightsDataset(object):
         """
 
         return np.prod(self.input_shape)
+
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=[None, None], dtype=tf.float32)])
+    def score(self, x):
+        """Assign a score to a large set of wrights provided by
+        performing a rollout in an environment
+
+        Args:
+
+        x: tf.Tensor
+            a batch of designs that will be evaluated using an oracle
+
+        Returns:
+
+        score: tf.Tensor
+            a vector of returns for policies whose weights are x[i]
+        """
+
+        y = tf.map_fn(self.score_tf, x, parallel_iterations=16)
+        y.set_shape(x.get_shape()[:1])
+        return y
+
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=[None], dtype=tf.float32)])
+    def score_tf(self, x):
+        """Assign a score to a single set of weights provided by
+        performing a rollout in an environment
+
+        Args:
+
+        x: np.ndarray
+            a single design that will be evaluated using an oracle
+
+        Returns:
+
+        score: np.ndarray
+            a return for a policy whose weights are x
+        """
+
+        return tf.numpy_function(self.score_np, [x], tf.float32)
+
+    def score_np(self, x) -> np.ndarray:
+        """Assign a score to a single set of weights provided by
+        performing a rollout in an environment
+
+        Args:
+
+        x: np.ndarray
+            a single design that will be evaluated using an oracle
+
+        Returns:
+
+        score: np.ndarray
+            a return for a policy whose weights are x
+        """
+
+        # extract weights from the vector design
+        weights = []
+        for s in self.stream_shapes:
+            weights.append(x[0:np.prod(s)].reshape(s))
+            x = x[np.prod(s):]
+
+        # the final weight is logstd and is not used
+        weights.pop(-1)
+
+        # create a policy forward pass in numpy
+        def mlp_policy(h):
+            h = np.tanh(h @ weights[0] + weights[1])
+            h = np.tanh(h @ weights[2] + weights[3])
+            return h @ weights[4] + weights[5]
+
+        # make a copy of the policy and the environment
+        env = gym.make(self.env_name)
+
+        # perform a single rollout for quick evaluation
+        obs, done = env.reset(), False
+        path_returns = np.zeros([], dtype=np.float32)
+        while not done:
+            obs, rew, done, info = env.step(mlp_policy(obs))
+            path_returns += rew.astype(np.float32)
+        return path_returns
