@@ -1,5 +1,4 @@
-from forward_model.data import PolicyWeightsDataset
-from forward_model.data import ProteinFluorescenceDataset
+from forward_model.data import StaticGraphTask
 from forward_model.perturbations import GradientAscent
 from forward_model.trainers import Conservative
 from forward_model.trainers import ModelInversion
@@ -22,35 +21,14 @@ def conservative_mbo(config):
 
     # create the dataset and logger
 
-    logging_dir = config['logging_dir']
-    logger = Logger(logging_dir)
-
-    if config['dataset'] == 'PolicyWeightsDataset':
-
-        data = PolicyWeightsDataset(
-            obs_dim=11,
-            action_dim=3,
-            hidden_dim=64,
-            val_size=200,
-            batch_size=config['batch_size'],
-            env_name='Hopper-v2',
-            seed=config['seed'],
-            x_file='hopper_controller_X.txt',
-            y_file='hopper_controller_y.txt',
-            include_weights=False)
-
-    else:
-
-        data = ProteinFluorescenceDataset(
-            val_size=200,
-            batch_size=config['batch_size'],
-            seed=config['seed'],
-            include_weights=False)
+    task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    train_data, validate_data = task.build(include_weights=False)
+    logger = Logger(config['logging_dir'])
 
     # create the neural net models and optimizers
 
     forward_model = ShallowFullyConnected(
-        data.input_size, 1,
+        task.input_size, 1,
         hidden=config['hidden_size'],
         act=tfkl.LeakyReLU,
         batch_norm=False)
@@ -63,24 +41,27 @@ def conservative_mbo(config):
 
     trainer = Conservative(
         forward_model, perturbation,
-        conservative_weight=config['conservative_weight'],
-        optim=tf.keras.optimizers.Adam,
-        learning_rate=config['forward_model_lr'])
+        target_threshold=config['target_threshold'],
+        initial_alpha=config['initial_alpha'],
+        forward_model_optim=tf.keras.optimizers.Adam,
+        forward_model_lr=config['forward_model_lr'],
+        alpha_optim=tf.keras.optimizers.Adam,
+        alpha_lr=config['alpha_lr'])
 
     # train and validate the neural network models
 
     for e in range(config['epochs']):
         e = tf.cast(tf.convert_to_tensor(e), tf.int64)
-        for name, loss in trainer.train(data.train, e).items():
+        for name, loss in trainer.train(train_data, e).items():
             logger.record(name, loss, e)
-        for name, loss in trainer.validate(data.validate, e).items():
+        for name, loss in trainer.validate(validate_data, e).items():
             logger.record(name, loss, e)
 
     # perform gradient based optimization to find x
 
-    indices = tf.math.top_k(data.y[:, 0], k=config['solver_samples'])[1]
-    original_x = tf.gather(data.x, indices, axis=0)
-    score = data.score(original_x)
+    indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
+    original_x = tf.gather(task.x, indices, axis=0)
+    score = task.score(original_x)
     prediction = forward_model(original_x)
 
     logger.record(
@@ -101,7 +82,7 @@ def conservative_mbo(config):
         original_x = original_x + grads * config['solver_lr']
 
         gradient_norm = tf.linalg.norm(grads, axis=1)
-        score = data.score(original_x)
+        score = task.score(original_x)
         prediction = forward_model(original_x)
 
         logger.record(

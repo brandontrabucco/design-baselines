@@ -1,6 +1,8 @@
 from forward_model.utils import spearman
 from collections import defaultdict
 import tensorflow as tf
+import tensorflow_probability as tfp
+import numpy as np
 
 
 class Conservative(tf.Module):
@@ -8,9 +10,12 @@ class Conservative(tf.Module):
     def __init__(self,
                  forward_model,
                  perturbation,
-                 conservative_weight=1.0,
-                 optim=tf.keras.optimizers.Adam,
-                 **optimizer_kwargs):
+                 target_threshold=tf.constant(10.0),
+                 initial_alpha=0.0001,
+                 forward_model_optim=tf.keras.optimizers.Adam,
+                 forward_model_lr=0.001,
+                 alpha_optim=tf.keras.optimizers.Adam,
+                 alpha_lr=0.001):
         """Build a trainer for a conservative forward model with negatives
         sampled from a perturbation distribution
 
@@ -20,20 +25,30 @@ class Conservative(tf.Module):
             a keras model that accepts vectorized inputs and returns scores
         perturbation: Perturbation
             a distribution that returns new samples conditioned on an X
-        conservative_weight: float
-            the weight of the conservative loss terms
-        optim: __class__
-            the optimizer class to use such as tf.keras.optimizers.SGD
-        **optimizer_kwargs: dict
-            additional keyword arguments passed to optim
+        target_threshold: float
+            the target gap between f(x) and f(\tilde x) for conservative training
+        initial_alpha: float
+            the initial value for the alpha lagrange multiplier
+        forward_model_optim: __class__
+            the optimizer class to use for optimizing the forward model
+        forward_model_lr: float
+            the learning rate for the forward model optimizer
+        alpha_optim: __class__
+            the optimizer class to use for optimizing the lagrange multiplier
+        alpha_lr: float
+            the learning rate for the lagrange multiplier optimizer
         """
 
         super().__init__()
         self.forward_model = forward_model
         self.perturbation = perturbation
-        self.conservative_weight = conservative_weight
-        self.optim = optim(**optimizer_kwargs)
-        self.optimizer_kwargs = optimizer_kwargs
+        self.target_threshold = target_threshold
+        self.optim = forward_model_optim(learning_rate=forward_model_lr)
+
+        # create training machinery for alpha
+        self.log_alpha = tf.Variable(np.log(initial_alpha).astype(np.float32))
+        self.alpha = tfp.util.DeferredTensor(self.log_alpha, tf.exp)
+        self.alpha_optim = alpha_optim(learning_rate=alpha_lr)
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
@@ -58,7 +73,7 @@ class Conservative(tf.Module):
             a dictionary that contains logging information
         """
 
-        with tf.GradientTape() as tape:
+        with tf.GradientTape(persistent=True) as tape:
             prediction = self.forward_model(X, training=True)
             mse = tf.keras.losses.mse(y, prediction)
             rank_correlation = spearman(y[:, 0], prediction[:, 0])
@@ -66,16 +81,23 @@ class Conservative(tf.Module):
             perturb = tf.stop_gradient(self.perturbation(X, num_steps))
             conservative = (self.forward_model(perturb, training=True)[:, 0] -
                             self.forward_model(X, training=True)[:, 0])
+            gap = (self.alpha * self.target_threshold -
+                   self.alpha * conservative)
 
-            total_loss = tf.reduce_mean(
-                mse + self.conservative_weight * conservative)
+            total_loss = tf.reduce_mean(mse + self.alpha * conservative)
+            alpha_loss = tf.reduce_mean(gap)
 
         grads = tape.gradient(
             total_loss, self.forward_model.trainable_variables)
         self.optim.apply_gradients(
             zip(grads, self.forward_model.trainable_variables))
 
+        grads = tape.gradient(alpha_loss, [self.log_alpha])
+        self.alpha_optim.apply_gradients(zip(grads, [self.log_alpha]))
+
         return {'train/mse': mse,
+                'train/alpha_loss': gap,
+                'train/alpha': self.alpha,
                 'train/rank_correlation': rank_correlation,
                 'train/conservative': conservative}
 

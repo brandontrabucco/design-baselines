@@ -39,19 +39,21 @@ def conservative_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus, num_gpus=gpus)
     tune.run(conservative_mbo, config={
         "logging_dir": "data",
-        "dataset": "ProteinFluorescenceDataset",
+        "task": "GFP-v0",
+        "task_kwargs": {"val_size": 200, "batch_size": 128},
         "seed": tune.randint(10000),
-        "epochs": tune.grid_search([100]),
+        "epochs": tune.grid_search([50]),
         "hidden_size": tune.grid_search([2048]),
-        "batch_size": tune.grid_search([128]),
-        "forward_model_lr": tune.grid_search([0.001]),
+        'target_threshold': tune.grid_search([0.0]),
+        'initial_alpha': tune.grid_search([
+            0.0, 0.00000001, 0.0000001, 0.000001, 0.00001, 0.0001, 0.001, 0.01]),
+        'forward_model_lr': tune.grid_search([0.001]),
+        'alpha_lr': tune.grid_search([0.0]),
         "perturbation_lr": tune.grid_search([1.0]),
         "perturbation_steps": tune.grid_search([100]),
         "solver_samples": tune.grid_search([128]),
         "solver_lr": tune.grid_search([1.0]),
-        "solver_steps": tune.grid_search([100]),
-        "conservative_weight": tune.grid_search([
-            0.0, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0])},
+        "solver_steps": tune.grid_search([100])},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={
@@ -88,19 +90,20 @@ def conservative_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus, num_gpus=gpus)
     tune.run(conservative_mbo, config={
         "logging_dir": "data",
-        "dataset": "PolicyWeightsDataset",
+        "task": "HopperController-v0",
+        "task_kwargs": {"val_size": 200, "batch_size": 128},
         "seed": tune.randint(10000),
-        "epochs": tune.grid_search([100]),
+        "epochs": tune.grid_search([200]),
         "hidden_size": tune.grid_search([2048]),
-        "batch_size": tune.grid_search([128]),
-        "forward_model_lr": tune.grid_search([0.001]),
         "perturbation_lr": tune.grid_search([0.001]),
         "perturbation_steps": tune.grid_search([100]),
+        'target_threshold': tune.grid_search([0.1, 1.0, 10.0, 100.0]),
+        'initial_alpha': tune.grid_search([10.0]),
+        'forward_model_lr': tune.grid_search([0.001]),
+        'alpha_lr': tune.grid_search([0.001]),
         "solver_samples": tune.grid_search([128]),
         "solver_lr": tune.grid_search([0.001]),
-        "solver_steps": tune.grid_search([100]),
-        "conservative_weight": tune.grid_search([
-            0.0, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0])},
+        "solver_steps": tune.grid_search([100])},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={
