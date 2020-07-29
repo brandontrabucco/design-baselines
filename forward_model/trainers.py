@@ -10,10 +10,10 @@ class Conservative(tf.Module):
     def __init__(self,
                  forward_model,
                  perturbation,
-                 target_threshold=tf.constant(10.0),
-                 initial_alpha=0.0001,
                  forward_model_optim=tf.keras.optimizers.Adam,
                  forward_model_lr=0.001,
+                 target_conservative_gap=tf.constant(10.0),
+                 initial_alpha=0.0001,
                  alpha_optim=tf.keras.optimizers.Adam,
                  alpha_lr=0.001):
         """Build a trainer for a conservative forward model with negatives
@@ -25,7 +25,7 @@ class Conservative(tf.Module):
             a keras model that accepts vectorized inputs and returns scores
         perturbation: Perturbation
             a distribution that returns new samples conditioned on an X
-        target_threshold: float
+        target_conservative_gap: float
             the target gap between f(x) and f(\tilde x) for conservative training
         initial_alpha: float
             the initial value for the alpha lagrange multiplier
@@ -42,7 +42,7 @@ class Conservative(tf.Module):
         super().__init__()
         self.forward_model = forward_model
         self.perturbation = perturbation
-        self.target_threshold = target_threshold
+        self.target_conservative_gap = target_conservative_gap
         self.optim = forward_model_optim(learning_rate=forward_model_lr)
 
         # create training machinery for alpha
@@ -81,7 +81,7 @@ class Conservative(tf.Module):
             perturb = tf.stop_gradient(self.perturbation(X, num_steps))
             conservative = (self.forward_model(perturb, training=True)[:, 0] -
                             self.forward_model(X, training=True)[:, 0])
-            gap = (self.alpha * self.target_threshold -
+            gap = (self.alpha * self.target_conservative_gap -
                    self.alpha * conservative)
 
             total_loss = tf.reduce_mean(mse + self.alpha * conservative)
@@ -97,7 +97,7 @@ class Conservative(tf.Module):
 
         return {'train/mse': mse,
                 'train/alpha_loss': gap,
-                'train/alpha': self.alpha,
+                'train/alpha': tf.convert_to_tensor(self.alpha),
                 'train/rank_correlation': rank_correlation,
                 'train/conservative': conservative}
 

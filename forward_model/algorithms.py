@@ -41,10 +41,10 @@ def conservative_mbo(config):
 
     trainer = Conservative(
         forward_model, perturbation,
-        target_threshold=config['target_threshold'],
-        initial_alpha=config['initial_alpha'],
         forward_model_optim=tf.keras.optimizers.Adam,
         forward_model_lr=config['forward_model_lr'],
+        target_conservative_gap=config['target_conservative_gap'],
+        initial_alpha=config['initial_alpha'],
         alpha_optim=tf.keras.optimizers.Adam,
         alpha_lr=config['alpha_lr'])
 
