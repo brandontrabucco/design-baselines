@@ -82,17 +82,22 @@ class StaticGraphTask(Task):
             with an optional sample weight included
         """
 
-        train_inputs = [self.x[self.val_size:], self.y[self.val_size:]]
-        validate_inputs = [self.x[:self.val_size], self.y[:self.val_size]]
+        indices = np.arange(self.x.shape[0])
+        np.random.shuffle(indices)
+        x = self.x[indices]
+        y = self.y[indices]
+
+        train_inputs = [x[self.val_size:], y[self.val_size:]]
+        validate_inputs = [x[:self.val_size], y[:self.val_size]]
 
         if include_weights:
-            train_inputs.append(get_weights(self.y[self.val_size:]))
-            validate_inputs.append(get_weights(self.y[:self.val_size]))
+            train_inputs.append(get_weights(y[self.val_size:]))
+            validate_inputs.append(get_weights(y[:self.val_size]))
 
         train = tf.data.Dataset.from_tensor_slices(tuple(train_inputs))
         validate = tf.data.Dataset.from_tensor_slices(tuple(validate_inputs))
 
-        train = train.shuffle(self.x.shape[0] - self.val_size)
+        train = train.shuffle(x.shape[0] - self.val_size)
         validate = validate.shuffle(self.val_size)
 
         train = train.batch(self.batch_size)
