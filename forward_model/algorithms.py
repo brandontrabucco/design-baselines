@@ -36,7 +36,6 @@ def conservative_mbo(config):
     perturbation = GradientAscent(
         forward_model,
         learning_rate=config['perturbation_lr'],
-        epochs=config['epochs'],
         max_steps=config['perturbation_steps'])
 
     trainer = Conservative(
@@ -52,9 +51,9 @@ def conservative_mbo(config):
 
     for e in range(config['epochs']):
         e = tf.cast(tf.convert_to_tensor(e), tf.int64)
-        for name, loss in trainer.train(train_data, e).items():
+        for name, loss in trainer.train(train_data).items():
             logger.record(name, loss, e)
-        for name, loss in trainer.validate(validate_data, e).items():
+        for name, loss in trainer.validate(validate_data).items():
             logger.record(name, loss, e)
 
     # perform gradient based optimization to find x
@@ -73,17 +72,19 @@ def conservative_mbo(config):
     logger.record(
         "best/prediction", prediction[0], tf.cast(0, tf.int64))
 
+    solution = tf.Variable(original_x)
+    solver = tf.keras.optimizers.Adam(learning_rate=config['solver_lr'])
+
     for i in range(1, config['solver_steps'] + 1):
 
-        with tf.GradientTape() as t:
-            t.watch(original_x)
-            prediction = forward_model(original_x)
-        grads = t.gradient(prediction, original_x)
-        original_x = original_x + grads * config['solver_lr']
+        with tf.GradientTape() as tape:
+            loss = -forward_model(solution)
+        grads = tape.gradient(loss, solution)
+        solver.apply_gradients([[grads, solution]])
 
         gradient_norm = tf.linalg.norm(grads, axis=1)
-        score = task.score(original_x)
-        prediction = forward_model(original_x)
+        score = task.score(solution)
+        prediction = forward_model(solution)
 
         logger.record(
             "gradient_norm", gradient_norm, tf.cast(i, tf.int64))

@@ -53,8 +53,7 @@ class Conservative(tf.Module):
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
                    X,
-                   y,
-                   num_steps):
+                   y):
         """Perform a training step of gradient descent on a forward model
         with an adversarial perturbation distribution
 
@@ -64,8 +63,6 @@ class Conservative(tf.Module):
             a batch of training inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of training labels shaped like [batch_size, 1]
-        num_steps: tf.Tensor
-            scalar that specifies how many steps to optimize X
 
         Returns:
 
@@ -78,7 +75,7 @@ class Conservative(tf.Module):
             mse = tf.keras.losses.mse(y, prediction)
             rank_correlation = spearman(y[:, 0], prediction[:, 0])
 
-            perturb = tf.stop_gradient(self.perturbation(X, num_steps))
+            perturb = tf.stop_gradient(self.perturbation(X))
             conservative = (self.forward_model(perturb, training=True)[:, 0] -
                             self.forward_model(X, training=True)[:, 0])
             gap = (self.alpha * self.target_conservative_gap -
@@ -104,8 +101,7 @@ class Conservative(tf.Module):
     @tf.function(experimental_relax_shapes=True)
     def validate_step(self,
                       X,
-                      y,
-                      num_steps):
+                      y):
         """Perform a validation step on a forward model with an
         adversarial perturbation distribution
 
@@ -115,8 +111,6 @@ class Conservative(tf.Module):
             a batch of validation inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of validation labels shaped like [batch_size, 1]
-        num_steps: tf.Tensor
-            scalar that specifies how many steps to optimize X
 
         Returns:
 
@@ -128,7 +122,7 @@ class Conservative(tf.Module):
         mse = tf.keras.losses.mse(y, prediction)
         rank_correlation = spearman(y[:, 0], prediction[:, 0])
 
-        perturb = tf.stop_gradient(self.perturbation(X, num_steps))
+        perturb = tf.stop_gradient(self.perturbation(X))
         conservative = (self.forward_model(perturb, training=False)[:, 0] -
                         self.forward_model(X, training=False)[:, 0])
 
@@ -137,8 +131,7 @@ class Conservative(tf.Module):
                 'validate/conservative': conservative}
 
     def train(self,
-              dataset,
-              num_steps):
+              dataset):
         """Train a conservative forward model and collect negative
         samples using a perturbation distribution
 
@@ -146,8 +139,6 @@ class Conservative(tf.Module):
 
         dataset: tf.data.Dataset
             the training dataset already batched and prefetched
-        num_steps: tf.Tensor
-            scalar that specifies how many steps to optimize X
 
         Returns:
 
@@ -157,15 +148,14 @@ class Conservative(tf.Module):
 
         statistics = defaultdict(list)
         for X, y in dataset:
-            for name, tensor in self.train_step(X, y, num_steps).items():
+            for name, tensor in self.train_step(X, y).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
         return statistics
 
     def validate(self,
-                 dataset,
-                 num_steps):
+                 dataset):
         """Validate a conservative forward model using a validation dataset
         and return the average validation loss
 
@@ -173,8 +163,6 @@ class Conservative(tf.Module):
 
         dataset: tf.data.Dataset
             the training dataset already batched and prefetched
-        num_steps: tf.Tensor
-            scalar that specifies how many steps to optimize X
 
         Returns:
 
@@ -184,7 +172,7 @@ class Conservative(tf.Module):
 
         statistics = defaultdict(list)
         for X, y in dataset:
-            for name, tensor in self.validate_step(X, y, num_steps).items():
+            for name, tensor in self.validate_step(X, y).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)

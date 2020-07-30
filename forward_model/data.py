@@ -100,8 +100,8 @@ class StaticGraphTask(Task):
         train = train.shuffle(x.shape[0] - self.val_size)
         validate = validate.shuffle(self.val_size)
 
-        train = train.batch(self.batch_size)
-        validate = validate.batch(self.batch_size)
+        train = train.batch(self.batch_size, drop_remainder=True)
+        validate = validate.batch(self.batch_size, drop_remainder=True)
         return train.prefetch(tf.data.experimental.AUTOTUNE),\
             validate.prefetch(tf.data.experimental.AUTOTUNE)
 
