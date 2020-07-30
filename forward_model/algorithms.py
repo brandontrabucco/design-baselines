@@ -75,6 +75,7 @@ def conservative_mbo(config):
     for i in range(1, config['solver_steps'] + 1):
 
         with tf.GradientTape() as tape:
+            tape.watch(solution)
             score = forward_model(solution)
         grads = tape.gradient(score, solution)
         solution = solution + config['solver_lr'] * grads
