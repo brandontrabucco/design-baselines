@@ -93,19 +93,25 @@ def conservative_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         "task": "HopperController-v0",
         "task_kwargs": {"val_size": 200, "batch_size": 128},
         "seed": 10000,
-        "epochs": 200,
+        "epochs": 100,
         "hidden_size": 2048,
         'forward_model_lr': 0.001,
-        'target_conservative_gap': tune.grid_search([50.0,
+        'target_conservative_gap': tune.grid_search([-1.0,
+                                                     10.0,
+                                                     50.0,
                                                      100.0,
-                                                     150.0,
                                                      200.0,
-                                                     250.0,
                                                      300.0,
-                                                     350.0,
-                                                     400.0]),
-        'initial_alpha': tune.grid_search([20.0]),
-        'alpha_lr': tune.grid_search([0.02]),
+                                                     400.0,
+                                                     600.0]),
+        'initial_alpha': tune.sample_from(
+            lambda c:
+            20.0 if c['config']['target_conservative_gap'] > 0.0
+            else 0.0),
+        'alpha_lr': tune.sample_from(
+            lambda c:
+            0.02 if c['config']['target_conservative_gap'] > 0.0
+            else 0.0),
         "perturbation_lr": 0.001,
         "perturbation_steps": 100,
         "solver_samples": 128,
@@ -175,8 +181,8 @@ def plot(dir, name, tag, xlabel, ylabel, title, out):
 
     import os
     file = tf.io.gfile.glob(os.path.join(dir, '*/data/events*'))
-    ids = [int(f.split('_batch_size')[
-        0].split('conservative_mbo_')[1]) for f in file]
+    ids = [int(f.split('conservative_mbo_')[
+        1].split('_')[0]) for f in file]
 
     zipped_lists = zip(ids, file)
     sorted_pairs = sorted(zipped_lists)

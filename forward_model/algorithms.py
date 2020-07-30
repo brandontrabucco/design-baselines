@@ -30,7 +30,7 @@ def conservative_mbo(config):
     forward_model = ShallowFullyConnected(
         task.input_size, 1,
         hidden=config['hidden_size'],
-        act=tfkl.LeakyReLU,
+        act=tfkl.ReLU,
         batch_norm=False)
 
     perturbation = GradientAscent(

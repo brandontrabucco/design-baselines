@@ -98,7 +98,7 @@ class GradientAscent(Perturbation):
             the perturbed value of x that maximizes the score function
         """
 
-        for _ in tf.range(self.schedule(epoch)):
+        for _ in tf.range(self.max_steps):
             with tf.GradientTape() as tape:
                 tape.watch(original_x)
                 prediction = self.forward_model(original_x, **kwargs)
