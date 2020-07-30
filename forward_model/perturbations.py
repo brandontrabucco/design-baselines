@@ -33,7 +33,6 @@ class GradientAscent(Perturbation):
     def __init__(self,
                  forward_model,
                  learning_rate=tf.constant(0.001),
-                 optim=tf.keras.optimizers.Adam,
                  max_steps=tf.constant(100)):
         """Create a gradient ascent module that finds adversarial
         negative samples from a forward model
@@ -49,18 +48,8 @@ class GradientAscent(Perturbation):
 
         super().__init__()
         self.forward_model = forward_model
-        self.optim = optim(learning_rate=learning_rate)
+        self.learning_rate = learning_rate
         self.max_steps = max_steps
-        self.perturbation = None
-
-    def optimization_step(self, **kwargs):
-        """Take a step of gradient descent to find a design that maximizes
-        the forward model
-        """
-
-        self.optim.minimize(
-            lambda: -self.forward_model(
-                self.perturbation, **kwargs), [self.perturbation])
 
     @tf.function(experimental_relax_shapes=True)
     def __call__(self,
@@ -80,14 +69,9 @@ class GradientAscent(Perturbation):
             the perturbed value of x that maximizes the score function
         """
 
-        if self.perturbation is None:
-            self.perturbation = tf.Variable(tf.zeros_like(x))
-            self.optimization_step(**kwargs)
-
-        self.perturbation.assign(x)
-        for state in self.optim.variables():
-            state.assign(tf.zeros_like(state))
-
         for _ in tf.range(self.max_steps):
-            self.optimization_step(**kwargs)
-        return tf.convert_to_tensor(self.perturbation)
+            with tf.GradientTape() as tape:
+                tape.watch(x)
+                score = self.forward_model(x, **kwargs)
+            x = x + self.learning_rate * tape.gradient(score, x)
+        return x

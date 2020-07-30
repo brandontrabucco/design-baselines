@@ -96,26 +96,21 @@ def conservative_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         "epochs": 100,
         "hidden_size": 2048,
         'forward_model_lr': 0.001,
-        'target_conservative_gap': tune.grid_search([-1.0,
-                                                     10.0,
-                                                     50.0,
-                                                     100.0,
-                                                     200.0,
-                                                     300.0,
-                                                     400.0,
-                                                     600.0]),
-        'initial_alpha': tune.sample_from(
-            lambda c:
-            20.0 if c['config']['target_conservative_gap'] > 0.0
-            else 0.0),
-        'alpha_lr': tune.sample_from(
-            lambda c:
-            0.02 if c['config']['target_conservative_gap'] > 0.0
-            else 0.0),
-        "perturbation_lr": 0.001,
+        'target_conservative_gap': 100.0,
+        'initial_alpha': 20.0,
+        'alpha_lr': 0.02,
+        "perturbation_lr": tune.grid_search([0.00001,
+                                             0.0001,
+                                             0.0005,
+                                             0.001,
+                                             0.005,
+                                             0.01,
+                                             0.05,
+                                             0.1]),
         "perturbation_steps": 100,
         "solver_samples": 128,
-        "solver_lr": 0.001,
+        "solver_lr": tune.sample_from(
+            lambda c: c['config']['perturbation_lr']),
         "solver_steps": 100},
         num_samples=num_samples,
         local_dir=local_dir,

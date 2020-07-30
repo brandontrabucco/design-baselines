@@ -19,7 +19,7 @@ def conservative_mbo(config):
         a dictionary of hyper parameters such as the learning rate
     """
 
-    # create the dataset and logger
+    # create the data set and logger
 
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
     train_data, validate_data = task.build(include_weights=False)
@@ -44,7 +44,7 @@ def conservative_mbo(config):
         forward_model_lr=config['forward_model_lr'],
         target_conservative_gap=config['target_conservative_gap'],
         initial_alpha=config['initial_alpha'],
-        alpha_optim=tf.keras.optimizers.Adam,
+        alpha_optim=tf.keras.optimizers.SGD,
         alpha_lr=config['alpha_lr'])
 
     # train and validate the neural network models
@@ -59,9 +59,9 @@ def conservative_mbo(config):
     # perform gradient based optimization to find x
 
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
-    original_x = tf.gather(task.x, indices, axis=0)
-    score = task.score(original_x)
-    prediction = forward_model(original_x)
+    solution = tf.gather(task.x, indices, axis=0)
+    score = task.score(solution)
+    prediction = forward_model(solution)
 
     logger.record(
         "score", score, tf.cast(0, tf.int64))
@@ -72,15 +72,12 @@ def conservative_mbo(config):
     logger.record(
         "best/prediction", prediction[0], tf.cast(0, tf.int64))
 
-    solution = tf.Variable(original_x)
-    solver = tf.keras.optimizers.Adam(learning_rate=config['solver_lr'])
-
     for i in range(1, config['solver_steps'] + 1):
 
         with tf.GradientTape() as tape:
-            loss = -forward_model(solution)
-        grads = tape.gradient(loss, solution)
-        solver.apply_gradients([[grads, solution]])
+            score = forward_model(solution)
+        grads = tape.gradient(score, solution)
+        solution = solution + config['solver_lr'] * grads
 
         gradient_norm = tf.linalg.norm(grads, axis=1)
         score = task.score(solution)
