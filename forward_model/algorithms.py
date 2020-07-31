@@ -108,22 +108,11 @@ def model_inversion(config):
         a dictionary of hyper parameters such as the learning rate
     """
 
-    # create the dataset and logger
+    # create the data set and logger
 
-    logging_dir = config['logging_dir']
-    logger = Logger(logging_dir)
-
-    data = PolicyWeightsDataset(
-        obs_dim=11,
-        action_dim=3,
-        hidden_dim=64,
-        val_size=200,
-        batch_size=config['batch_size'],
-        env_name='Hopper-v2',
-        seed=config['seed'],
-        x_file='hopper_controller_X.txt',
-        y_file='hopper_controller_y.txt',
-        include_weights=True)
+    task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    train_data, validate_data = task.build(include_weights=True)
+    logger = Logger(config['logging_dir'])
 
     # create the neural net models and optimizers
 
@@ -135,10 +124,10 @@ def model_inversion(config):
         tfkl.ReLU(),
         tfkl.Dense(hdim, use_bias=True),
         tfkl.ReLU(),
-        tfkl.Dense(data.input_size, use_bias=True)])
+        tfkl.Dense(task.input_size, use_bias=True)])
 
     discriminator = tf.keras.Sequential([
-        tfkl.Dense(hdim, use_bias=True, input_shape=(data.input_size + 1,)),
+        tfkl.Dense(hdim, use_bias=True, input_shape=(task.input_size + 1,)),
         tfkl.LeakyReLU(alpha=0.2),
         tfkl.Dense(hdim, use_bias=True),
         tfkl.LeakyReLU(alpha=0.2),
@@ -157,26 +146,19 @@ def model_inversion(config):
 
     for e in range(config['epochs']):
         step = tf.cast(e, tf.int64)
-        for name, loss in trainer.train(data.train).items():
+        for name, loss in trainer.train(train_data).items():
             logger.record(name, loss, step)
-        for name, loss in trainer.validate(data.validate).items():
+        for name, loss in trainer.validate(validate_data).items():
             logger.record(name, loss, step)
-
-    # save the trained forward model
-
-    generator.save(
-        os.path.join(logging_dir, "generator"))
-    discriminator.save(
-        os.path.join(logging_dir, "discriminator"))
 
     # sample for the best y using the generator
 
     max_y = tf.tile(tf.reduce_max(
-        data.y, keepdims=True), [config['solver_samples'], 1])
+        task.y, keepdims=True), [config['solver_samples'], 1])
     max_x = generator(tf.concat([
         tf.random.normal([max_y.shape[0], latent_size]), max_y], 1))
 
     logger.record(
-        "score", data.score(max_x), tf.cast(0, tf.int64))
+        "score", task.score(max_x), tf.cast(0, tf.int64))
     logger.record(
         "prediction", max_y, tf.cast(0, tf.int64))
