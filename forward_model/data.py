@@ -63,17 +63,23 @@ class StaticGraphTask(Task):
             x.reshape([-1, *self.wrapped_task.input_shape]))
 
     def build(self,
+              x=None,
+              y=None,
               bootstraps=0,
-              include_weights=False):
+              importance_weights=None):
         """Provide an interface for splitting a task into a training and
         validation set and including sample re-weighting
 
         Args:
 
+        x: None or tf.Tensor
+            if provided this is used in place of task.x
+        y: None or tf.Tensor
+            if provided this is used in place of task.y
         bootstraps: int
             the number of bootstrap dataset resamples to include
-        include_weights: bool
-            whether to build a dataset that includes sample weights
+        importance_weights: None or tf.Tensor
+            an additional importance weight tensor to include in the dataset
 
         Returns:
 
@@ -85,27 +91,29 @@ class StaticGraphTask(Task):
             with an optional sample weight included
         """
 
-        indices = np.arange(self.x.shape[0])
-        np.random.shuffle(indices)
-        x = self.x[indices]
-        y = self.y[indices]
+        x = self.x if x is None else x
+        y = self.y if y is None else y
 
-        size = self.x.shape[0] - self.val_size
+        indices = np.arange(x.shape[0])
+        np.random.shuffle(indices)
+        x = x[indices]
+        y = y[indices]
+
         train_inputs = [x[self.val_size:], y[self.val_size:]]
         validate_inputs = [x[:self.val_size], y[:self.val_size]]
+        size = x.shape[0] - self.val_size
 
         if bootstraps > 0:
-            counts = []
-            for b in range(bootstraps):
-                samples = tf.random.uniform(
-                    [size], minval=0, maxval=size, dtype=tf.int32)
-                counts.append(tf.math.bincount(
-                    samples, minlength=size, dtype=tf.float32))
-            train_inputs.append(tf.stack(counts, axis=1))
+            train_inputs.append(tf.stack([
+                tf.math.bincount(
+                    tf.random.uniform(
+                        [size],
+                        minval=0, maxval=size, dtype=tf.int32),
+                    minlength=size, dtype=tf.float32)
+                for b in range(bootstraps)], axis=1))
 
-        if include_weights:
-            train_inputs.append(get_weights(y[self.val_size:]))
-            validate_inputs.append(get_weights(y[:self.val_size]))
+        if importance_weights is not None:
+            train_inputs.append(importance_weights[self.val_size:])
 
         make_dataset = tf.data.Dataset.from_tensor_slices
         train = make_dataset(tuple(train_inputs))

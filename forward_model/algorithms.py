@@ -3,8 +3,11 @@ from forward_model.perturbations import GradientAscent
 from forward_model.trainers import Conservative
 from forward_model.trainers import ModelInversion
 from forward_model.trainers import BootstrapEnsemble
+from forward_model.trainers import WeightedVAE
 from forward_model.nets import ShallowFullyConnected
 from forward_model.logger import Logger
+from tensorflow_probability import distributions as tfpd
+import tensorflow_probability as tfp
 import tensorflow.keras.layers as tfkl
 import tensorflow as tf
 import os
@@ -51,7 +54,6 @@ def conservative_mbo(config):
     # train and validate the neural network models
 
     for e in range(config['epochs']):
-        e = tf.cast(tf.convert_to_tensor(e), tf.int64)
         for name, loss in trainer.train(train_data).items():
             logger.record(name, loss, e)
         for name, loss in trainer.validate(validate_data).items():
@@ -128,14 +130,193 @@ def cbas(config):
         oracle_optim=tf.keras.optimizers.Adam,
         oracle_lr=config['oracle_lr'])
 
-    # train and validate the neural network models
+    # train and validate the ensemble
 
     for e in range(config['oracle_epochs']):
-        e = tf.cast(tf.convert_to_tensor(e), tf.int64)
         for name, loss in ensemble.train(train_data).items():
             logger.record(name, loss, e)
         for name, loss in ensemble.validate(validate_data).items():
             logger.record(name, loss, e)
+
+    # create the neural net vae components and their optimizer
+
+    p_encoder = ShallowFullyConnected(
+        task.input_size, config['latent_size'] * 2,
+        hidden=config['vae_hidden_size'],
+        act=tfkl.ReLU,
+        batch_norm=False)
+
+    p_decoder = ShallowFullyConnected(
+        config['latent_size'], task.input_size,
+        hidden=config['vae_hidden_size'],
+        act=tfkl.ReLU,
+        batch_norm=False)
+
+    p_vae = WeightedVAE(
+        p_encoder,
+        p_decoder,
+        vae_optim=tf.keras.optimizers.Adam,
+        vae_lr=config['vae_lr'])
+
+    train_data, validate_data = task.build(
+        importance_weights=tf.ones_like(task.y))
+
+    # train and validate the p_vae
+
+    for e in range(config['vae_epochs']):
+        for name, loss in p_vae.train(train_data).items():
+            logger.record(name, loss, e)
+        for name, loss in p_vae.validate(validate_data).items():
+            logger.record(name, loss, e)
+
+    # create the neural net vae components and their optimizer
+
+    q_encoder = ShallowFullyConnected(
+        task.input_size, config['latent_size'] * 2,
+        hidden=config['vae_hidden_size'],
+        act=tfkl.ReLU,
+        batch_norm=False)
+    q_encoder.set_weights(p_encoder.get_weights())
+
+    q_decoder = ShallowFullyConnected(
+        config['latent_size'], task.input_size,
+        hidden=config['vae_hidden_size'],
+        act=tfkl.ReLU,
+        batch_norm=False)
+    q_decoder.set_weights(p_decoder.get_weights())
+
+    q_vae = WeightedVAE(
+        q_encoder,
+        q_decoder,
+        vae_optim=tf.keras.optimizers.Adam,
+        vae_lr=config['vae_lr'])
+
+    @tf.function(experimental_relax_shapes=True)
+    def generate_data(dataset_size,
+                      batch_size):
+        """A function for generating a data set of samples of a particular
+        size using two adaptively sampled vaes
+
+        Args:
+
+        dataset_size: int
+            the number of samples to include in the final data set
+        batch_size: int
+            the number of samples to generate all at once using the vae
+
+        Returns:
+
+        xs: tf.Tensor
+            the dataset x values sampled from the vaes
+        ys: tf.Tensor
+            the dataset y values predicted by the ensemble
+        ws: tf.Tensor
+            the dataset importance weights calculated using the vaes
+        """
+
+        xs = []
+        ys = []
+        ws = []
+
+        num_steps = dataset_size // batch_size
+        for j in range(num_steps):
+
+            num_samples = (batch_size if j < num_steps - 1
+                           else dataset_size % batch_size)
+
+            z = tf.random.normal([
+                num_samples, config['latent_size']])
+
+            mu, log_std = tf.split(
+                q_decoder(z, training=False), 2, axis=-1)
+            q_dx = tfpd.Normal(
+                loc=mu, scale=tf.math.softplus(log_std))
+
+            mu, log_std = tf.split(
+                p_decoder(z, training=False), 2, axis=-1)
+            p_dx = tfpd.Normal(
+                loc=mu, scale=tf.math.softplus(log_std))
+
+            x = q_dx.sample()
+            xs.append(x)
+
+            y = ensemble.get_distribution(x).mean()
+            ys.append(y)
+
+            weight = tf.reduce_mean(p_dx.prob(x), axis=1, keepdims=True) / \
+                     tf.reduce_mean(q_dx.prob(x), axis=1, keepdims=True)
+            ws.append(weight)
+
+        return tf.concat(xs, axis=0), \
+               tf.concat(ys, axis=0), \
+               tf.concat(ws, axis=0)
+
+    @tf.function(experimental_relax_shapes=True)
+    def reweight_by_s(x,
+                      y,
+                      percentile,
+                      batch_size):
+        """A function for generating the probability that samples x
+        satisfy a specification s given by y
+
+        Args:
+
+        x: tf.Tensor
+            the dataset x values sampled from the vaes
+        y: tf.Tensor
+            the dataset y values predicted by the ensemble
+        percentile: int
+            the percentile to use when calculating importance weights
+        batch_size: int
+            the number of samples to generate all at once using the vae
+
+        Returns:
+
+        ws: tf.Tensor
+            the dataset importance weights calculated using the ensemble
+        """
+
+        ws = []
+        gamma = tfp.stats.percentile(x, percentile)
+
+        num_steps = x.shape[0] // batch_size
+        for j in range(num_steps):
+
+            num_samples = (batch_size if j < num_steps - 1
+                           else x.shape[0] % batch_size)
+
+            d = ensemble.get_distribution(
+                x[j * batch_size:j * batch_size + num_samples])
+
+            weight = 1.0 - d.cdf(tf.fill([num_samples, 1], gamma))
+            ws.append(weight)
+
+        return tf.concat(ws, axis=0)
+
+    # train and validate the q_vae
+
+    for i in range(config['iterations']):
+
+        x, y, w = generate_data(
+            task.x.shape[0], config['task_kwargs']['batch_size'])
+
+        logger.record("score", task.score(x[:128]), i)
+
+        w = w * reweight_by_s(
+            x, y, config['percentile'], config['task_kwargs']['batch_size'])
+
+        train_data, validate_data = task.build(x=x,
+                                               y=y,
+                                               importance_weights=w)
+
+        for e in range(config['vae_epochs']):
+            for name, loss in q_vae.train(train_data).items():
+                logger.record(name, loss, e + (config['vae_epochs'] * (i + 1)))
+            for name, loss in q_vae.validate(validate_data).items():
+                logger.record(name, loss, e + (config['vae_epochs'] * (i + 1)))
+
+    x = generate_data(128, config['task_kwargs']['batch_size'])[0]
+    logger.record("score", task.score(x), config['iterations'])
 
 
 def model_inversion(config):

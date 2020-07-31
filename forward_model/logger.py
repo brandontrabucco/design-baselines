@@ -38,6 +38,7 @@ class Logger(object):
             typically on intervals of 10000
         """
 
+        step = tf.cast(tf.convert_to_tensor(step), tf.int64)
         with self.writer.as_default():
 
             # log several statistics of the incoming tensors
