@@ -238,7 +238,7 @@ class BootstrapEnsemble(tf.Module):
         for i, (oracle, optim) in enumerate(
                 zip(self.oracles, self.optims)):
 
-            with tf.GradientTape(persistent=True) as tape:
+            with tf.GradientTape() as tape:
                 prediction = oracle(X, training=True)
                 mu, log_std = tf.split(prediction, 2, axis=-1)
 
@@ -283,7 +283,7 @@ class BootstrapEnsemble(tf.Module):
         for i, (oracle, optim) in enumerate(
                 zip(self.oracles, self.optims)):
 
-            prediction = oracle(X, training=True)
+            prediction = oracle(X, training=False)
             mu, log_std = tf.split(prediction, 2, axis=-1)
 
             d = tfpd.MultivariateNormalDiag(
