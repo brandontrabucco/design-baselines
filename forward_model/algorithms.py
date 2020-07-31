@@ -44,7 +44,7 @@ def conservative_mbo(config):
         forward_model_lr=config['forward_model_lr'],
         target_conservative_gap=config['target_conservative_gap'],
         initial_alpha=config['initial_alpha'],
-        alpha_optim=tf.keras.optimizers.SGD,
+        alpha_optim=tf.keras.optimizers.Adam,
         alpha_lr=config['alpha_lr'])
 
     # train and validate the neural network models
