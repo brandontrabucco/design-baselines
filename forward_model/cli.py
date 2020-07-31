@@ -111,6 +111,48 @@ def conservative_policy(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
+@click.option('--local-dir', type=str, default='cbas')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def cbas(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from forward_model.algorithms import cbas
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    tune.run(cbas, config={
+        "logging_dir": "data",
+        "task": "HopperController-v0",
+        "task_kwargs": {"val_size": 200, "batch_size": 128},
+        "bootstraps": 5,
+        "oracle_epochs": 100,
+        "oracle_hidden_size": 2048,
+        "oracle_lr": 0.001},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={
+            'cpu': cpus // num_parallel,
+            'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
 @click.option('--local-dir', type=str, default='data')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)

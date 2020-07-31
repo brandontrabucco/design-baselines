@@ -1,8 +1,8 @@
 from forward_model.utils import spearman
 from collections import defaultdict
+from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
 import tensorflow_probability as tfp
-import tensorflow_probability.distributions as tfpd
 import numpy as np
 
 
@@ -289,8 +289,8 @@ class BootstrapEnsemble(tf.Module):
             d = tfpd.MultivariateNormalDiag(
                 loc=mu, scale_diag=tf.math.softplus(log_std))
 
-            nll = d.log_prob(y)
-            statistics[f'oracle_{i}/train/nll'] = nll
+            nll = -d.log_prob(y)
+            statistics[f'oracle_{i}/validate/nll'] = nll
 
         return statistics
 

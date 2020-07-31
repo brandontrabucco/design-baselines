@@ -2,6 +2,7 @@ from forward_model.data import StaticGraphTask
 from forward_model.perturbations import GradientAscent
 from forward_model.trainers import Conservative
 from forward_model.trainers import ModelInversion
+from forward_model.trainers import BootstrapEnsemble
 from forward_model.nets import ShallowFullyConnected
 from forward_model.logger import Logger
 import tensorflow.keras.layers as tfkl
@@ -96,6 +97,45 @@ def conservative_mbo(config):
             "best/score", score[0], tf.cast(i, tf.int64))
         logger.record(
             "best/prediction", prediction[0], tf.cast(i, tf.int64))
+
+
+def cbas(config):
+    """Optimization code for Conditioning By Adaptive Sampling
+    otherwise known as CbAS
+
+    Args:
+
+    config: dict
+        a dictionary of hyper parameters such as the learning rate
+    """
+
+    # create the data set and logger
+
+    task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    train_data, validate_data = task.build(bootstraps=config['bootstraps'])
+    logger = Logger(config['logging_dir'])
+
+    # create the neural net models and optimizers
+
+    oracles = [ShallowFullyConnected(
+        task.input_size, 2,
+        hidden=config['oracle_hidden_size'],
+        act=tfkl.ReLU,
+        batch_norm=False) for b in range(config['bootstraps'])]
+
+    ensemble = BootstrapEnsemble(
+        oracles,
+        oracle_optim=tf.keras.optimizers.Adam,
+        oracle_lr=config['oracle_lr'])
+
+    # train and validate the neural network models
+
+    for e in range(config['oracle_epochs']):
+        e = tf.cast(tf.convert_to_tensor(e), tf.int64)
+        for name, loss in ensemble.train(train_data).items():
+            logger.record(name, loss, e)
+        for name, loss in ensemble.validate(validate_data).items():
+            logger.record(name, loss, e)
 
 
 def model_inversion(config):

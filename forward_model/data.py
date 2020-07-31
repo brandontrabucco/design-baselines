@@ -95,19 +95,21 @@ class StaticGraphTask(Task):
         validate_inputs = [x[:self.val_size], y[:self.val_size]]
 
         if bootstraps > 0:
-
-            samples = tf.random.uniform(
-                [size, bootstraps], minval=0, maxval=size, dtype=tf.int32)
-            train_inputs.append(tf.math.bincount(
-                samples, minlength=size, axis=0, dtype=tf.float32))
+            counts = []
+            for b in range(bootstraps):
+                samples = tf.random.uniform(
+                    [size], minval=0, maxval=size, dtype=tf.int32)
+                counts.append(tf.math.bincount(
+                    samples, minlength=size, dtype=tf.float32))
+            train_inputs.append(tf.stack(counts, axis=1))
 
         if include_weights:
-
             train_inputs.append(get_weights(y[self.val_size:]))
             validate_inputs.append(get_weights(y[:self.val_size]))
 
-        train = tf.data.Dataset.from_tensor_slices(tuple(train_inputs))
-        validate = tf.data.Dataset.from_tensor_slices(tuple(validate_inputs))
+        make_dataset = tf.data.Dataset.from_tensor_slices
+        train = make_dataset(tuple(train_inputs))
+        validate = make_dataset(tuple(validate_inputs))
         train = train.shuffle(size)
         validate = validate.shuffle(self.val_size)
 
