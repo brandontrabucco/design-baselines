@@ -2,6 +2,7 @@ from forward_model.utils import spearman
 from collections import defaultdict
 import tensorflow as tf
 import tensorflow_probability as tfp
+import tensorflow_probability.distributions as tfpd
 import numpy as np
 
 
@@ -147,17 +148,156 @@ class Conservative(tf.Module):
         """
 
         statistics = defaultdict(list)
+
         for X, y in dataset:
             for name, tensor in self.train_step(X, y).items():
                 statistics[name].append(tensor)
+
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
+
         return statistics
 
     def validate(self,
                  dataset):
         """Validate a conservative forward model using a validation dataset
         and return the average validation loss
+
+        Args:
+
+        dataset: tf.data.Dataset
+            the validation dataset already batched and prefetched
+
+        Returns:
+
+        loss_dict: dict
+            a dictionary mapping names to loss values for logging
+        """
+
+        statistics = defaultdict(list)
+
+        for X, y in dataset:
+            for name, tensor in self.validate_step(X, y).items():
+                statistics[name].append(tensor)
+
+        for name in statistics.keys():
+            statistics[name] = tf.concat(statistics[name], axis=0)
+
+        return statistics
+
+
+class BootstrapEnsemble(tf.Module):
+
+    def __init__(self,
+                 oracles,
+                 oracle_optim=tf.keras.optimizers.Adam,
+                 oracle_lr=0.001):
+        """Build a trainer for an ensemble of probabilistic neural networks
+        trained on bootstraps of a dataset
+
+        Args:
+
+        oracles: List[tf.keras.Model]
+            a list of keras model that predict distributions over scores
+        oracle_optim: __class__
+            the optimizer class to use for optimizing the oracle model
+        oracle__lr: float
+            the learning rate for the oracle model optimizer
+        """
+
+        super().__init__()
+        self.oracles = oracles
+        self.optims = [oracle_optim(
+            learning_rate=oracle_lr) for _ in oracles]
+
+    @tf.function(experimental_relax_shapes=True)
+    def train_step(self,
+                   X,
+                   y,
+                   b):
+        """Perform a training step of gradient descent on an ensemble
+        using bootstrap weights for each model in the ensemble
+
+        Args:
+
+        X: tf.Tensor
+            a batch of training inputs shaped like [batch_size, channels]
+        y: tf.Tensor
+            a batch of training labels shaped like [batch_size, 1]
+        b: tf.Tensor
+            bootstrap indicators shaped like [batch_size, num_oracles]
+
+        Returns:
+
+        statistics: dict
+            a dictionary that contains logging information
+        """
+
+        statistics = dict()
+
+        for i, (oracle, optim) in enumerate(
+                zip(self.oracles, self.optims)):
+
+            with tf.GradientTape(persistent=True) as tape:
+                prediction = oracle(X, training=True)
+                mu, log_std = tf.split(prediction, 2, axis=-1)
+
+                d = tfpd.MultivariateNormalDiag(
+                    loc=mu, scale_diag=tf.math.softplus(log_std))
+
+                nll = -d.log_prob(y)
+                total_loss = tf.reduce_sum(
+                    b[:, i] * nll) / tf.reduce_sum(b[:, i])
+
+            grads = tape.gradient(
+                total_loss, oracle.trainable_variables)
+            optim.apply_gradients(
+                zip(grads, oracle.trainable_variables))
+
+            statistics[f'oracle_{i}/train/nll'] = nll
+
+        return statistics
+
+    @tf.function(experimental_relax_shapes=True)
+    def validate_step(self,
+                      X,
+                      y):
+        """Perform a validation step on an ensemble of models
+        without using bootstrapping weights
+
+        Args:
+
+        X: tf.Tensor
+            a batch of validation inputs shaped like [batch_size, channels]
+        y: tf.Tensor
+            a batch of validation labels shaped like [batch_size, 1]
+
+        Returns:
+
+        statistics: dict
+            a dictionary that contains logging information
+        """
+
+        statistics = dict()
+
+        for i, (oracle, optim) in enumerate(
+                zip(self.oracles, self.optims)):
+
+            prediction = oracle(X, training=True)
+            mu, log_std = tf.split(prediction, 2, axis=-1)
+
+            d = tfpd.MultivariateNormalDiag(
+                loc=mu, scale_diag=tf.math.softplus(log_std))
+
+            nll = d.log_prob(y)
+            statistics[f'oracle_{i}/train/nll'] = nll
+
+        return statistics
+
+    def train(self,
+              dataset):
+        """Perform training using gradient descent on an ensemble
+        using bootstrap weights for each model in the ensemble
 
         Args:
 
@@ -171,11 +311,41 @@ class Conservative(tf.Module):
         """
 
         statistics = defaultdict(list)
+
+        for X, y, b in dataset:
+            for name, tensor in self.train_step(X, y, b).items():
+                statistics[name].append(tensor)
+
+        for name in statistics.keys():
+            statistics[name] = tf.concat(statistics[name], axis=0)
+
+        return statistics
+
+    def validate(self,
+                 dataset):
+        """Perform validation on an ensemble of models without
+        using bootstrapping weights
+
+        Args:
+
+        dataset: tf.data.Dataset
+            the validation dataset already batched and prefetched
+
+        Returns:
+
+        loss_dict: dict
+            a dictionary mapping names to loss values for logging
+        """
+
+        statistics = defaultdict(list)
+
         for X, y in dataset:
             for name, tensor in self.validate_step(X, y).items():
                 statistics[name].append(tensor)
+
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
+
         return statistics
 
 

@@ -63,12 +63,15 @@ class StaticGraphTask(Task):
             x.reshape([-1, *self.wrapped_task.input_shape]))
 
     def build(self,
+              bootstraps=0,
               include_weights=False):
         """Provide an interface for splitting a task into a training and
         validation set and including sample re-weighting
 
         Args:
 
+        bootstraps: int
+            the number of bootstrap dataset resamples to include
         include_weights: bool
             whether to build a dataset that includes sample weights
 
@@ -87,21 +90,29 @@ class StaticGraphTask(Task):
         x = self.x[indices]
         y = self.y[indices]
 
+        size = self.x.shape[0] - self.val_size
         train_inputs = [x[self.val_size:], y[self.val_size:]]
         validate_inputs = [x[:self.val_size], y[:self.val_size]]
 
+        if bootstraps > 0:
+
+            samples = tf.random.uniform(
+                [size, bootstraps], minval=0, maxval=size, dtype=tf.int32)
+            train_inputs.append(tf.math.bincount(
+                samples, minlength=size, axis=0, dtype=tf.float32))
+
         if include_weights:
+
             train_inputs.append(get_weights(y[self.val_size:]))
             validate_inputs.append(get_weights(y[:self.val_size]))
 
         train = tf.data.Dataset.from_tensor_slices(tuple(train_inputs))
         validate = tf.data.Dataset.from_tensor_slices(tuple(validate_inputs))
-
-        train = train.shuffle(x.shape[0] - self.val_size)
+        train = train.shuffle(size)
         validate = validate.shuffle(self.val_size)
 
-        train = train.batch(self.batch_size, drop_remainder=True)
-        validate = validate.batch(self.batch_size, drop_remainder=True)
+        train = train.batch(self.batch_size)
+        validate = validate.batch(self.batch_size)
         return train.prefetch(tf.data.experimental.AUTOTUNE),\
             validate.prefetch(tf.data.experimental.AUTOTUNE)
 
