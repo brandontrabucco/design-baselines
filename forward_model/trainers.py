@@ -390,7 +390,8 @@ class WeightedVAE(tf.Module):
                  encoder,
                  decoder,
                  vae_optim=tf.keras.optimizers.Adam,
-                 vae_lr=0.001):
+                 vae_lr=0.001,
+                 vae_beta=0.01):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -410,6 +411,7 @@ class WeightedVAE(tf.Module):
         self.encoder = encoder
         self.decoder = decoder
         self.optim = vae_optim(learning_rate=vae_lr)
+        self.vae_beta = vae_beta
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
@@ -444,25 +446,25 @@ class WeightedVAE(tf.Module):
             mu, log_std = tf.split(
                 self.encoder(X, training=True), 2, axis=-1)
 
-            dz = tfpd.Normal(
-                loc=mu, scale=tf.math.softplus(log_std))
+            dz = tfpd.MultivariateNormalDiag(
+                loc=mu, scale_diag=tf.math.softplus(log_std))
 
             z = dz.sample()
 
             mu, log_std = tf.split(
                 self.decoder(z, training=True), 2, axis=-1)
 
-            dx = tfpd.Normal(
-                loc=mu, scale=tf.math.softplus(log_std))
+            dx = tfpd.MultivariateNormalDiag(
+                loc=mu, scale_diag=tf.math.softplus(log_std))
 
-            nll = -dx.log_prob(X)
+            nll = -dx.log_prob(X)[:, tf.newaxis]
 
-            prior = tfpd.Normal(
-                loc=tf.zeros_like(mu), scale=tf.ones_like(log_std))
+            prior = tfpd.MultivariateNormalDiag(
+                loc=tf.zeros_like(mu), scale_diag=tf.ones_like(log_std))
 
-            kl = dx.kl_divergence(prior)
+            kl = dx.kl_divergence(prior)[:, tf.newaxis]
 
-            total_loss = tf.reduce_mean(w * (nll + kl))
+            total_loss = tf.reduce_mean(w * (nll + self.vae_beta * kl))
 
         grads = tape.gradient(total_loss, var_list)
         self.optim.apply_gradients(zip(grads, var_list))
@@ -497,26 +499,26 @@ class WeightedVAE(tf.Module):
         mu, log_std = tf.split(
             self.encoder(X, training=True), 2, axis=-1)
 
-        dz = tfpd.Normal(
-            loc=mu, scale=tf.math.softplus(log_std))
+        dz = tfpd.MultivariateNormalDiag(
+            loc=mu, scale_diag=tf.math.softplus(log_std))
 
         z = dz.sample()
 
         mu, log_std = tf.split(
             self.decoder(z, training=True), 2, axis=-1)
 
-        dx = tfpd.Normal(
-            loc=mu, scale=tf.math.softplus(log_std))
+        dx = tfpd.MultivariateNormalDiag(
+            loc=mu, scale_diag=tf.math.softplus(log_std))
 
-        nll = -dx.log_prob(X)
+        nll = -dx.log_prob(X)[:, tf.newaxis]
 
-        prior = tfpd.Normal(
-            loc=tf.zeros_like(mu), scale=tf.ones_like(log_std))
+        prior = tfpd.MultivariateNormalDiag(
+            loc=tf.zeros_like(mu), scale_diag=tf.ones_like(log_std))
 
-        kl = dx.kl_divergence(prior)
+        kl = dx.kl_divergence(prior)[:, tf.newaxis]
 
-        statistics[f'vae/train/nll'] = nll
-        statistics[f'vae/train/kl'] = kl
+        statistics[f'vae/validate/nll'] = nll
+        statistics[f'vae/validate/kl'] = kl
 
         return statistics
 

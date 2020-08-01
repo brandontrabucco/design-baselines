@@ -160,20 +160,24 @@ def cbas(config):
         p_encoder,
         p_decoder,
         vae_optim=tf.keras.optimizers.Adam,
-        vae_lr=config['vae_lr'])
+        vae_lr=config['vae_lr'],
+        vae_beta=config['vae_beta'])
 
     train_data, validate_data = task.build(
         importance_weights=np.ones_like(task.y))
 
     # train and validate the p_vae
 
-    for e in range(config['vae_epochs']):
+    e = 0
+    for _ in range(config['offline_vae_epochs']):
 
         for name, loss in p_vae.train(train_data).items():
             logger.record(name, loss, e)
 
         for name, loss in p_vae.validate(validate_data).items():
             logger.record(name, loss, e)
+
+        e += 1
 
     # create the neural net vae components and their optimizer
 
@@ -195,7 +199,8 @@ def cbas(config):
         q_encoder,
         q_decoder,
         vae_optim=tf.keras.optimizers.Adam,
-        vae_lr=config['vae_lr'])
+        vae_lr=config['vae_lr'],
+        vae_beta=config['vae_beta'])
 
     @tf.function(experimental_relax_shapes=True)
     def generate_data(dataset_size,
@@ -235,13 +240,13 @@ def cbas(config):
 
             mu, log_std = tf.split(
                 q_decoder(z, training=False), 2, axis=-1)
-            q_dx = tfpd.Normal(
-                loc=mu, scale=tf.math.softplus(log_std))
+            q_dx = tfpd.MultivariateNormalDiag(
+                loc=mu, scale_diag=tf.math.softplus(log_std))
 
             mu, log_std = tf.split(
                 p_decoder(z, training=False), 2, axis=-1)
-            p_dx = tfpd.Normal(
-                loc=mu, scale=tf.math.softplus(log_std))
+            p_dx = tfpd.MultivariateNormalDiag(
+                loc=mu, scale_diag=tf.math.softplus(log_std))
 
             x = q_dx.sample()
             xs.append(x)
@@ -249,9 +254,8 @@ def cbas(config):
             y = ensemble.get_distribution(x).mean()
             ys.append(y)
 
-            weight = tf.reduce_mean(p_dx.prob(x), axis=1, keepdims=True) / \
-                     tf.reduce_mean(q_dx.prob(x), axis=1, keepdims=True)
-            ws.append(weight)
+            ws.append(tf.math.exp(
+                p_dx.log_prob(x) - q_dx.log_prob(x))[:, tf.newaxis])
 
         return tf.concat(xs, axis=0), \
                tf.concat(ys, axis=0), \
@@ -283,7 +287,7 @@ def cbas(config):
         """
 
         ws = []
-        gamma = tfp.stats.percentile(x, percentile)
+        gamma = tfp.stats.percentile(y, percentile)
 
         num_steps = math.ceil(x.shape[0] / batch_size)
         for j in range(num_steps):
@@ -314,13 +318,15 @@ def cbas(config):
         train_data, validate_data = task.build(
             x=x.numpy(), y=y.numpy(), importance_weights=w.numpy())
 
-        for e in range(config['vae_epochs']):
+        for _ in range(config['online_vae_epochs']):
 
             for name, loss in q_vae.train(train_data).items():
-                logger.record(name, loss, e + (config['vae_epochs'] * (i + 1)))
+                logger.record(name, loss, e)
 
             for name, loss in q_vae.validate(validate_data).items():
-                logger.record(name, loss, e + (config['vae_epochs'] * (i + 1)))
+                logger.record(name, loss, e)
+
+            e += 1
 
     x = generate_data(config['solver_samples'],
                       config['task_kwargs']['batch_size'])[0]
