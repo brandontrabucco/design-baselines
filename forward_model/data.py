@@ -113,6 +113,7 @@ class StaticGraphTask(Task):
                 for b in range(bootstraps)], axis=1))
 
         if importance_weights is not None:
+            importance_weights = importance_weights[indices]
             train_inputs.append(importance_weights[self.val_size:])
 
         make_dataset = tf.data.Dataset.from_tensor_slices

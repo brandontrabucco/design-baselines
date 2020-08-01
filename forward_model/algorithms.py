@@ -10,7 +10,9 @@ from tensorflow_probability import distributions as tfpd
 import tensorflow_probability as tfp
 import tensorflow.keras.layers as tfkl
 import tensorflow as tf
+import numpy as np
 import os
+import math
 
 
 def conservative_mbo(config):
@@ -133,8 +135,10 @@ def cbas(config):
     # train and validate the ensemble
 
     for e in range(config['oracle_epochs']):
+
         for name, loss in ensemble.train(train_data).items():
             logger.record(name, loss, e)
+
         for name, loss in ensemble.validate(validate_data).items():
             logger.record(name, loss, e)
 
@@ -147,7 +151,7 @@ def cbas(config):
         batch_norm=False)
 
     p_decoder = ShallowFullyConnected(
-        config['latent_size'], task.input_size,
+        config['latent_size'], task.input_size * 2,
         hidden=config['vae_hidden_size'],
         act=tfkl.ReLU,
         batch_norm=False)
@@ -159,13 +163,15 @@ def cbas(config):
         vae_lr=config['vae_lr'])
 
     train_data, validate_data = task.build(
-        importance_weights=tf.ones_like(task.y))
+        importance_weights=np.ones_like(task.y))
 
     # train and validate the p_vae
 
     for e in range(config['vae_epochs']):
+
         for name, loss in p_vae.train(train_data).items():
             logger.record(name, loss, e)
+
         for name, loss in p_vae.validate(validate_data).items():
             logger.record(name, loss, e)
 
@@ -179,7 +185,7 @@ def cbas(config):
     q_encoder.set_weights(p_encoder.get_weights())
 
     q_decoder = ShallowFullyConnected(
-        config['latent_size'], task.input_size,
+        config['latent_size'], task.input_size * 2,
         hidden=config['vae_hidden_size'],
         act=tfkl.ReLU,
         batch_norm=False)
@@ -218,11 +224,11 @@ def cbas(config):
         ys = []
         ws = []
 
-        num_steps = dataset_size // batch_size
+        num_steps = math.ceil(dataset_size / batch_size)
         for j in range(num_steps):
 
-            num_samples = (batch_size if j < num_steps - 1
-                           else dataset_size % batch_size)
+            num_samples = min(dataset_size - batch_size * j,
+                              batch_size)
 
             z = tf.random.normal([
                 num_samples, config['latent_size']])
@@ -279,11 +285,11 @@ def cbas(config):
         ws = []
         gamma = tfp.stats.percentile(x, percentile)
 
-        num_steps = x.shape[0] // batch_size
+        num_steps = math.ceil(x.shape[0] / batch_size)
         for j in range(num_steps):
 
-            num_samples = (batch_size if j < num_steps - 1
-                           else x.shape[0] % batch_size)
+            num_samples = min(x.shape[0] - batch_size * j,
+                              batch_size)
 
             d = ensemble.get_distribution(
                 x[j * batch_size:j * batch_size + num_samples])
@@ -297,25 +303,28 @@ def cbas(config):
 
     for i in range(config['iterations']):
 
-        x, y, w = generate_data(
-            task.x.shape[0], config['task_kwargs']['batch_size'])
+        x, y, w = generate_data(config['online_size'],
+                                config['task_kwargs']['batch_size'])
 
-        logger.record("score", task.score(x[:128]), i)
+        logger.record("score", task.score(x[:config['solver_samples']]), i)
 
-        w = w * reweight_by_s(
-            x, y, config['percentile'], config['task_kwargs']['batch_size'])
+        w = w * reweight_by_s(x, y, config['percentile'],
+                              config['task_kwargs']['batch_size'])
 
-        train_data, validate_data = task.build(x=x,
-                                               y=y,
-                                               importance_weights=w)
+        train_data, validate_data = task.build(
+            x=x.numpy(), y=y.numpy(), importance_weights=w.numpy())
 
         for e in range(config['vae_epochs']):
+
             for name, loss in q_vae.train(train_data).items():
                 logger.record(name, loss, e + (config['vae_epochs'] * (i + 1)))
+
             for name, loss in q_vae.validate(validate_data).items():
                 logger.record(name, loss, e + (config['vae_epochs'] * (i + 1)))
 
-    x = generate_data(128, config['task_kwargs']['batch_size'])[0]
+    x = generate_data(config['solver_samples'],
+                      config['task_kwargs']['batch_size'])[0]
+
     logger.record("score", task.score(x), config['iterations'])
 
 
