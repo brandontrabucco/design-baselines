@@ -145,6 +145,10 @@ def conservative_ensemble(config):
     logger.record("score", score, 0)
     logger.record("prediction", prediction, 0)
 
+    # and keep track of the best design sampled so far
+    best_design = None
+    best_score = None
+
     # perform gradient ascent on the score through the forward model
     for i in range(1, config['solver_steps'] + 1):
 
@@ -164,6 +168,18 @@ def conservative_ensemble(config):
         logger.record("gradient_norm", gradient_norm, i)
         logger.record("score", score, i)
         logger.record("prediction", prediction, i)
+
+        # update the best design every iteration
+        idx = np.argmax(score.numpy())
+        if best_design is None or score[idx] > best_score:
+            best_score = score[idx]
+            best_design = solution[idx]
+
+    # save the best design to the disk
+    np.save(os.path.join(
+        config['logging_dir'], 'score.npy'), best_score)
+    np.save(os.path.join(
+        config['logging_dir'], 'design.npy'), best_design)
 
 
 def second_model_predictions(config):
