@@ -219,7 +219,7 @@ def conservative_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def cbas(local_dir, cpus, gpus, num_parallel, num_samples):
+def cbas_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
 
@@ -237,32 +237,35 @@ def cbas(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.algorithms import cbas
+    from forward_model.cbas import condition_by_adaptive_sampling
 
     ray.init(num_cpus=cpus, num_gpus=gpus)
-    tune.run(cbas, config={
-        "logging_dir": "data",
-        "task": "HopperController-v0",
-        "task_kwargs": {"val_size": 200, "batch_size": 32},
-        "bootstraps": 8,
-        "oracle_epochs": 200,
-        "oracle_hidden_size": 2048,
-        "oracle_lr": 0.001,
-        "latent_size": 256,
-        "vae_hidden_size": 2048,
+    cpu = cpus // num_parallel
+    gpu = gpus / num_parallel - 0.01
+    tune.run(condition_by_adaptive_sampling, config={
+        "logging_dir": "gfp",
+        "task": "GFP-v0",
+        "task_kwargs": {},
+        "bootstraps": 5,
+        "val_size": 200,
+        "batch_size": 32,
+        "hidden_size": 50,
+        "initial_max_std": 1.5,
+        "initial_min_std": 0.5,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 1,
+        "latent_size": 20,
         "vae_lr": 0.001,
-        "vae_beta": tune.grid_search([10.0, 1.0, 0.1, 0.01]),
-        "offline_vae_epochs": 200,
-        "online_vae_epochs": tune.grid_search([1, 5, 10, 50]),
-        "online_size": 328,  # 128 training set and 200 validation set
-        "iterations": 50,
-        "percentile": tune.grid_search([50, 80, 90, 100]),
+        "vae_beta": 1.0,
+        "offline_epochs": 2,
+        "online_epochs": 2,
+        "online_batches": 10,
+        "iterations": 5,
+        "percentile": 80.0,
         "solver_samples": 128},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={
-            'cpu': cpus // num_parallel,
-            'gpu': gpus / num_parallel - 0.01})
+        resources_per_trial={'cpu': cpu, 'gpu': gpu})
 
 
 @cli.command()
