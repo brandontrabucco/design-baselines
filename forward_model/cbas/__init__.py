@@ -5,7 +5,8 @@ from forward_model.cbas.trainers import WeightedVAE
 from forward_model.cbas.trainers import CBAS
 from forward_model.cbas.nets import ForwardModel
 from forward_model.cbas.nets import Encoder
-from forward_model.cbas.nets import Decoder
+from forward_model.cbas.nets import DiscreteDecoder
+from forward_model.cbas.nets import ContinuousDecoder
 import tensorflow as tf
 import numpy as np
 import os
@@ -56,6 +57,7 @@ def condition_by_adaptive_sampling(config):
                     config['ensemble_epochs'])
 
     # build the encoder and decoder distribution and the p model
+    Decoder = DiscreteDecoder if config['is_discrete'] else ContinuousDecoder
     p_encoder = Encoder(task.input_shape,
                         config['latent_size'],
                         hidden=config['hidden_size'])

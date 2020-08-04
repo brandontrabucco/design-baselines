@@ -144,7 +144,7 @@ class Encoder(tf.keras.Sequential):
         return self.distribution(**self.get_params(inputs, **kwargs))
 
 
-class Decoder(tf.keras.Sequential):
+class DiscreteDecoder(tf.keras.Sequential):
     """A Fully Connected Network with 3 trainable layers"""
 
     distribution = tfpd.OneHotCategorical
@@ -166,7 +166,7 @@ class Decoder(tf.keras.Sequential):
             the global hidden size of the network
         """
 
-        super(Decoder, self).__init__([
+        super(DiscreteDecoder, self).__init__([
             tfkl.Dense(hidden, input_shape=(latent_size,)),
             tfkl.ReLU(),
             tfkl.Dense(np.prod(input_shape)),
@@ -187,8 +187,8 @@ class Decoder(tf.keras.Sequential):
             a dictionary that contains 'loc' and 'scale_diag' keys
         """
 
-        prediction = super(Decoder, self).__call__(inputs, **kwargs)
-        logits = tf.math.log_softmax(prediction, axis=-1)
+        x = super(DiscreteDecoder, self).__call__(inputs, **kwargs)
+        logits = tf.math.log_softmax(x, axis=-1)
         return {"logits": logits}
 
     def get_distribution(self, inputs, **kwargs):
@@ -208,3 +208,77 @@ class Decoder(tf.keras.Sequential):
 
         return self.distribution(
             **self.get_params(inputs, **kwargs), dtype=tf.float32)
+
+
+class ContinuousDecoder(tf.keras.Sequential):
+    """A Fully Connected Network with 3 trainable layers"""
+
+    distribution = tfpd.MultivariateNormalDiag
+
+    def __init__(self,
+                 input_shape,
+                 latent_size,
+                 hidden=50,
+                 initial_max_std=1.5,
+                 initial_min_std=0.5):
+        """Create a fully connected architecture using keras that can process
+        several parallel streams of weights and biases
+
+        Args:
+
+        inp_size: int
+            the size of the input vector of this network
+        out_size: int
+            the size of the output vector of this network
+        hidden: int
+            the global hidden size of the network
+        """
+
+        self.max_logstd = tf.Variable(tf.fill([1, 1], np.log(
+            initial_max_std).astype(np.float32)), trainable=True)
+        self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
+            initial_min_std).astype(np.float32)), trainable=True)
+
+        super(ContinuousDecoder, self).__init__([
+            tfkl.Dense(hidden, input_shape=(latent_size,)),
+            tfkl.ReLU(),
+            tfkl.Dense(np.prod(input_shape) * 2),
+            tfkl.Reshape(list(input_shape) + [2])])
+
+    def get_params(self, inputs, **kwargs):
+        """Return a dictionary of parameters for a particular distribution
+        family such as the mean and variance of a gaussian
+
+        Args:
+
+        inputs: tf.Tensor
+            a batch of training inputs shaped like [batch_size, channels]
+
+        Returns:
+
+        parameters: dict
+            a dictionary that contains 'loc' and 'scale_diag' keys
+        """
+
+        x = super(ContinuousDecoder, self).__call__(inputs, **kwargs)
+        mean, logstd = x[..., 0], x[..., 1]
+        logstd = self.max_logstd - tf.nn.softplus(self.max_logstd - logstd)
+        logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
+        return {"loc": mean, "scale_diag": tf.math.exp(logstd)}
+
+    def get_distribution(self, inputs, **kwargs):
+        """Return a distribution over the outputs of this model, for example
+        a Multivariate Gaussian Distribution
+
+        Args:
+
+        inputs: tf.Tensor
+            a batch of training inputs shaped like [batch_size, channels]
+
+        Returns:
+
+        distribution: tfp.distribution.Distribution
+            a tensorflow probability distribution over outputs of the model
+        """
+
+        return self.distribution(**self.get_params(inputs, **kwargs))
