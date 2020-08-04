@@ -1,5 +1,103 @@
 import tensorflow as tf
 import tensorflow.keras.layers as tfkl
+import tensorflow_probability as tfp
+from tensorflow_probability import distributions as tfpd
+
+
+class ShallowGaussian(tf.keras.Model):
+    """A Fully Connected Network with 5 trainable layers"""
+
+    def __init__(self,
+                 inp_size,
+                 out_size,
+                 hidden=2048,
+                 act=tfkl.ReLU,
+                 batch_norm=False):
+        """Create a fully connected architecture using keras that can process
+        several parallel streams of weights and biases
+
+        Args:
+
+        inp_size: int
+            the size of the input vector of this network
+        out_size: int
+            the size of the output vector of this network
+        hidden: int
+            the global hidden size of the network
+        act: function
+            a function that returns an activation function such as tfkl.ReLU
+        batch_norm: bool
+            whether to use batch normalization or remove it
+        """
+
+        super(ShallowGaussian, self).__init__()
+        self.inp_size = inp_size
+        self.out_size = out_size
+
+        self.max_logstd = tf.Variable(tf.fill([1, out_size], 10.0))
+        self.min_logstd = tf.Variable(tf.fill([1, out_size], -5.0))
+
+        if batch_norm:
+            self.module = tf.keras.Sequential([
+                tfkl.Dense(hidden, input_shape=(inp_size,)),
+                tfkl.BatchNormalization(),
+                act(),
+                tfkl.Dense(hidden),
+                tfkl.BatchNormalization(),
+                act(),
+                tfkl.Dense(out_size * 2)])
+
+        else:
+            self.module = tf.keras.Sequential([
+                tfkl.Dense(hidden, input_shape=(inp_size,)),
+                act(),
+                tfkl.Dense(hidden),
+                act(),
+                tfkl.Dense(out_size * 2)])
+
+    @tf.function(experimental_relax_shapes=True)
+    def call(self, inputs, training=False, **kwargs):
+        """Pass a vector input through the network that is composed of
+        several streams of inputs and outputs
+
+        Args:
+
+        inputs: tf.Tensor
+            a tensor that has a batch axis and a channels axis
+        training: bool
+            whether the network is in training of evaluation mode
+
+        Returns:
+
+        outputs: tf.Tensor
+            a tensor that has a batch axis and a channels axis
+        """
+
+        return self.module(inputs, training=training, **kwargs)
+
+    @tf.function(experimental_relax_shapes=True)
+    def get_parameters(self, inputs, **kwargs):
+        """Pass a vector input through the network that is composed of
+        several streams of inputs and outputs
+
+        Args:
+
+        inputs: tf.Tensor
+            a tensor that has a batch axis and a channels axis
+        training: bool
+            whether the network is in training of evaluation mode
+
+        Returns:
+
+        outputs: tf.Tensor
+            a tensor that has a batch axis and a channels axis
+        """
+
+        prediction = self.call(inputs, **kwargs)
+        mu, logstd = tf.split(prediction, 2, axis=-1)
+        logstd = self.max_logstd - tf.nn.softplus(self.max_logstd - logstd)
+        logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
+        return mu, tf.exp(logstd)
 
 
 class ShallowFullyConnected(tf.keras.Model):
