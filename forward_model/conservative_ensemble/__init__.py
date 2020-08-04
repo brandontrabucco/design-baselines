@@ -8,18 +8,17 @@ import numpy as np
 import os
 
 
-class FullyConnected(tf.keras.Sequential):
+class ForwardModel(tf.keras.Sequential):
     """A Fully Connected Network with 3 trainable layers"""
 
     distribution = tfpd.MultivariateNormalDiag
 
     def __init__(self,
-                 inp_size,
-                 out_size,
+                 input_shape,
                  hidden=2048,
                  initial_max_std=1.5,
                  initial_min_std=0.5,
-                 act=tfkl.ReLU):
+                 act=tfkl.LeakyReLU):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
@@ -35,17 +34,18 @@ class FullyConnected(tf.keras.Sequential):
             a function that returns an activation function such as tfkl.ReLU
         """
 
-        self.max_logstd = tf.Variable(tf.fill([1, out_size], np.log(
+        self.max_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_max_std).astype(np.float32)), trainable=True)
-        self.min_logstd = tf.Variable(tf.fill([1, out_size], np.log(
+        self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_min_std).astype(np.float32)), trainable=True)
 
-        super(FullyConnected, self).__init__([
-            tfkl.Dense(hidden, input_shape=(inp_size,)),
+        super(ForwardModel, self).__init__([
+            tfkl.Flatten(input_shape=input_shape),
+            tfkl.Dense(hidden),
             act(),
             tfkl.Dense(hidden),
             act(),
-            tfkl.Dense(out_size * 2)])
+            tfkl.Dense(2)])
 
     def get_parameters(self, inputs, **kwargs):
         """Return a dictionary of parameters for a particular distribution
@@ -62,7 +62,7 @@ class FullyConnected(tf.keras.Sequential):
             a dictionary that contains 'loc' and 'scale_diag' keys
         """
 
-        prediction = super(FullyConnected, self).__call__(inputs, **kwargs)
+        prediction = super(ForwardModel, self).__call__(inputs, **kwargs)
         mean, logstd = tf.split(prediction, 2, axis=-1)
         logstd = self.max_logstd - tf.nn.softplus(self.max_logstd - logstd)
         logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
@@ -98,17 +98,18 @@ def conservative_ensemble(config):
 
     # create the training task and logger
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    train_data, validate_data = task.build(bootstraps=config['bootstraps'])
+    train_data, validate_data = task.build(bootstraps=config['bootstraps'],
+                                           batch_size=config['batch_size'],
+                                           val_size=config['val_size'])
     logger = Logger(config['logging_dir'])
 
     # make several keras neural networks with two hidden layers
-    forward_models = [FullyConnected(
-        task.input_size,
-        1,
+    forward_models = [ForwardModel(
+        task.input_shape,
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'],
-        act=tfkl.ReLU) for b in range(config['bootstraps'])]
+        act=tfkl.LeakyReLU) for b in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
     trainer = ConservativeEnsemble(
@@ -194,13 +195,14 @@ def second_model_predictions(config):
 
     # create the training task and logger
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    train_data, validate_data = task.build(bootstraps=2)
+    train_data, validate_data = task.build(bootstraps=2,
+                                           batch_size=config['batch_size'],
+                                           val_size=config['val_size'])
     logger = Logger(config['logging_dir'])
 
     # make several keras neural networks with two hidden layers
-    forward_models = [FullyConnected(
-        task.input_size,
-        1,
+    forward_models = [ForwardModel(
+        task.input_shape,
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'],

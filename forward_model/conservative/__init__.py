@@ -6,14 +6,13 @@ import tensorflow as tf
 import os
 
 
-class FullyConnected(tf.keras.Sequential):
+class ForwardModel(tf.keras.Sequential):
     """A Fully Connected Network with 3 trainable layers"""
 
     def __init__(self,
-                 inp_size,
-                 out_size,
+                 input_shape,
                  hidden=2048,
-                 act=tfkl.ReLU):
+                 act=tfkl.LeakyReLU):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
@@ -29,12 +28,13 @@ class FullyConnected(tf.keras.Sequential):
             a function that returns an activation function such as tfkl.ReLU
         """
 
-        super(FullyConnected, self).__init__([
-            tfkl.Dense(hidden, input_shape=(inp_size,)),
+        super(ForwardModel, self).__init__([
+            tfkl.Flatten(input_shape=input_shape),
+            tfkl.Dense(hidden),
             act(),
             tfkl.Dense(hidden),
             act(),
-            tfkl.Dense(out_size)])
+            tfkl.Dense(1)])
 
 
 def conservative(config):
@@ -49,15 +49,15 @@ def conservative(config):
 
     # create the training task and logger
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    train_data, validate_data = task.build()
+    train_data, validate_data = task.build(batch_size=config['batch_size'],
+                                           val_size=config['val_size'])
     logger = Logger(config['logging_dir'])
 
     # make a keras neural network with two hidden layers
-    forward_model = FullyConnected(
-        task.input_size,
-        1,
+    forward_model = ForwardModel(
+        task.input_shape,
         hidden=config['hidden_size'],
-        act=tfkl.ReLU)
+        act=tfkl.LeakyReLU)
 
     # create a trainer for a forward model with a conservative objective
     trainer = Conservative(

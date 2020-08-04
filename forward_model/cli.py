@@ -42,7 +42,9 @@ def conservative_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(conservative, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
-        "task_kwargs": {"val_size": 200, "batch_size": 128},
+        "task_kwargs": {},
+        "val_size": 200,
+        "batch_size": 128,
         "epochs": 100,
         "hidden_size": 2048,
         'forward_model_lr': 0.001,
@@ -91,7 +93,9 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
     tune.run(conservative_ensemble, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
-        "task_kwargs": {"val_size": 200, "batch_size": 128},
+        "task_kwargs": {},
+        "val_size": 200,
+        "batch_size": 128,
         "bootstraps": tune.grid_search([1, 2, 4, 8, 16]),
         "epochs": 200,
         "hidden_size": 2048,
@@ -143,7 +147,9 @@ def second_model_predictions_policy(local_dir, cpus, gpus, num_parallel, num_sam
     tune.run(second_model_predictions, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
-        "task_kwargs": {"val_size": 200, "batch_size": 128},
+        "task_kwargs": {},
+        "val_size": 200,
+        "batch_size": 128,
         "epochs": 200,
         "hidden_size": 2048,
         "initial_max_std": 1.5,
@@ -162,8 +168,11 @@ def second_model_predictions_policy(local_dir, cpus, gpus, num_parallel, num_sam
         resources_per_trial={'cpu': cpu, 'gpu': gpu})
 
 
+#############
+
+
 @cli.command()
-@click.option('--local-dir', type=str, default='data')
+@click.option('--local-dir', type=str, default='conservative_gfp')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -189,28 +198,138 @@ def conservative_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     from forward_model.conservative import conservative
 
     ray.init(num_cpus=cpus, num_gpus=gpus)
+    cpu = cpus // num_parallel
+    gpu = gpus / num_parallel - 0.01
     tune.run(conservative, config={
         "logging_dir": "data",
         "task": "GFP-v0",
-        "task_kwargs": {"val_size": 200, "batch_size": 128},
-        "seed": tune.randint(10000),
-        "epochs": tune.grid_search([50]),
-        "hidden_size": tune.grid_search([2048]),
-        'target_conservative_gap': tune.grid_search([0.0]),
-        'initial_alpha': tune.grid_search([
-            0.0, 0.00000001, 0.0000001, 0.000001, 0.00001, 0.0001, 0.001, 0.01]),
-        'forward_model_lr': tune.grid_search([0.001]),
-        'alpha_lr': tune.grid_search([0.0]),
-        "perturbation_lr": tune.grid_search([1.0]),
-        "perturbation_steps": tune.grid_search([100]),
-        "solver_samples": tune.grid_search([128]),
-        "solver_lr": tune.grid_search([1.0]),
-        "solver_steps": tune.grid_search([100])},
+        "task_kwargs": {},
+        "val_size": 200,
+        "batch_size": 128,
+        "epochs": 50,
+        "hidden_size": 2048,
+        'forward_model_lr': 0.001,
+        'target_conservative_gap': 0.0,
+        'initial_alpha': 0.00005,
+        'alpha_lr': 0.0,
+        "perturbation_lr": 1.0,
+        "perturbation_steps": 100,
+        "solver_samples": 128,
+        "solver_lr": 1.0,
+        "solver_steps": 100},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={
-            'cpu': cpus // num_parallel,
-            'gpu': gpus / num_parallel - 0.01})
+        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='conservative_ensemble_gfp')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from forward_model.conservative_ensemble import conservative_ensemble
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    cpu = cpus // num_parallel
+    gpu = gpus / num_parallel - 0.01
+    tune.run(conservative_ensemble, config={
+        "logging_dir": "data",
+        "task": "GFP-v0",
+        "task_kwargs": {},
+        "val_size": 200,
+        "batch_size": 128,
+        "bootstraps": tune.grid_search([1, 2, 4, 8, 16]),
+        "epochs": 50,
+        "hidden_size": 2048,
+        "initial_max_std": 1.5,
+        "initial_min_std": 0.5,
+        "forward_model_lr": 0.001,
+        "target_conservative_gap": 0.0,
+        "initial_alpha": 0.00005,
+        "alpha_lr": 0.0,
+        "perturbation_lr": 1.0,
+        "perturbation_steps": 100,
+        "solver_samples": 128,
+        "solver_lr": 1.0,
+        "solver_steps": 1000},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='second_model_predictions_gfp')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def second_model_predictions_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from forward_model.conservative_ensemble import second_model_predictions
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    cpu = cpus // num_parallel
+    gpu = gpus / num_parallel - 0.01
+    tune.run(second_model_predictions, config={
+        "logging_dir": "data",
+        "task": "GFP-v0",
+        "task_kwargs": {},
+        "val_size": 200,
+        "batch_size": 128,
+        "epochs": 50,
+        "hidden_size": 2048,
+        "initial_max_std": 1.5,
+        "initial_min_std": 0.5,
+        "forward_model_lr": 0.001,
+        "target_conservative_gap": 0.0,
+        "initial_alpha": 0.00005,
+        "alpha_lr": 0.0,
+        "perturbation_lr": 1.0,
+        "perturbation_steps": 100,
+        "solver_samples": 128,
+        "solver_lr": 1.0,
+        "solver_steps": 100},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+
+
+#############
 
 
 @cli.command()
