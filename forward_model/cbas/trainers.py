@@ -104,8 +104,8 @@ class Ensemble(tf.Module):
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
                 # build the total loss and weight by the bootstrap
-                denom = tf.reduce_sum(b[:, i])
-                total_loss = tf.reduce_sum(b[:, i] * nll) / denom
+                total_loss = tf.math.divide_no_nan(
+                    tf.reduce_sum(b[:, i] * nll), tf.reduce_sum(b[:, i]))
 
             grads = tape.gradient(total_loss, fm.trainable_variables)
             fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
@@ -550,7 +550,7 @@ class CBAS(tf.Module):
 
             # re-weight by the cumulative probability of the score
             d = self.ensemble.get_distribution(xs[j])
-            ws[j] *= (1.0 - d.cdf(tf.fill([num_samples, 1], gamma)))
+            ws[j] *= 1.0 - d.cdf(tf.fill([num_samples, 1], gamma))
 
         return tf.concat(xs, axis=0), \
                tf.concat(ys, axis=0), \

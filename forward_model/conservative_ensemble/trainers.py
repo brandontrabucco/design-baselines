@@ -174,8 +174,10 @@ class ConservativeEnsemble(tf.Module):
 
                 # build the total and lagrangian losses
                 denom = tf.reduce_sum(b[:, i])
-                total_loss = tf.reduce_sum(b[:, i] * model_loss) / denom
-                alpha_loss = tf.reduce_sum(b[:, i] * gap) / denom
+                total_loss = tf.math.divide_no_nan(
+                    tf.reduce_sum(b[:, i] * model_loss), denom)
+                alpha_loss = tf.math.divide_no_nan(
+                    tf.reduce_sum(b[:, i] * gap), denom)
 
             grads = tape.gradient(total_loss, fm.trainable_variables)
             fm_optim.apply_gradients(zip(grads, fm.trainable_variables))

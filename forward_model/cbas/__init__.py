@@ -26,7 +26,7 @@ def condition_by_adaptive_sampling(config):
     # create the training task and logger
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
     train_data, val_data = task.build(bootstraps=config['bootstraps'],
-                                      batch_size=config['batch_size'],
+                                      batch_size=config['ensemble_batch_size'],
                                       val_size=config['val_size'])
 
     # make several keras neural networks with two hidden layers
@@ -76,7 +76,7 @@ def condition_by_adaptive_sampling(config):
 
     # build a weighted data set
     train_data, val_data = task.build(importance_weights=np.ones_like(task.y),
-                                      batch_size=config['batch_size'],
+                                      batch_size=config['vae_batch_size'],
                                       val_size=config['val_size'])
 
     # train the initial vae fit to the original data distribution
@@ -112,23 +112,23 @@ def condition_by_adaptive_sampling(config):
                 latent_size=config['latent_size'])
 
     # train and validate the q_vae using online samples
-    q_manager.restore_or_initialize()
+    q_encoder.set_weights(p_encoder.get_weights())
+    q_decoder.set_weights(p_decoder.get_weights())
     for i in range(config['iterations']):
 
         # generate an importance weighted dataset
         x, y, w = cbas.generate_data(config['online_batches'],
-                                     config['batch_size'],
+                                     config['vae_batch_size'],
                                      config['percentile'])
 
         # evaluate the sampled designs
-        logger.record("score", task.score(
-            x[:config['solver_samples']]), i)
+        logger.record("score", task.score(x[:config['solver_samples']]), i)
 
         # build a weighted data set
         train_data, val_data = task.build(x=x.numpy(),
                                           y=y.numpy(),
                                           importance_weights=w.numpy(),
-                                          batch_size=config['batch_size'],
+                                          batch_size=config['vae_batch_size'],
                                           val_size=config['val_size'])
 
         # train a vae fit using weighted maximum likelihood
