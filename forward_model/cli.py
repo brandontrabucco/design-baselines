@@ -96,7 +96,7 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "task_kwargs": {},
         "val_size": 200,
         "batch_size": 128,
-        "bootstraps": tune.grid_search([1, 2, 4, 8, 16]),
+        "bootstraps": tune.grid_search([1, 2, 4, 8, 16, 32]),
         "epochs": 200,
         "hidden_size": 2048,
         "initial_max_std": 1.5,
@@ -257,7 +257,7 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "task_kwargs": {},
         "val_size": 200,
         "batch_size": 128,
-        "bootstraps": tune.grid_search([1, 2, 4, 8, 16]),
+        "bootstraps": tune.grid_search([1, 2, 4, 8, 16, 32]),
         "epochs": 50,
         "hidden_size": 2048,
         "initial_max_std": 1.5,
@@ -510,7 +510,7 @@ def plot(dir, name, tag, xlabel, ylabel, title, out):
 
     import os
     file = tf.io.gfile.glob(os.path.join(dir, '*/data/events*'))
-    ids = [int(f.split('conservative_mbo_')[
+    ids = [int(f.split('second_model_predictions_')[
         1].split('_')[0]) for f in file]
 
     zipped_lists = zip(ids, file)
