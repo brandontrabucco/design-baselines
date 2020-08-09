@@ -506,11 +506,12 @@ def plot(dir, name, tag, xlabel, ylabel, title, out):
     import seaborn as sns
     import pandas as pd
     import matplotlib.pyplot as plt
+    import math
     sns.set(style='darkgrid')
 
     import os
     file = tf.io.gfile.glob(os.path.join(dir, '*/data/events*'))
-    ids = [int(f.split('second_model_predictions_')[
+    ids = [int(f.split('conservative_ensemble_')[
         1].split('_')[0]) for f in file]
 
     zipped_lists = zip(ids, file)
@@ -518,7 +519,7 @@ def plot(dir, name, tag, xlabel, ylabel, title, out):
     tuples = zip(*sorted_pairs)
     ids, file = [list(tuple) for tuple in tuples]
 
-    name = list(name) * (len(file) // len(name))
+    name = list(name) * int(math.ceil(len(file) / len(name)))
     df = pd.DataFrame(columns=[xlabel, ylabel, 'Type'])
 
     for f, n in zip(file, name):

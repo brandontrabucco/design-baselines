@@ -5,7 +5,7 @@ import numpy as np
 
 
 class ForwardModel(tf.keras.Sequential):
-    """A Fully Connected Network with 3 trainable layers"""
+    """A Fully Connected Network with 2 trainable layers"""
 
     distribution = tfpd.Normal
 
@@ -37,7 +37,7 @@ class ForwardModel(tf.keras.Sequential):
         super(ForwardModel, self).__init__([
             tfkl.Flatten(input_shape=input_shape),
             tfkl.Dense(hidden),
-            tfkl.ReLU(),
+            tfkl.LeakyReLU(),
             tfkl.Dense(2)])
 
     def get_params(self, inputs, **kwargs):
@@ -80,7 +80,7 @@ class ForwardModel(tf.keras.Sequential):
 
 
 class Encoder(tf.keras.Sequential):
-    """A Fully Connected Network with 3 trainable layers"""
+    """A Fully Connected Network with 2 trainable layers"""
 
     distribution = tfpd.MultivariateNormalDiag
 
@@ -104,7 +104,7 @@ class Encoder(tf.keras.Sequential):
         super(Encoder, self).__init__([
             tfkl.Flatten(input_shape=input_shape),
             tfkl.Dense(hidden),
-            tfkl.ReLU(),
+            tfkl.LeakyReLU(),
             tfkl.Dense(latent_size * 2)])
 
     def get_params(self, inputs, **kwargs):
@@ -145,7 +145,7 @@ class Encoder(tf.keras.Sequential):
 
 
 class DiscreteDecoder(tf.keras.Sequential):
-    """A Fully Connected Network with 3 trainable layers"""
+    """A Fully Connected Network with 2 trainable layers"""
 
     distribution = tfpd.OneHotCategorical
 
@@ -168,7 +168,7 @@ class DiscreteDecoder(tf.keras.Sequential):
 
         super(DiscreteDecoder, self).__init__([
             tfkl.Dense(hidden, input_shape=(latent_size,)),
-            tfkl.ReLU(),
+            tfkl.LeakyReLU(),
             tfkl.Dense(np.prod(input_shape)),
             tfkl.Reshape(input_shape)])
 
@@ -211,7 +211,7 @@ class DiscreteDecoder(tf.keras.Sequential):
 
 
 class ContinuousDecoder(tf.keras.Sequential):
-    """A Fully Connected Network with 3 trainable layers"""
+    """A Fully Connected Network with 2 trainable layers"""
 
     distribution = tfpd.MultivariateNormalDiag
 
@@ -241,7 +241,7 @@ class ContinuousDecoder(tf.keras.Sequential):
 
         super(ContinuousDecoder, self).__init__([
             tfkl.Dense(hidden, input_shape=(latent_size,)),
-            tfkl.ReLU(),
+            tfkl.LeakyReLU(),
             tfkl.Dense(np.prod(input_shape) * 2),
             tfkl.Reshape(list(input_shape) + [2])])
 
