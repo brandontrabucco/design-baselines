@@ -102,6 +102,8 @@ class Discriminator(tf.keras.Sequential):
         super(Discriminator, self).__init__([
             tfkl.Dense(hidden, input_shape=(np.prod(design_shape) + 1,)),
             tfkl.LeakyReLU(),
+            tfkl.Dense(hidden),
+            tfkl.LeakyReLU(),
             tfkl.Dense(1)])
 
     def loss(self, x, y, real=True, **kwargs):
@@ -130,7 +132,7 @@ class Discriminator(tf.keras.Sequential):
         x = tf.reshape(x, [tf.shape(y)[0], np.prod(self.design_shape)])
         inputs = tf.concat([x, y], 1)
         mu = super(Discriminator, self).__call__(inputs, **kwargs)
-        return (mu - 1.0 if real else 0.0) ** 2
+        return (mu - (1.0 if real else 0.0)) ** 2
 
 
 class DiscreteGenerator(tf.keras.Sequential):
@@ -156,6 +158,8 @@ class DiscreteGenerator(tf.keras.Sequential):
         self.latent_size = latent_size
         super(DiscreteGenerator, self).__init__([
             tfkl.Dense(hidden, input_shape=(latent_size + 1,)),
+            tfkl.LeakyReLU(),
+            tfkl.Dense(hidden),
             tfkl.LeakyReLU(),
             tfkl.Dense(np.prod(design_shape)),
             tfkl.Reshape(design_shape),
@@ -206,6 +210,8 @@ class ContinuousGenerator(tf.keras.Sequential):
         self.latent_size = latent_size
         super(ContinuousGenerator, self).__init__([
             tfkl.Dense(hidden, input_shape=(latent_size + 1,)),
+            tfkl.LeakyReLU(),
+            tfkl.Dense(hidden),
             tfkl.LeakyReLU(),
             tfkl.Dense(np.prod(design_shape)),
             tfkl.Reshape(design_shape)])
