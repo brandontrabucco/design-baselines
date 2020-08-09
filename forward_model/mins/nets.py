@@ -130,7 +130,7 @@ class Discriminator(tf.keras.Sequential):
         """
 
         x = tf.reshape(x, [tf.shape(y)[0], np.prod(self.design_shape)])
-        inputs = tf.concat([x, y], 1)
+        inputs = tf.cast(tf.concat([x, y], 1), tf.float32)
         mu = super(Discriminator, self).__call__(inputs, **kwargs)
         return (mu - (1.0 if real else 0.0)) ** 2
 
@@ -183,7 +183,7 @@ class DiscreteGenerator(tf.keras.Sequential):
         """
 
         z = tf.random.normal([tf.shape(y)[0], self.latent_size])
-        inputs = tf.concat([z, y], 1)
+        inputs = tf.cast(tf.concat([z, y], 1), tf.float32)
         return super(DiscreteGenerator, self).__call__(inputs, **kwargs)
 
 
@@ -234,5 +234,5 @@ class ContinuousGenerator(tf.keras.Sequential):
         """
 
         z = tf.random.normal([tf.shape(y)[0], self.latent_size])
-        inputs = tf.concat([z, y], 1)
+        inputs = tf.cast(tf.concat([z, y], 1), tf.float32)
         return super(ContinuousGenerator, self).__call__(inputs, **kwargs)

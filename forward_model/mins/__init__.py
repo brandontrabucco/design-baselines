@@ -6,89 +6,10 @@ from forward_model.mins.nets import ForwardModel
 from forward_model.mins.nets import Discriminator
 from forward_model.mins.nets import DiscreteGenerator
 from forward_model.mins.nets import ContinuousGenerator
+from forward_model.mins.utils import get_weights
+from forward_model.mins.utils import get_synthetic_data
 import tensorflow as tf
-import numpy as np
 import os
-
-
-def adaptive_temp_v2(scores_np):
-    """Calculate an adaptive temperature value based on the
-    statistics of the scores array
-
-    Args:
-
-    scores_np: np.ndarray
-        an array that represents the vectorized scores per data point
-
-    Returns:
-
-    temp: np.ndarray
-        the scalar 90th percentile of scores in the dataset
-    """
-
-    inverse_arr = scores_np
-    max_score = inverse_arr.max()
-    scores_new = inverse_arr - max_score
-    quantile_ninety = np.quantile(scores_new, q=0.9)
-    return np.abs(quantile_ninety)
-
-
-def softmax(arr,
-            temp=1.0):
-    """Calculate the softmax using numpy by normalizing a vector
-    to have entries that sum to one
-
-    Args:
-
-    arr: np.ndarray
-        the array which will be normalized using a tempered softmax
-    temp: float
-        a temperature parameter for the softmax
-
-    Returns:
-
-    normalized: np.ndarray
-        the normalized input array which sums to one
-    """
-
-    max_arr = arr.max()
-    arr_new = arr - max_arr
-    exp_arr = np.exp(arr_new / temp)
-    return exp_arr / np.sum(exp_arr)
-
-
-def get_weights(scores):
-    """Calculate weights used for training a model inversion
-    network with a per-sample reweighted objective
-
-    Args:
-
-    scores: np.ndarray
-        scores which correspond to the value of data points in the dataset
-
-    Returns:
-
-    weights: np.ndarray
-        an array with the same shape as scores that reweights samples
-    """
-
-    scores_np = scores[:, 0]
-    hist, bin_edges = np.histogram(scores_np, bins=20)
-    hist = hist / np.sum(hist)
-
-    base_temp = adaptive_temp_v2(scores_np)
-    softmin_prob = softmax(bin_edges[1:], temp=base_temp)
-
-    provable_dist = softmin_prob * (hist / (hist + 1e-3))
-    provable_dist = provable_dist / (np.sum(provable_dist) + 1e-7)
-
-    bin_indices = np.digitize(scores_np, bin_edges[1:])
-    hist_prob = hist[np.minimum(bin_indices, 19)]
-
-    weights = provable_dist[
-        np.minimum(bin_indices, 19)] / (hist_prob + 1e-7)
-    weights = np.clip(weights, a_min=0.0, a_max=5.0)
-    return weights.astype(np.float32)
 
 
 def model_inversion(config):
@@ -140,42 +61,114 @@ def model_inversion(config):
         'is_discrete'] else ContinuousGenerator
 
     # build the neural network GAN components
-    generator = Generator(task.input_shape, config['latent_size'],
-                          hidden=config['hidden_size'])
-    disc = Discriminator(task.input_shape,
-                         hidden=config['hidden_size'])
-    gan = WeightedGAN(generator, disc,
-                      g_lr=config['generator_lr'],
-                      g_beta_1=config['generator_beta_1'],
-                      g_beta_2=config['generator_beta_2'],
-                      d_lr=config['discriminator_lr'],
-                      d_beta_1=config['discriminator_beta_1'],
-                      d_beta_2=config['discriminator_beta_2'])
+    exploration_generator = Generator(
+        task.input_shape, config['latent_size'], hidden=config['hidden_size'])
+    exploration_discriminator = Discriminator(
+        task.input_shape, hidden=config['hidden_size'])
+    exploration_gan = WeightedGAN(
+        exploration_generator, exploration_discriminator,
+        generator_lr=config['generator_lr'],
+        generator_beta_1=config['generator_beta_1'],
+        generator_beta_2=config['generator_beta_2'],
+        discriminator_lr=config['discriminator_lr'],
+        discriminator_beta_1=config['discriminator_beta_1'],
+        discriminator_beta_2=config['discriminator_beta_2'])
 
     # create a manager for saving algorithms state to the disk
-    gan_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**gan.get_saveables()),
-        directory=os.path.join(config['logging_dir'], 'gan'),
-        max_to_keep=1)
+    exploration_manager = tf.train.CheckpointManager(
+        tf.train.Checkpoint(**exploration_gan.get_saveables()),
+        os.path.join(config['logging_dir'], 'exploration_gan'), 1)
+    exploration_manager.restore_or_initialize()
 
-    # build a weighted data set
-    train_data, val_data = task.build(importance_weights=get_weights(task.y),
-                                      batch_size=config['gan_batch_size'],
-                                      val_size=config['val_size'])
+    # build the neural network GAN components
+    exploitation_generator = Generator(
+        task.input_shape, config['latent_size'], hidden=config['hidden_size'])
+    exploitation_discriminator = Discriminator(
+        task.input_shape, hidden=config['hidden_size'])
+    exploitation_gan = WeightedGAN(
+        exploitation_generator, exploitation_discriminator,
+        generator_lr=config['generator_lr'],
+        generator_beta_1=config['generator_beta_1'],
+        generator_beta_2=config['generator_beta_2'],
+        discriminator_lr=config['discriminator_lr'],
+        discriminator_beta_1=config['discriminator_beta_1'],
+        discriminator_beta_2=config['discriminator_beta_2'])
 
-    # train the initial vae fit to the original data distribution
-    gan_manager.restore_or_initialize()
-    gan.launch(train_data,
-               val_data,
-               logger,
-               config['offline_epochs'])
+    # create a manager for saving algorithms state to the disk
+    exploitation_manager = tf.train.CheckpointManager(
+        tf.train.Checkpoint(**exploitation_gan.get_saveables()),
+        os.path.join(config['logging_dir'], 'exploitation_gan'), 1)
+    exploitation_manager.restore_or_initialize()
+
+    # save the initial dataset statistics for safe keeping
+    x = task.x
+    y = task.y
+
+    # train the gan using an importance sampled data set
+    for iteration in range(config['iterations']):
+
+        # generate synthetic x paired with high performing scores
+        tilde_x, tilde_y = get_synthetic_data(
+            x, y,
+            exploration_samples=config['exploration_samples'],
+            exploration_rate=config['exploration_rate'],
+            exploration_noise_std=config['exploration_noise_std'])
+
+        # build a weighted data set using newly collected samples
+        train_data, val_data = task.build(
+            x=tilde_x, y=tilde_y,
+            importance_weights=get_weights(tilde_y),
+            batch_size=config['gan_batch_size'],
+            val_size=config['val_size'])
+
+        # train the gan for several epochs
+        exploration_gan.launch(
+            train_data, val_data, logger, config['epochs_per_iteration'],
+            start_epoch=config['epochs_per_iteration'] * iteration,
+            header="exploration/")
+
+        # sample designs from the GAN and evaluate them
+        conditioned_ys = tf.tile(tf.reduce_max(
+            tilde_y, keepdims=True), [config['thompson_samples'], 1])
+
+        # generate samples and evaluate using an ensemble
+        solver_xs = exploration_generator.sample(conditioned_ys)
+        actual_ys = ensemble.get_distribution(solver_xs).mean()
+
+        # record score percentiles
+        logger.record("exploration/conditioned_ys", conditioned_ys, iteration)
+        logger.record("exploration/actual_ys", actual_ys, iteration)
+
+        # concatenate newly paired samples with the existing data set
+        x = tf.concat([x, solver_xs], 0)
+        y = tf.concat([y, actual_ys], 0)
+
+        # build a weighted data set using newly collected samples
+        train_data, val_data = task.build(
+            x=x, y=y,
+            importance_weights=get_weights(y),
+            batch_size=config['gan_batch_size'],
+            val_size=config['val_size'])
+
+        # train the gan for several epochs
+        exploitation_gan.launch(
+            train_data, val_data, logger, config['epochs_per_iteration'],
+            start_epoch=config['epochs_per_iteration'] * iteration,
+            header="exploitation/")
+
+        # sample designs from the GAN and evaluate them
+        conditioned_ys = tf.tile(tf.reduce_max(
+            y, keepdims=True), [config['solver_samples'], 1])
+
+        # generate samples and evaluate using the task
+        solver_xs = exploration_generator.sample(conditioned_ys)
+        actual_ys = task.score(solver_xs)
+
+        # record score percentiles
+        logger.record("exploitation/conditioned_ys", conditioned_ys, iteration)
+        logger.record("exploitation/actual_ys", actual_ys, iteration)
 
     # save every model to the disk
     ensemble_manager.save()
-    gan_manager.save()
-
-    # sample designs from the GAN and evaluate them
-    y = tf.tile(tf.reduce_max(
-        task.y, keepdims=True), [config['solver_samples'], 1])
-    logger.record("score", task.score(
-        generator.sample(y)), config['offline_epochs'])
+    exploration_manager.save()
+    exploitation_manager.save()

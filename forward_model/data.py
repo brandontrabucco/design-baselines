@@ -49,7 +49,7 @@ class StaticGraphTask(Task):
         return self.wrapped_task.input_size
 
     def score_np(self, x):
-        return self.wrapped_task.score(x)
+        return self.wrapped_task.score(x).astype(np.float32)
 
     def build(self,
               x=None,

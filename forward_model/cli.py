@@ -499,7 +499,8 @@ def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         "discriminator_lr": tune.grid_search([1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8]),
         "discriminator_beta_1": 0.5,
         "discriminator_beta_2": 0.999,
-        "offline_epochs": 1000,
+        "epochs_per_eval": 10,
+        "iterations": 100,
         "solver_samples": 128},
         num_samples=num_samples,
         local_dir=local_dir,
@@ -550,17 +551,25 @@ def mins_quadratic(local_dir, cpus, gpus, num_parallel, num_samples):
         "ensemble_lr": 0.001,
         "ensemble_epochs": 0,
         "latent_size": 16,
-        "generator_lr": tune.grid_search([1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8]),
+        "generator_lr": 1e-4,
         "generator_beta_1": 0.5,
         "generator_beta_2": 0.999,
-        "discriminator_lr": tune.grid_search([1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8]),
+        "discriminator_lr": 1e-3,
         "discriminator_beta_1": 0.5,
         "discriminator_beta_2": 0.999,
-        "offline_epochs": 1000,
+        "epochs_per_iteration": 10,
+        "iterations": 100,
+        "exploration_samples": 32,
+        "exploration_rate": 10.0,
+        "exploration_noise_std": 0.1,
+        "thompson_samples": 32,
         "solver_samples": 32},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpu, 'gpu': gpu})
+
+
+#############
 
 
 @cli.command()

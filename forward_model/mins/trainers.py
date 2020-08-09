@@ -204,7 +204,8 @@ class Ensemble(tf.Module):
                validate_data,
                logger,
                epochs,
-               start_epoch=0):
+               start_epoch=0,
+               header=""):
         """Launch training and validation for the model for the specified
         number of epochs, and log statistics
 
@@ -222,9 +223,9 @@ class Ensemble(tf.Module):
 
         for e in range(start_epoch, start_epoch + epochs):
             for name, loss in self.train(train_data).items():
-                logger.record(name, loss, e)
+                logger.record(header + name, loss, e)
             for name, loss in self.validate(validate_data).items():
-                logger.record(name, loss, e)
+                logger.record(header + name, loss, e)
 
     def get_saveables(self):
         """Collects and returns stateful objects that are serializeable
@@ -248,12 +249,12 @@ class WeightedGAN(tf.Module):
     def __init__(self,
                  generator,
                  discriminator,
-                 g_lr=0.001,
-                 g_beta_1=0.5,
-                 g_beta_2=0.999,
-                 d_lr=0.001,
-                 d_beta_1=0.5,
-                 d_beta_2=0.999):
+                 generator_lr=0.001,
+                 generator_beta_1=0.5,
+                 generator_beta_2=0.999,
+                 discriminator_lr=0.001,
+                 discriminator_beta_1=0.5,
+                 discriminator_beta_2=0.999):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -273,11 +274,15 @@ class WeightedGAN(tf.Module):
 
         super().__init__()
         self.generator = generator
-        self.disc = discriminator
+        self.discriminator = discriminator
         self.generator_optim = tf.keras.optimizers.Adam(
-            learning_rate=g_lr, beta_1=g_beta_1, beta_2=g_beta_2)
-        self.disc_optim = tf.keras.optimizers.Adam(
-            learning_rate=d_lr, beta_1=d_beta_1, beta_2=d_beta_2)
+            learning_rate=generator_lr,
+            beta_1=generator_beta_1,
+            beta_2=generator_beta_2)
+        self.discriminator_optim = tf.keras.optimizers.Adam(
+            learning_rate=discriminator_lr,
+            beta_1=discriminator_beta_1,
+            beta_2=discriminator_beta_2)
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
@@ -310,8 +315,8 @@ class WeightedGAN(tf.Module):
             x_fake = self.generator.sample(y, training=True)
 
             # evaluate the sampled designs using the discriminator
-            d_real = self.disc.loss(x, y, real=True, training=True)
-            d_fake = self.disc.loss(x_fake, y, real=False, training=True)
+            d_real = self.discriminator.loss(x, y, real=True, training=True)
+            d_fake = self.discriminator.loss(x_fake, y, real=False, training=True)
 
             # calculate discriminative accuracy
             acc_real = tf.cast(d_real < 0.25, tf.float32)
@@ -320,9 +325,9 @@ class WeightedGAN(tf.Module):
             # build the total loss
             total_loss = tf.reduce_mean(w * (d_real + d_fake))
 
-        var_list = self.disc.trainable_variables
+        var_list = self.discriminator.trainable_variables
         grads = tape.gradient(total_loss, var_list)
-        self.disc_optim.apply_gradients(zip(grads, var_list))
+        self.discriminator_optim.apply_gradients(zip(grads, var_list))
 
         statistics[f'discriminator/train/d_real'] = d_real
         statistics[f'discriminator/train/d_fake'] = d_fake
@@ -335,7 +340,7 @@ class WeightedGAN(tf.Module):
             x_fake = self.generator.sample(y, training=True)
 
             # evaluate the sampled designs using the discriminator
-            d_fake = self.disc.loss(x_fake, y, real=True, training=True)
+            d_fake = self.discriminator.loss(x_fake, y, real=True, training=True)
 
             # build the total loss
             total_loss = tf.reduce_mean(w * d_fake)
@@ -372,8 +377,8 @@ class WeightedGAN(tf.Module):
         x_fake = self.generator.sample(y, training=False)
 
         # evaluate the sampled designs using the discriminator
-        d_real = self.disc.loss(x, y, real=True, training=False)
-        d_fake = self.disc.loss(x_fake, y, real=False, training=False)
+        d_real = self.discriminator.loss(x, y, real=True, training=False)
+        d_fake = self.discriminator.loss(x_fake, y, real=False, training=False)
 
         # calculate discriminative accuracy
         acc_real = tf.cast(d_real < 0.25, tf.float32)
@@ -439,7 +444,8 @@ class WeightedGAN(tf.Module):
                validate_data,
                logger,
                epochs,
-               start_epoch=0):
+               start_epoch=0,
+               header=""):
         """Launch training and validation for the model for the specified
         number of epochs, and log statistics
 
@@ -457,9 +463,9 @@ class WeightedGAN(tf.Module):
 
         for e in range(start_epoch, start_epoch + epochs):
             for name, loss in self.train(train_data).items():
-                logger.record(name, loss, e)
+                logger.record(header + name, loss, e)
             for name, loss in self.validate(validate_data).items():
-                logger.record(name, loss, e)
+                logger.record(header + name, loss, e)
 
     def get_saveables(self):
         """Collects and returns stateful objects that are serializeable
@@ -473,7 +479,7 @@ class WeightedGAN(tf.Module):
 
         saveables = dict()
         saveables['generator'] = self.generator
-        saveables['disc'] = self.disc
+        saveables['discriminator'] = self.discriminator
         saveables['generator_optim'] = self.generator_optim
-        saveables['disc_optim'] = self.disc_optim
+        saveables['discriminator_optim'] = self.discriminator_optim
         return saveables
