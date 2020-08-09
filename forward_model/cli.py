@@ -446,13 +446,16 @@ def cbas_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         resources_per_trial={'cpu': cpu, 'gpu': gpu})
 
 
+#############
+
+
 @cli.command()
-@click.option('--local-dir', type=str, default='data')
+@click.option('--local-dir', type=str, default='mins-hopper')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def model_inversion(local_dir, cpus, gpus, num_parallel, num_samples):
+def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
 
@@ -470,26 +473,37 @@ def model_inversion(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.algorithms import model_inversion
+    from forward_model.mins import model_inversion
 
     ray.init(num_cpus=cpus, num_gpus=gpus)
+    cpu = cpus // num_parallel
+    gpu = gpus / num_parallel - 0.01
     tune.run(model_inversion, config={
-        "logging_dir": "data",
+        "logging_dir": "hopper",
+        "is_discrete": False,
         "task": "HopperController-v0",
-        "task_kwargs": {"val_size": 200, "batch_size": 128},
-        "epochs": 100,
-        "batch_size": 32,
+        "task_kwargs": {},
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "gan_batch_size": 100,
         "hidden_size": 2048,
-        "latent_size": 32,
-        "model_lr": 0.0002,
-        "beta_1": 0.5,
-        "beta_2": 0.999,
-        "solver_samples": 32},
+        "initial_max_std": 1.5,
+        "initial_min_std": 0.5,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "latent_size": 256,
+        "generator_lr": 0.001,
+        "generator_beta_1": 0.5,
+        "generator_beta_2": 0.999,
+        "discriminator_lr": 0.001,
+        "discriminator_beta_1": 0.5,
+        "discriminator_beta_2": 0.999,
+        "offline_epochs": 100,
+        "solver_samples": 128},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={
-            'cpu': cpus // num_parallel,
-            'gpu': gpus / num_parallel - 0.01})
+        resources_per_trial={'cpu': cpu, 'gpu': gpu})
 
 
 @cli.command()

@@ -207,7 +207,7 @@ class ContinuousGenerator(tf.keras.Sequential):
         super(ContinuousGenerator, self).__init__([
             tfkl.Dense(hidden, input_shape=(latent_size + 1,)),
             tfkl.LeakyReLU(),
-            tfkl.Dense(np.prod(design_shape) * 2),
+            tfkl.Dense(np.prod(design_shape)),
             tfkl.Reshape(design_shape)])
 
     def sample(self, y, **kwargs):

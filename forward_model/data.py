@@ -1,4 +1,3 @@
-from forward_model.utils import get_weights
 from design_bench.task import Task
 from design_bench import make
 import tensorflow as tf

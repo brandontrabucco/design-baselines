@@ -1,7 +1,6 @@
 from forward_model.utils import spearman
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
-import tensorflow_probability as tfp
 import tensorflow as tf
 
 
@@ -474,7 +473,7 @@ class WeightedGAN(tf.Module):
 
         saveables = dict()
         saveables['generator'] = self.generator
-        saveables['discriminator'] = self.discriminator
+        saveables['disc'] = self.disc
         saveables['generator_optim'] = self.generator_optim
-        saveables['discriminator_optim'] = self.discriminator_optim
+        saveables['disc_optim'] = self.disc_optim
         return saveables
