@@ -146,7 +146,9 @@ def get_synthetic_data(x,
     """
 
     # sample ys based on their importance weight
-    p_y, bin_edges = get_p_y(y)
+    p_y, bin_edges = tf.numpy_function(get_p_y, [y], [tf.float32, tf.float32])
+    p_y.set_shape([20, 1])
+    bin_edges.set_shape([20, 1])
 
     # sample ys according to the optimal bins
     d = tfpd.Categorical(probs=p_y[:, 0])

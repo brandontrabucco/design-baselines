@@ -116,8 +116,8 @@ def model_inversion(config):
 
         # build a weighted data set using newly collected samples
         train_data, val_data = task.build(
-            x=tilde_x, y=tilde_y,
-            importance_weights=get_weights(tilde_y),
+            x=tilde_x.numpy(), y=tilde_y.numpy(),
+            importance_weights=get_weights(tilde_y.numpy()),
             batch_size=config['gan_batch_size'],
             val_size=config['val_size'])
 
@@ -133,7 +133,10 @@ def model_inversion(config):
 
         # generate samples and evaluate using an ensemble
         solver_xs = exploration_generator.sample(conditioned_ys)
-        actual_ys = ensemble.get_distribution(solver_xs).mean()
+        if config['fully_offline']:
+            actual_ys = ensemble.get_distribution(solver_xs).mean()
+        else:
+            actual_ys = task.score(solver_xs)
 
         # record score percentiles
         logger.record("exploration/conditioned_ys", conditioned_ys, iteration)
@@ -145,8 +148,8 @@ def model_inversion(config):
 
         # build a weighted data set using newly collected samples
         train_data, val_data = task.build(
-            x=x, y=y,
-            importance_weights=get_weights(y),
+            x=x.numpy(), y=y.numpy(),
+            importance_weights=get_weights(y.numpy()),
             batch_size=config['gan_batch_size'],
             val_size=config['val_size'])
 
