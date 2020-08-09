@@ -507,6 +507,63 @@ def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
+@click.option('--local-dir', type=str, default='mins-quadratic')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def mins_quadratic(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from forward_model.mins import model_inversion
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    cpu = cpus // num_parallel
+    gpu = gpus / num_parallel - 0.01
+    tune.run(model_inversion, config={
+        "logging_dir": "data",
+        "is_discrete": False,
+        "task": "Quadratic-v0",
+        "task_kwargs": {'dataset_size': 5000},
+        "bootstraps": 1,
+        "val_size": 200,
+        "ensemble_batch_size": 32,
+        "gan_batch_size": 32,
+        "hidden_size": 256,
+        "initial_max_std": 1.5,
+        "initial_min_std": 0.5,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 0,
+        "latent_size": 16,
+        "generator_lr": tune.grid_search([1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8]),
+        "generator_beta_1": 0.5,
+        "generator_beta_2": 0.999,
+        "discriminator_lr": tune.grid_search([1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8]),
+        "discriminator_beta_1": 0.5,
+        "discriminator_beta_2": 0.999,
+        "offline_epochs": 1000,
+        "solver_samples": 32},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+
+
+@cli.command()
 @click.option('--dir', type=str)
 @click.option('--name', type=str, multiple=True)
 @click.option('--tag', type=str)
