@@ -101,12 +101,6 @@ class Ensemble(tf.Module):
                 # evaluate how correct the rank fo the model predictions are
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
-                # calculate the conservative gap
-                perturb = tf.stop_gradient(self.optimize(X, fm))
-
-                # calculate the prediction error and accuracy of the model
-                perturb_d = fm.get_distribution(perturb, training=True)
-
                 # build the total and lagrangian losses
                 denom = tf.reduce_sum(b[:, i])
                 total_loss = tf.math.divide_no_nan(

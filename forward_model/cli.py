@@ -10,6 +10,109 @@ def cli():
     """
 
 
+#############
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='ensemble')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def ensemble_policy(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from forward_model.ensemble import ensemble
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    cpu = cpus // num_parallel
+    gpu = gpus / num_parallel - 0.01
+    tune.run(ensemble, config={
+        "logging_dir": "data",
+        "task": "HopperController-v0",
+        "task_kwargs": {},
+        "val_size": 200,
+        "batch_size": 128,
+        "bootstraps": tune.grid_search([1, 2, 4, 8, 16]),
+        "epochs": 200,
+        "hidden_size": 2048,
+        "initial_max_std": 1.5,
+        "initial_min_std": 0.5,
+        "forward_model_lr": 0.001,
+        "solver_samples": 128,
+        "solver_lr": 0.0005,
+        "solver_steps": 1000},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='ensemble-predictions')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from forward_model.ensemble import second_model_predictions
+
+    ray.init(num_cpus=cpus, num_gpus=gpus)
+    cpu = cpus // num_parallel
+    gpu = gpus / num_parallel - 0.01
+    tune.run(second_model_predictions, config={
+        "logging_dir": "data",
+        "task": "HopperController-v0",
+        "task_kwargs": {},
+        "val_size": 200,
+        "batch_size": 128,
+        "epochs": 200,
+        "hidden_size": 2048,
+        "initial_max_std": 1.5,
+        "initial_min_std": 0.5,
+        "forward_model_lr": 0.001,
+        "solver_samples": 128,
+        "solver_lr": 0.0005,
+        "solver_steps": 100},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+
+
+#############
+
+
 @cli.command()
 @click.option('--local-dir', type=str, default='c-hopper')
 @click.option('--cpus', type=int, default=24)
@@ -545,10 +648,10 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "gan_batch_size": 32,
         "hidden_size": 256,
         "temperature": 0.75,
-        "generator_lr": 1e-4,
+        "generator_lr": tune.grid_search([1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8]),
         "generator_beta_1": 0.5,
         "generator_beta_2": 0.999,
-        "discriminator_lr": 1e-6,
+        "discriminator_lr": tune.grid_search([1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8]),
         "discriminator_beta_1": 0.5,
         "discriminator_beta_2": 0.999,
         "initial_epochs": 200,
