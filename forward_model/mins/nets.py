@@ -102,8 +102,6 @@ class Discriminator(tf.keras.Sequential):
         super(Discriminator, self).__init__([
             tfkl.Dense(hidden, input_shape=(np.prod(design_shape) + 1,)),
             tfkl.LeakyReLU(),
-            tfkl.Dense(hidden),
-            tfkl.LeakyReLU(),
             tfkl.Dense(1)])
 
     def loss(self, x, y, real=True, **kwargs):
@@ -140,7 +138,7 @@ class DiscreteGenerator(tf.keras.Sequential):
 
     def __init__(self,
                  design_shape,
-                 latent_size,
+                 temp,
                  hidden=50):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
@@ -155,15 +153,12 @@ class DiscreteGenerator(tf.keras.Sequential):
             the global hidden size of the network
         """
 
-        self.latent_size = latent_size
+        self.temp = temp
         super(DiscreteGenerator, self).__init__([
-            tfkl.Dense(hidden, input_shape=(latent_size + 1,)),
-            tfkl.LeakyReLU(),
-            tfkl.Dense(hidden),
+            tfkl.Dense(hidden, input_shape=(1,)),
             tfkl.LeakyReLU(),
             tfkl.Dense(np.prod(design_shape)),
-            tfkl.Reshape(design_shape),
-            tf.keras.layers.Softmax(axis=-1)])
+            tfkl.Reshape(design_shape)])
 
     def sample(self, y, **kwargs):
         """Generate samples of designs X that have a score y where y is
@@ -182,9 +177,9 @@ class DiscreteGenerator(tf.keras.Sequential):
             conditioned on the score y achieved by that design
         """
 
-        z = tf.random.normal([tf.shape(y)[0], self.latent_size])
-        inputs = tf.cast(tf.concat([z, y], 1), tf.float32)
-        return super(DiscreteGenerator, self).__call__(inputs, **kwargs)
+        inputs = tf.cast(y, tf.float32)
+        logits = super(DiscreteGenerator, self).__call__(inputs, **kwargs)
+        return tfpd.RelaxedOneHotCategorical(self.temp, logits).sample()
 
 
 class ContinuousGenerator(tf.keras.Sequential):
@@ -210,8 +205,6 @@ class ContinuousGenerator(tf.keras.Sequential):
         self.latent_size = latent_size
         super(ContinuousGenerator, self).__init__([
             tfkl.Dense(hidden, input_shape=(latent_size + 1,)),
-            tfkl.LeakyReLU(),
-            tfkl.Dense(hidden),
             tfkl.LeakyReLU(),
             tfkl.Dense(np.prod(design_shape)),
             tfkl.Reshape(design_shape)])

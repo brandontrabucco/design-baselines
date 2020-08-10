@@ -22,47 +22,65 @@ def model_inversion(config):
         a dictionary of hyper parameters such as the learning rate
     """
 
-    logger = Logger(config['logging_dir'])
-
     # create the training task and logger
+    logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    train_data, val_data = task.build(bootstraps=config['bootstraps'],
-                                      batch_size=config['ensemble_batch_size'],
-                                      val_size=config['val_size'])
 
-    # make several keras neural networks with two hidden layers
-    forward_models = [ForwardModel(
-        task.input_shape,
-        hidden=config['hidden_size'],
-        initial_max_std=config['initial_max_std'],
-        initial_min_std=config['initial_min_std'])
-        for b in range(config['bootstraps'])]
+    if config['fully_offline']:
 
-    # create a trainer for a forward model with a conservative objective
-    ensemble = Ensemble(forward_models,
-                        forward_model_optim=tf.keras.optimizers.Adam,
-                        forward_model_lr=config['ensemble_lr'])
+        # make several keras neural networks with two hidden layers
+        forward_models = [ForwardModel(
+            task.input_shape,
+            hidden=config['hidden_size'],
+            initial_max_std=config['initial_max_std'],
+            initial_min_std=config['initial_min_std'])
+            for b in range(config['bootstraps'])]
 
-    # create a manager for saving algorithms state to the disk
-    ensemble_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**ensemble.get_saveables()),
-        directory=os.path.join(config['logging_dir'], 'ensemble'),
-        max_to_keep=1)
+        # create a trainer for a forward model with a conservative objective
+        ensemble = Ensemble(forward_models,
+                            forward_model_optim=tf.keras.optimizers.Adam,
+                            forward_model_lr=config['ensemble_lr'])
 
-    # train the model for an additional number of epochs
-    ensemble_manager.restore_or_initialize()
-    ensemble.launch(train_data,
-                    val_data,
-                    logger,
-                    config['ensemble_epochs'])
+        # create a manager for saving algorithms state to the disk
+        ensemble_manager = tf.train.CheckpointManager(
+            tf.train.Checkpoint(**ensemble.get_saveables()),
+            directory=os.path.join(config['logging_dir'], 'ensemble'),
+            max_to_keep=1)
 
-    # pick the right architecture based on the task
-    Generator = DiscreteGenerator if config[
-        'is_discrete'] else ContinuousGenerator
+        # build a bootstrapped data set
+        train_data, val_data = task.build(
+            bootstraps=config['bootstraps'],
+            batch_size=config['ensemble_batch_size'],
+            val_size=config['val_size'])
+
+        # train the model for an additional number of epochs
+        ensemble_manager.restore_or_initialize()
+        ensemble.launch(train_data,
+                        val_data,
+                        logger,
+                        config['ensemble_epochs'])
+
+    if config['is_discrete']:
+
+        # build a Gumbel-Softmax GAN to sample discrete outputs
+        exploration_generator = DiscreteGenerator(
+            task.input_shape, config['temperature'],
+            hidden=config['hidden_size'])
+        exploitation_generator = DiscreteGenerator(
+            task.input_shape, config['temperature'],
+            hidden=config['hidden_size'])
+
+    else:
+
+        # build an LS-GAN to sample continuous outputs
+        exploration_generator = ContinuousGenerator(
+            task.input_shape, config['latent_size'],
+            hidden=config['hidden_size'])
+        exploitation_generator = ContinuousGenerator(
+            task.input_shape, config['latent_size'],
+            hidden=config['hidden_size'])
 
     # build the neural network GAN components
-    exploration_generator = Generator(
-        task.input_shape, config['latent_size'], hidden=config['hidden_size'])
     exploration_discriminator = Discriminator(
         task.input_shape, hidden=config['hidden_size'])
     exploration_gan = WeightedGAN(
@@ -75,14 +93,11 @@ def model_inversion(config):
         discriminator_beta_2=config['discriminator_beta_2'])
 
     # create a manager for saving algorithms state to the disk
-    exploration_manager = tf.train.CheckpointManager(
+    exploration_gan_manager = tf.train.CheckpointManager(
         tf.train.Checkpoint(**exploration_gan.get_saveables()),
         os.path.join(config['logging_dir'], 'exploration_gan'), 1)
-    exploration_manager.restore_or_initialize()
 
     # build the neural network GAN components
-    exploitation_generator = Generator(
-        task.input_shape, config['latent_size'], hidden=config['hidden_size'])
     exploitation_discriminator = Discriminator(
         task.input_shape, hidden=config['hidden_size'])
     exploitation_gan = WeightedGAN(
@@ -95,24 +110,41 @@ def model_inversion(config):
         discriminator_beta_2=config['discriminator_beta_2'])
 
     # create a manager for saving algorithms state to the disk
-    exploitation_manager = tf.train.CheckpointManager(
+    exploitation_gan_manager = tf.train.CheckpointManager(
         tf.train.Checkpoint(**exploitation_gan.get_saveables()),
         os.path.join(config['logging_dir'], 'exploitation_gan'), 1)
-    exploitation_manager.restore_or_initialize()
+
+    # restore tha GANS if a checkpoint exists
+    exploration_gan_manager.restore_or_initialize()
+    exploitation_gan_manager.restore_or_initialize()
 
     # save the initial dataset statistics for safe keeping
     x = task.x
     y = task.y
+
+    # build a weighted data set using newly collected samples
+    train_data, val_data = task.build(
+        x=x, y=y, importance_weights=get_weights(y),
+        batch_size=config['gan_batch_size'],
+        val_size=config['val_size'])
+
+    # train the gan for several epochs
+    exploration_gan.launch(
+        train_data, val_data, logger, config['initial_epochs'],
+        header="exploration/")
+    exploitation_gan.launch(
+        train_data, val_data, logger, config['initial_epochs'],
+        header="exploitation/")
 
     # train the gan using an importance sampled data set
     for iteration in range(config['iterations']):
 
         # generate synthetic x paired with high performing scores
         tilde_x, tilde_y = get_synthetic_data(
-            x, y,
+            x, y, is_discrete=config['is_discrete'],
             exploration_samples=config['exploration_samples'],
             exploration_rate=config['exploration_rate'],
-            exploration_noise_std=config['exploration_noise_std'])
+            exploration_noise_std=config.get('exploration_noise_std', 0.1))
 
         # build a weighted data set using newly collected samples
         train_data, val_data = task.build(
@@ -124,22 +156,21 @@ def model_inversion(config):
         # train the gan for several epochs
         exploration_gan.launch(
             train_data, val_data, logger, config['epochs_per_iteration'],
-            start_epoch=config['epochs_per_iteration'] * iteration,
+            start_epoch=config['epochs_per_iteration'] * iteration +
+                        config['initial_epochs'],
             header="exploration/")
 
         # sample designs from the GAN and evaluate them
-        conditioned_ys = tf.tile(tf.reduce_max(
+        condition_ys = tf.tile(tf.reduce_max(
             tilde_y, keepdims=True), [config['thompson_samples'], 1])
 
         # generate samples and evaluate using an ensemble
-        solver_xs = exploration_generator.sample(conditioned_ys)
-        if config['fully_offline']:
-            actual_ys = ensemble.get_distribution(solver_xs).mean()
-        else:
-            actual_ys = task.score(solver_xs)
+        solver_xs = exploration_generator.sample(condition_ys)
+        actual_ys = ensemble.get_distribution(solver_xs).mean() \
+            if config['fully_offline'] else task.score(solver_xs)
 
         # record score percentiles
-        logger.record("exploration/conditioned_ys", conditioned_ys, iteration)
+        logger.record("exploration/condition_ys", condition_ys, iteration)
         logger.record("exploration/actual_ys", actual_ys, iteration)
 
         # concatenate newly paired samples with the existing data set
@@ -156,22 +187,24 @@ def model_inversion(config):
         # train the gan for several epochs
         exploitation_gan.launch(
             train_data, val_data, logger, config['epochs_per_iteration'],
-            start_epoch=config['epochs_per_iteration'] * iteration,
+            start_epoch=config['epochs_per_iteration'] * iteration +
+                        config['initial_epochs'],
             header="exploitation/")
 
         # sample designs from the GAN and evaluate them
-        conditioned_ys = tf.tile(tf.reduce_max(
+        condition_ys = tf.tile(tf.reduce_max(
             y, keepdims=True), [config['solver_samples'], 1])
 
         # generate samples and evaluate using the task
-        solver_xs = exploration_generator.sample(conditioned_ys)
+        solver_xs = exploration_generator.sample(condition_ys)
         actual_ys = task.score(solver_xs)
 
         # record score percentiles
-        logger.record("exploitation/conditioned_ys", conditioned_ys, iteration)
+        logger.record("exploitation/condition_ys", condition_ys, iteration)
         logger.record("exploitation/actual_ys", actual_ys, iteration)
 
     # save every model to the disk
-    ensemble_manager.save()
-    exploration_manager.save()
-    exploitation_manager.save()
+    exploration_gan_manager.save()
+    exploitation_gan_manager.save()
+    if config['fully_offline']:
+        ensemble_manager.save()
