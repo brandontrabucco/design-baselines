@@ -149,7 +149,7 @@ def noisy_conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_
         "val_size": 200,
         "batch_size": 128,
         "bootstraps": tune.grid_search([1, 2, 4, 8]),
-        "bootstraps_noise": tune.grid_search([0.0, 1.0, 5.0, 10.0, 50.0, 100.0]),
+        "bootstraps_noise": tune.grid_search([0.0, 250.0, 500.0, 750.0, 1000.0, 1250.0]),
         "epochs": 200,
         "hidden_size": 2048,
         "initial_max_std": 1.5,
@@ -860,10 +860,10 @@ def plot(dir, tag, xlabel, ylabel):
     import matplotlib.pyplot as plt
 
     def pretty(s):
-        return s.replace('_', ' ').capitalize()
+        return s.replace('_', ' ').title()
 
     # get the experiment ids
-    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=\w+_)*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
     dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
     matches = [pattern.search(d) for d in dirs]
     ids = [int(m.group(2)) for m in matches]
@@ -896,6 +896,8 @@ def plot(dir, tag, xlabel, ylabel):
     # get the task and algorithm name
     task_name = params[0]['task']
     algo_name = matches[0].group(1)
+    if len(params_of_variation) == 0:
+        params_of_variation.append('task')
 
     # read data from tensor board
     data = pd.DataFrame(columns=[xlabel, ylabel] + params_of_variation)
