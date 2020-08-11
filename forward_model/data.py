@@ -117,8 +117,8 @@ class StaticGraphTask(Task):
 
             # add noise to the labels to increase diversity
             if bootstraps_noise is not None:
-                train_inputs.append(
-                    bootstraps_noise * tf.random.normal([size, bootstraps]))
+                train_inputs.append(bootstraps_noise *
+                                    tf.random.normal([size, bootstraps]))
 
         # possibly add importance weights to the data set
         if importance_weights is not None:
