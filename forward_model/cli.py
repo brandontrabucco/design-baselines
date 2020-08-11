@@ -841,50 +841,79 @@ def mins_quadratic(local_dir, cpus, gpus, num_parallel, num_samples):
 
 @cli.command()
 @click.option('--dir', type=str)
-@click.option('--name', type=str, multiple=True)
 @click.option('--tag', type=str)
 @click.option('--xlabel', type=str)
 @click.option('--ylabel', type=str)
-@click.option('--title', type=str)
-@click.option('--out', type=str)
-def plot(dir, name, tag, xlabel, ylabel, title, out):
+def plot(dir, tag, xlabel, ylabel):
 
-    import tensorflow as tf
-    import seaborn as sns
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import math
-    sns.set(style='darkgrid')
-
+    from collections import defaultdict
+    import glob
     import os
-    file = tf.io.gfile.glob(os.path.join(dir, '*/data/events*'))
-    ids = [int(f.split('conservative_ensemble_')[
-        1].split('_')[0]) for f in file]
+    import re
+    import pickle as pkl
+    import pandas as pd
+    import tensorflow as tf
+    import tqdm
+    import seaborn as sns
+    import matplotlib.pyplot as plt
 
-    zipped_lists = zip(ids, file)
+    def pretty(s):
+        return s.replace('_', ' ').capitalize()
+
+    # get the experiment ids
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=\w+_)*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
+    matches = [pattern.search(d) for d in dirs]
+    ids = [int(m.group(2)) for m in matches]
+
+    # sort the files by the experiment ids
+    zipped_lists = zip(ids, dirs)
     sorted_pairs = sorted(zipped_lists)
     tuples = zip(*sorted_pairs)
-    ids, file = [list(tuple) for tuple in tuples]
+    ids, dirs = [list(tuple) for tuple in tuples]
 
-    name = list(name) * int(math.ceil(len(file) / len(name)))
-    df = pd.DataFrame(columns=[xlabel, ylabel, 'Type'])
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
 
-    for f, n in zip(file, name):
-        for e in tf.compat.v1.train.summary_iterator(f):
-            for v in e.summary.value:
-                if v.tag == tag:
-                    df = df.append({xlabel: e.step,
-                                    ylabel: tf.make_ndarray(v.tensor).tolist(),
-                                    'Type': n}, ignore_index=True)
+    # concatenate all params along axis 1
+    all_params = defaultdict(list)
+    for p in params:
+        for key, val in p.items():
+            if val not in all_params[key]:
+                all_params[key].append(val)
 
-    plt.clf()
-    g = sns.relplot(x=xlabel,
-                    y=ylabel,
-                    hue='Type',
-                    data=df,
-                    kind="line",
-                    height=5,
-                    aspect=2,
-                    facet_kws={"legend_out": True})
-    g.set(title=title)
-    plt.savefig(out)
+    # locate the params of variation in this experiment
+    params_of_variation = []
+    for key, val in all_params.items():
+        if len(val) > 1:
+            params_of_variation.append(key)
+
+    # get the task and algorithm name
+    task_name = params[0]['task']
+    algo_name = matches[0].group(1)
+
+    # read data from tensor board
+    data = pd.DataFrame(columns=[xlabel, ylabel] + params_of_variation)
+    for d, p in tqdm.tqdm(zip(dirs, params)):
+        for f in glob.glob(os.path.join(d, 'data/events.out*')):
+            for e in tf.compat.v1.train.summary_iterator(f):
+                for v in e.summary.value:
+                    if v.tag == tag:
+                        row = {ylabel: tf.make_ndarray(v.tensor).tolist(),
+                               xlabel: e.step}
+                        for key in params_of_variation:
+                            row[key] = f'{pretty(key)} = {p[key]}'
+                        data = data.append(row, ignore_index=True)
+
+    # save a separate plot for every hyper parameter
+    for key in params_of_variation:
+        plt.clf()
+        g = sns.relplot(x=xlabel, y=ylabel, hue=key, data=data,
+                        kind="line", height=5, aspect=2,
+                        facet_kws={"legend_out": True})
+        g.set(title=f'Evaluating {pretty(algo_name)} On {task_name}')
+        plt.savefig(f'{algo_name}_{task_name}_{key}_{tag.replace("/", "_")}.png',
+                    bbox_inches='tight')
