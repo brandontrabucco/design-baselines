@@ -354,17 +354,18 @@ def second_model_predictions_policy(local_dir, cpus, gpus, num_parallel, num_sam
         the number of samples to take per configuration
     """
 
-    from forward_model.conservative_ensemble import second_model_predictions
+    from forward_model.conservative_ensemble import conservative_ensemble_predictions
 
     ray.init(num_cpus=cpus, num_gpus=gpus)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
-    tune.run(second_model_predictions, config={
+    tune.run(conservative_ensemble_predictions, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
         "task_kwargs": {},
         "val_size": 200,
         "batch_size": 128,
+        "bootstraps": 1,
         "epochs": 200,
         "hidden_size": 2048,
         "initial_max_std": 1.5,
@@ -515,17 +516,18 @@ def second_model_predictions_gfp(local_dir, cpus, gpus, num_parallel, num_sample
         the number of samples to take per configuration
     """
 
-    from forward_model.conservative_ensemble import second_model_predictions
+    from forward_model.conservative_ensemble import conservative_ensemble_predictions
 
     ray.init(num_cpus=cpus, num_gpus=gpus)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
-    tune.run(second_model_predictions, config={
+    tune.run(conservative_ensemble_predictions, config={
         "logging_dir": "data",
         "task": "GFP-v0",
         "task_kwargs": {},
         "val_size": 200,
         "batch_size": 128,
+        "bootstraps": 1,
         "epochs": 50,
         "hidden_size": 2048,
         "initial_max_std": 1.5,

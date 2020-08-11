@@ -1,89 +1,11 @@
 from forward_model.data import StaticGraphTask
 from forward_model.logger import Logger
 from forward_model.conservative_ensemble.trainers import ConservativeEnsemble
-from tensorflow_probability import distributions as tfpd
+from forward_model.conservative_ensemble.nets import ForwardModel
 import tensorflow.keras.layers as tfkl
 import tensorflow as tf
 import numpy as np
 import os
-
-
-class ForwardModel(tf.keras.Sequential):
-    """A Fully Connected Network with 3 trainable layers"""
-
-    distribution = tfpd.MultivariateNormalDiag
-
-    def __init__(self,
-                 input_shape,
-                 hidden=2048,
-                 initial_max_std=1.5,
-                 initial_min_std=0.5,
-                 act=tfkl.LeakyReLU):
-        """Create a fully connected architecture using keras that can process
-        several parallel streams of weights and biases
-
-        Args:
-
-        inp_size: int
-            the size of the input vector of this network
-        out_size: int
-            the size of the output vector of this network
-        hidden: int
-            the global hidden size of the network
-        act: function
-            a function that returns an activation function such as tfkl.ReLU
-        """
-
-        self.max_logstd = tf.Variable(tf.fill([1, 1], np.log(
-            initial_max_std).astype(np.float32)), trainable=True)
-        self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
-            initial_min_std).astype(np.float32)), trainable=True)
-
-        super(ForwardModel, self).__init__([
-            tfkl.Flatten(input_shape=input_shape),
-            tfkl.Dense(hidden),
-            act(),
-            tfkl.Dense(hidden),
-            act(),
-            tfkl.Dense(2)])
-
-    def get_parameters(self, inputs, **kwargs):
-        """Return a dictionary of parameters for a particular distribution
-        family such as the mean and variance of a gaussian
-
-        Args:
-
-        inputs: tf.Tensor
-            a batch of training inputs shaped like [batch_size, channels]
-
-        Returns:
-
-        parameters: dict
-            a dictionary that contains 'loc' and 'scale_diag' keys
-        """
-
-        prediction = super(ForwardModel, self).__call__(inputs, **kwargs)
-        mean, logstd = tf.split(prediction, 2, axis=-1)
-        logstd = self.max_logstd - tf.nn.softplus(self.max_logstd - logstd)
-        logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
-        return {"loc": mean, "scale_diag": tf.exp(logstd)}
-
-    def get_distribution(self, inputs, **kwargs):
-        """Return a distribution over the outputs of this model, for example
-        a Multivariate Gaussian Distribution
-
-        Args:
-
-        inputs: tf.Tensor
-            a batch of training inputs shaped like [batch_size, channels]
-
-        Returns:
-
-        distribution: tfp.distribution.Distribution
-            a tensorflow probability distribution over outputs of the model
-        """
-
-        return self.distribution(**self.get_parameters(inputs, **kwargs))
 
 
 def conservative_ensemble(config):
@@ -183,7 +105,7 @@ def conservative_ensemble(config):
         config['logging_dir'], 'design.npy'), best_design)
 
 
-def second_model_predictions(config):
+def conservative_ensemble_predictions(config):
     """Train a forward model and perform model based optimization
     using a conservative objective function
 
@@ -194,23 +116,23 @@ def second_model_predictions(config):
     """
 
     # create the training task and logger
+    logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    train_data, validate_data = task.build(bootstraps=2,
+    train_data, validate_data = task.build(bootstraps=config['bootstraps'],
                                            batch_size=config['batch_size'],
                                            val_size=config['val_size'])
-    logger = Logger(config['logging_dir'])
 
     # make several keras neural networks with two hidden layers
-    forward_models = [ForwardModel(
+    conservative_forward_models = [ForwardModel(
         task.input_shape,
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'],
-        act=tfkl.ReLU) for b in range(2)]
+        act=tfkl.ReLU) for b in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
-    trainer = ConservativeEnsemble(
-        forward_models,
+    conservative_trainer = ConservativeEnsemble(
+        conservative_forward_models,
         forward_model_optim=tf.keras.optimizers.Adam,
         forward_model_lr=config['forward_model_lr'],
         target_conservative_gap=config['target_conservative_gap'],
@@ -221,15 +143,44 @@ def second_model_predictions(config):
         perturbation_steps=config['perturbation_steps'])
 
     # create a manager for saving algorithms state to the disk
-    manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**trainer.get_saveables()),
-        directory=os.path.join(config['logging_dir'], 'ckpt'),
-        max_to_keep=1)
+    conservative_manager = tf.train.CheckpointManager(
+        tf.train.Checkpoint(**conservative_trainer.get_saveables()),
+        os.path.join(config['logging_dir'], 'conservative'), 1)
 
     # train the model for an additional number of epochs
-    manager.restore_or_initialize()
-    trainer.launch(train_data, validate_data, logger, config['epochs'])
-    manager.save()
+    conservative_manager.restore_or_initialize()
+    conservative_trainer.launch(train_data, validate_data, logger, config['epochs'])
+    conservative_manager.save()
+
+    # make several keras neural networks with two hidden layers
+    vanilla_forward_models = [ForwardModel(
+        task.input_shape,
+        hidden=config['hidden_size'],
+        initial_max_std=config['initial_max_std'],
+        initial_min_std=config['initial_min_std'],
+        act=tfkl.ReLU) for b in range(config['bootstraps'])]
+
+    # create a trainer for a forward model with a conservative objective
+    vanilla_trainer = ConservativeEnsemble(
+        vanilla_forward_models,
+        forward_model_optim=tf.keras.optimizers.Adam,
+        forward_model_lr=config['forward_model_lr'],
+        target_conservative_gap=0.0,
+        initial_alpha=0.0,
+        alpha_optim=tf.keras.optimizers.Adam,
+        alpha_lr=0.0,
+        perturbation_lr=0.0,
+        perturbation_steps=0)
+
+    # create a manager for saving algorithms state to the disk
+    vanilla_manager = tf.train.CheckpointManager(
+        tf.train.Checkpoint(**vanilla_trainer.get_saveables()),
+        os.path.join(config['logging_dir'], 'vanilla'), 1)
+
+    # train the model for an additional number of epochs
+    vanilla_manager.restore_or_initialize()
+    vanilla_trainer.launch(train_data, validate_data, logger, config['epochs'])
+    vanilla_manager.save()
 
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
@@ -237,13 +188,13 @@ def second_model_predictions(config):
     # evaluate the initial design using the oracle and the forward model
     solution = tf.gather(task.x, indices, axis=0)
     score = task.score(solution)
-    prediction0 = forward_models[0].get_distribution(solution).mean()
-    prediction1 = forward_models[1].get_distribution(solution).mean()
+    prediction0 = conservative_trainer.get_distribution(solution).mean()
+    prediction1 = vanilla_trainer.get_distribution(solution).mean()
 
     # record the prediction and score to the logger
     logger.record("score", score, 0)
-    logger.record("model_0/prediction", prediction0, 0)
-    logger.record("model_1/prediction", prediction1, 0)
+    logger.record("conservative/prediction", prediction0, 0)
+    logger.record("vanilla/prediction", prediction1, 0)
 
     # perform gradient ascent on the score through the forward model
     for i in range(1, config['solver_steps'] + 1):
@@ -251,18 +202,18 @@ def second_model_predictions(config):
         # back propagate through the forward model
         with tf.GradientTape() as tape:
             tape.watch(solution)
-            score = forward_models[0].get_distribution(solution).mean()
+            score = conservative_trainer.get_distribution(solution).mean()
         grads = tape.gradient(score, solution)
         solution = solution + config['solver_lr'] * grads
 
         # evaluate the design using the oracle and the forward model
         gradient_norm = tf.linalg.norm(grads, axis=1)
         score = task.score(solution)
-        prediction0 = forward_models[0].get_distribution(solution).mean()
-        prediction1 = forward_models[1].get_distribution(solution).mean()
+        prediction0 = conservative_trainer.get_distribution(solution).mean()
+        prediction1 = vanilla_trainer.get_distribution(solution).mean()
 
         # record the prediction and score to the logger
         logger.record("gradient_norm", gradient_norm, i)
         logger.record("score", score, i)
-        logger.record("model_0/prediction", prediction0, i)
-        logger.record("model_1/prediction", prediction1, i)
+        logger.record("conservative/prediction", prediction0, i)
+        logger.record("vanilla/prediction", prediction1, i)
