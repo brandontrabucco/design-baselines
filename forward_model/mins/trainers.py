@@ -140,7 +140,7 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
 
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(X, training=True)
+            d = fm.get_distribution(X, training=False)
             nll = -d.log_prob(y)[:, 0]
 
             # evaluate how correct the rank fo the model predictions are

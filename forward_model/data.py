@@ -57,6 +57,7 @@ class StaticGraphTask(Task):
               val_size=200,
               batch_size=128,
               bootstraps=0,
+              bootstraps_noise=None,
               importance_weights=None):
         """Provide an interface for splitting a task into a training and
         validation set and including sample re-weighting
@@ -75,6 +76,8 @@ class StaticGraphTask(Task):
             Dataset.from_tensor_slices dataset
         bootstraps: int
             the number of bootstrap dataset resamples to include
+        bootstraps: float
+            the standard deviation of noise to add to the labels for each bootstrap
         importance_weights: None or tf.Tensor
             an additional importance weight tensor to include in the dataset
 
@@ -102,14 +105,20 @@ class StaticGraphTask(Task):
         validate_inputs = [x[:val_size], y[:val_size]]
         size = x.shape[0] - val_size
 
-        # possible add a bootstrap mask to the data set
         if bootstraps > 0:
+
+            # sample the data set with replacement
             train_inputs.append(tf.stack([
                 tf.math.bincount(tf.random.uniform(
                     [size],
                     minval=0, maxval=size, dtype=tf.int32),
                     minlength=size, dtype=tf.float32)
                 for b in range(bootstraps)], axis=1))
+
+            # add noise to the labels to increase diversity
+            if bootstraps_noise is not None:
+                train_inputs.append(
+                    tf.random.normal([size, bootstraps]))
 
         # possibly add importance weights to the data set
         if importance_weights is not None:

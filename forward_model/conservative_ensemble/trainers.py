@@ -220,7 +220,7 @@ class ConservativeEnsemble(tf.Module):
             fm = self.forward_models[i]
 
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(X, training=True)
+            d = fm.get_distribution(X, training=False)
             nll = -d.log_prob(y)
 
             # evaluate how correct the rank fo the model predictions are
@@ -230,7 +230,7 @@ class ConservativeEnsemble(tf.Module):
             perturb = tf.stop_gradient(self.optimize(X, fm))
 
             # calculate the prediction error and accuracy of the model
-            perturb_d = fm.get_distribution(perturb, training=True)
+            perturb_d = fm.get_distribution(perturb, training=False)
 
             # build the lagrangian loss
             conservative_gap = (perturb_d.mean() - d.mean())[:, 0]

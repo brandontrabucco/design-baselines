@@ -141,7 +141,7 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
 
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(X, training=True)
+            d = fm.get_distribution(X, training=False)
             nll = -d.log_prob(y)[:, 0]
 
             # evaluate how correct the rank fo the model predictions are
@@ -352,9 +352,9 @@ class WeightedVAE(tf.Module):
         statistics = dict()
 
         # build distributions for the data x and latent variable z
-        dz = self.encoder.get_distribution(X, training=True)
+        dz = self.encoder.get_distribution(X, training=False)
         z = dz.sample()
-        dx = self.decoder.get_distribution(z, training=True)
+        dx = self.decoder.get_distribution(z, training=False)
 
         # build the reconstruction loss
         nll = -dx.log_prob(X)[..., tf.newaxis]
