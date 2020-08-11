@@ -149,7 +149,7 @@ def noisy_conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_
         "val_size": 200,
         "batch_size": 128,
         "bootstraps": tune.grid_search([1, 2, 4, 8]),
-        "bootstraps_noise": tune.grid_search([0.0, 250.0, 500.0, 750.0, 1000.0, 1250.0]),
+        "bootstraps_noise": tune.grid_search([0.0, 12.5, 25.0, 50.0, 100.0, 200.0]),
         "epochs": 200,
         "hidden_size": 2048,
         "initial_max_std": 1.5,
