@@ -1,8 +1,10 @@
 from forward_model.data import StaticGraphTask
 from forward_model.logger import Logger
+from forward_model.utils import spearman
 from forward_model.conservative_ensemble.trainers import ConservativeEnsemble
 from forward_model.conservative_ensemble.nets import ForwardModel
 import tensorflow.keras.layers as tfkl
+import tensorflow_probability as tfp
 import tensorflow as tf
 import numpy as np
 import os
@@ -149,7 +151,8 @@ def conservative_ensemble_predictions(config):
 
     # train the model for an additional number of epochs
     conservative_manager.restore_or_initialize()
-    conservative_trainer.launch(train_data, validate_data, logger, config['epochs'])
+    conservative_trainer.launch(train_data, validate_data, logger,
+                                config['epochs'], header='conservative/')
     conservative_manager.save()
 
     # make several keras neural networks with two hidden layers
@@ -179,7 +182,8 @@ def conservative_ensemble_predictions(config):
 
     # train the model for an additional number of epochs
     vanilla_manager.restore_or_initialize()
-    vanilla_trainer.launch(train_data, validate_data, logger, config['epochs'])
+    vanilla_trainer.launch(train_data, validate_data, logger,
+                           config['epochs'], header='vanilla/')
     vanilla_manager.save()
 
     # select the top k initial designs from the dataset
@@ -195,25 +199,43 @@ def conservative_ensemble_predictions(config):
     logger.record("score", score, 0)
     logger.record("conservative/prediction", prediction0, 0)
     logger.record("vanilla/prediction", prediction1, 0)
+    logger.record("rank_corr", spearman(prediction0[:, 0],
+                                        prediction1[:, 0]), 0)
 
     # perform gradient ascent on the score through the forward model
     for i in range(1, config['solver_steps'] + 1):
 
-        # back propagate through the forward model
+        # back propagate through the conservative model
         with tf.GradientTape() as tape:
             tape.watch(solution)
             score = conservative_trainer.get_distribution(solution).mean()
-        grads = tape.gradient(score, solution)
-        solution = solution + config['solver_lr'] * grads
+        conservative_grads = tape.gradient(score, solution)
+
+        # back propagate through the vanilla model
+        with tf.GradientTape() as tape:
+            tape.watch(solution)
+            score = vanilla_trainer.get_distribution(solution).mean()
+        vanilla_grads = tape.gradient(score, solution)
+
+        # use the conservative optimizer to update the solution
+        solution = solution + config['solver_lr'] * conservative_grads
+
+        # calculate the element-wise gradient correlation
+        gradient_corr = tfp.stats.correlation(
+            conservative_grads, vanilla_grads,
+            sample_axis=0, event_axis=None)
 
         # evaluate the design using the oracle and the forward model
-        gradient_norm = tf.linalg.norm(grads, axis=1)
+        gradient_norm = tf.linalg.norm(conservative_grads, axis=1)
         score = task.score(solution)
         prediction0 = conservative_trainer.get_distribution(solution).mean()
         prediction1 = vanilla_trainer.get_distribution(solution).mean()
 
         # record the prediction and score to the logger
+        logger.record("gradient_corr", gradient_corr, i)
         logger.record("gradient_norm", gradient_norm, i)
         logger.record("score", score, i)
         logger.record("conservative/prediction", prediction0, i)
         logger.record("vanilla/prediction", prediction1, i)
+        logger.record("rank_corr", spearman(prediction0[:, 0],
+                                            prediction1[:, 0]), i)

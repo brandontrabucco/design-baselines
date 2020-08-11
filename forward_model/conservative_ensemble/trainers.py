@@ -294,7 +294,8 @@ class ConservativeEnsemble(tf.Module):
                validate_data,
                logger,
                epochs,
-               start_epoch=0):
+               start_epoch=0,
+               header=""):
         """Launch training and validation for the model for the specified
         number of epochs, and log statistics
 
@@ -312,9 +313,9 @@ class ConservativeEnsemble(tf.Module):
 
         for e in range(start_epoch, start_epoch + epochs):
             for name, loss in self.train(train_data).items():
-                logger.record(name, loss, e)
+                logger.record(header + name, loss, e)
             for name, loss in self.validate(validate_data).items():
-                logger.record(name, loss, e)
+                logger.record(header + name, loss, e)
 
     def get_saveables(self):
         """Collects and returns stateful objects that are serializeable

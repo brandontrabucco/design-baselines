@@ -331,12 +331,12 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='second_model_predictions')
+@click.option('--local-dir', type=str, default='conservative-ensemble-predictions-policy')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def second_model_predictions_policy(local_dir, cpus, gpus, num_parallel, num_samples):
+def conservative_ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
 
