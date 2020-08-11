@@ -199,8 +199,12 @@ def conservative_ensemble_predictions(config):
     logger.record("score", score, 0)
     logger.record("conservative/prediction", prediction0, 0)
     logger.record("vanilla/prediction", prediction1, 0)
-    logger.record("rank_corr", spearman(prediction0[:, 0],
-                                        prediction1[:, 0]), 0)
+    logger.record("rank_corr/conservative_to_vanilla",
+                  spearman(prediction0[:, 0], prediction1[:, 0]), 0)
+    logger.record("rank_corr/conservative_to_real",
+                  spearman(prediction0[:, 0], score[:, 0]), 0)
+    logger.record("rank_corr/real_to_vanilla",
+                  spearman(score[:, 0], prediction1[:, 0]), 0)
 
     # perform gradient ascent on the score through the forward model
     for i in range(1, config['solver_steps'] + 1):
@@ -237,5 +241,9 @@ def conservative_ensemble_predictions(config):
         logger.record("score", score, i)
         logger.record("conservative/prediction", prediction0, i)
         logger.record("vanilla/prediction", prediction1, i)
-        logger.record("rank_corr", spearman(prediction0[:, 0],
-                                            prediction1[:, 0]), i)
+        logger.record("rank_corr/conservative_to_vanilla",
+                      spearman(prediction0[:, 0], prediction1[:, 0]), i)
+        logger.record("rank_corr/conservative_to_real",
+                      spearman(prediction0[:, 0], score[:, 0]), i)
+        logger.record("rank_corr/real_to_vanilla",
+                      spearman(score[:, 0], prediction1[:, 0]), i)
