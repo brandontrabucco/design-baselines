@@ -39,7 +39,7 @@ def ensemble_policy(local_dir, cpus, gpus, num_parallel, num_samples):
 
     from forward_model.ensemble import ensemble
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(ensemble, config={
@@ -88,7 +88,7 @@ def ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel, num_samples
 
     from forward_model.ensemble import second_model_predictions
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(second_model_predictions, config={
@@ -139,7 +139,7 @@ def noisy_conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_
 
     from forward_model.noisy_conservative_ensemble import noisy_conservative_ensemble
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(noisy_conservative_ensemble, config={
@@ -194,7 +194,7 @@ def noisy_conservative_ensemble_predictions_policy(local_dir, cpus, gpus, num_pa
 
     from forward_model.noisy_conservative_ensemble import noisy_conservative_ensemble_predictions
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(noisy_conservative_ensemble_predictions, config={
@@ -251,7 +251,7 @@ def conservative_policy(local_dir, cpus, gpus, num_parallel, num_samples):
 
     from forward_model.conservative import conservative
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(conservative, config={
@@ -302,7 +302,7 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
 
     from forward_model.conservative_ensemble import conservative_ensemble
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(conservative_ensemble, config={
@@ -356,7 +356,7 @@ def conservative_ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel
 
     from forward_model.conservative_ensemble import conservative_ensemble_predictions
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(conservative_ensemble_predictions, config={
@@ -413,7 +413,7 @@ def conservative_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 
     from forward_model.conservative import conservative
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(conservative, config={
@@ -464,7 +464,7 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 
     from forward_model.conservative_ensemble import conservative_ensemble
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(conservative_ensemble, config={
@@ -518,7 +518,7 @@ def second_model_predictions_gfp(local_dir, cpus, gpus, num_parallel, num_sample
 
     from forward_model.conservative_ensemble import conservative_ensemble_predictions
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(conservative_ensemble_predictions, config={
@@ -575,7 +575,7 @@ def cbas_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 
     from forward_model.cbas import condition_by_adaptive_sampling
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(condition_by_adaptive_sampling, config={
@@ -632,7 +632,7 @@ def cbas_policy(local_dir, cpus, gpus, num_parallel, num_samples):
 
     from forward_model.cbas import condition_by_adaptive_sampling
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(condition_by_adaptive_sampling, config={
@@ -692,7 +692,7 @@ def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
 
     from forward_model.mins import model_inversion
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(model_inversion, config={
@@ -749,7 +749,7 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 
     from forward_model.mins import model_inversion
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(model_inversion, config={
@@ -806,7 +806,7 @@ def mins_quadratic(local_dir, cpus, gpus, num_parallel, num_samples):
 
     from forward_model.mins import model_inversion
 
-    ray.init(num_cpus=cpus, num_gpus=gpus)
+    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
     cpu = cpus // num_parallel
     gpu = gpus / num_parallel - 0.01
     tune.run(model_inversion, config={
