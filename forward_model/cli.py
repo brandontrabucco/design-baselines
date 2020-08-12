@@ -1,6 +1,7 @@
 from ray import tune
 import click
 import ray
+import os
 
 
 @click.group()
@@ -38,10 +39,9 @@ def ensemble_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     """
 
     from forward_model.ensemble import ensemble
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(ensemble, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -59,7 +59,8 @@ def ensemble_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_steps": 1000},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 @cli.command()
@@ -87,10 +88,9 @@ def ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel, num_samples
     """
 
     from forward_model.ensemble import second_model_predictions
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(second_model_predictions, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -107,7 +107,8 @@ def ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel, num_samples
         "solver_steps": 100},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 #############
@@ -138,10 +139,9 @@ def noisy_conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_
     """
 
     from forward_model.noisy_conservative_ensemble import noisy_conservative_ensemble
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(noisy_conservative_ensemble, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -165,7 +165,8 @@ def noisy_conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_
         "solver_steps": 500},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 @cli.command()
@@ -193,10 +194,9 @@ def noisy_conservative_ensemble_predictions_policy(local_dir, cpus, gpus, num_pa
     """
 
     from forward_model.noisy_conservative_ensemble import noisy_conservative_ensemble_predictions
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(noisy_conservative_ensemble_predictions, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -219,7 +219,8 @@ def noisy_conservative_ensemble_predictions_policy(local_dir, cpus, gpus, num_pa
         "solver_steps": 100},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 #############
@@ -250,10 +251,9 @@ def conservative_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     """
 
     from forward_model.conservative import conservative
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(conservative, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -273,7 +273,8 @@ def conservative_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_steps": 100},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 @cli.command()
@@ -301,10 +302,9 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
     """
 
     from forward_model.conservative_ensemble import conservative_ensemble
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(conservative_ensemble, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -327,7 +327,8 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "solver_steps": 1000},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 @cli.command()
@@ -355,10 +356,9 @@ def conservative_ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel
     """
 
     from forward_model.conservative_ensemble import conservative_ensemble_predictions
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(conservative_ensemble_predictions, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -381,7 +381,8 @@ def conservative_ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel
         "solver_steps": 100},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 #############
@@ -412,10 +413,9 @@ def conservative_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     """
 
     from forward_model.conservative import conservative
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(conservative, config={
         "logging_dir": "data",
         "task": "GFP-v0",
@@ -435,7 +435,8 @@ def conservative_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_steps": 100},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 @cli.command()
@@ -463,10 +464,9 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     """
 
     from forward_model.conservative_ensemble import conservative_ensemble
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(conservative_ensemble, config={
         "logging_dir": "data",
         "task": "GFP-v0",
@@ -489,7 +489,8 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_steps": 1000},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 @cli.command()
@@ -517,10 +518,9 @@ def second_model_predictions_gfp(local_dir, cpus, gpus, num_parallel, num_sample
     """
 
     from forward_model.conservative_ensemble import conservative_ensemble_predictions
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(conservative_ensemble_predictions, config={
         "logging_dir": "data",
         "task": "GFP-v0",
@@ -543,7 +543,8 @@ def second_model_predictions_gfp(local_dir, cpus, gpus, num_parallel, num_sample
         "solver_steps": 100},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 #############
@@ -574,10 +575,9 @@ def cbas_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     """
 
     from forward_model.cbas import condition_by_adaptive_sampling
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(condition_by_adaptive_sampling, config={
         "logging_dir": "gfp",
         "is_discrete": True,
@@ -603,7 +603,8 @@ def cbas_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_samples": 128},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 @cli.command()
@@ -631,10 +632,9 @@ def cbas_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     """
 
     from forward_model.cbas import condition_by_adaptive_sampling
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(condition_by_adaptive_sampling, config={
         "logging_dir": "hopper",
         "is_discrete": False,
@@ -660,7 +660,8 @@ def cbas_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_samples": 128},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 #############
@@ -691,10 +692,9 @@ def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     """
 
     from forward_model.mins import model_inversion
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(model_inversion, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -720,7 +720,8 @@ def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_samples": 32},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 @cli.command()
@@ -748,10 +749,9 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     """
 
     from forward_model.mins import model_inversion
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(model_inversion, config={
         "logging_dir": "data",
         "task": "GFP-v0",
@@ -777,7 +777,8 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_samples": 32},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 @cli.command()
@@ -805,10 +806,9 @@ def mins_quadratic(local_dir, cpus, gpus, num_parallel, num_samples):
     """
 
     from forward_model.mins import model_inversion
-
-    ray.init(num_cpus=cpus, num_gpus=gpus, temp_dir=local_dir)
-    cpu = cpus // num_parallel
-    gpu = gpus / num_parallel - 0.01
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
     tune.run(model_inversion, config={
         "logging_dir": "data",
         "task": "Quadratic-v0",
@@ -835,7 +835,8 @@ def mins_quadratic(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_samples": 32},
         num_samples=num_samples,
         local_dir=local_dir,
-        resources_per_trial={'cpu': cpu, 'gpu': gpu})
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
 
 
 #############
