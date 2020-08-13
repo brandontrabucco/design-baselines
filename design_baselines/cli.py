@@ -38,7 +38,7 @@ def forward_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.forward_ensemble import forward_ensemble
+    from design_baselines.forward_ensemble import forward_ensemble
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -90,7 +90,7 @@ def cbas_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.cbas import condition_by_adaptive_sampling
+    from design_baselines.cbas import condition_by_adaptive_sampling
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -147,7 +147,7 @@ def cbas_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.cbas import condition_by_adaptive_sampling
+    from design_baselines.cbas import condition_by_adaptive_sampling
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -207,7 +207,7 @@ def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.mins import model_inversion
+    from design_baselines.mins import model_inversion
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -264,7 +264,7 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.mins import model_inversion
+    from design_baselines.mins import model_inversion
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -321,7 +321,7 @@ def mins_quadratic(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.mins import model_inversion
+    from design_baselines.mins import model_inversion
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))

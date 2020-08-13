@@ -1,13 +1,13 @@
-from forward_model.data import StaticGraphTask
-from forward_model.logger import Logger
-from forward_model.mins.trainers import Ensemble
-from forward_model.mins.trainers import WeightedGAN
-from forward_model.mins.nets import ForwardModel
-from forward_model.mins.nets import Discriminator
-from forward_model.mins.nets import DiscreteGenerator
-from forward_model.mins.nets import ContinuousGenerator
-from forward_model.mins.utils import get_weights
-from forward_model.mins.utils import get_synthetic_data
+from design_baselines.data import StaticGraphTask
+from design_baselines.logger import Logger
+from design_baselines.mins.trainers import Ensemble
+from design_baselines.mins.trainers import WeightedGAN
+from design_baselines.mins.nets import ForwardModel
+from design_baselines.mins.nets import Discriminator
+from design_baselines.mins.nets import DiscreteGenerator
+from design_baselines.mins.nets import ContinuousGenerator
+from design_baselines.mins.utils import get_weights
+from design_baselines.mins.utils import get_synthetic_data
 import tensorflow as tf
 import os
 
