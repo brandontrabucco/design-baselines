@@ -1,4 +1,4 @@
-name: forward-model
+name: design-baselines
 channels:
 - defaults
 - conda-forge
