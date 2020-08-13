@@ -21,7 +21,7 @@ conda env create -f design-baselines/environment.yml
 
 ## Usage
 
-Every algorithm is implemented as a function that accepts a dictionary of hyper parameters called `config`. This makes interfacing with hyper parameter tuning platforms such as `ray.tune`, that return hyper parameters as a dictionary, simple. 
+Every algorithm is implemented as a function that accepts a dictionary of hyper parameters called `config`. This makes interfacing with hyper parameter tuning platforms such as `ray.tune`, simple. 
 
 ```python
 from design_baselines.forward_ensemble import forward_ensemble
