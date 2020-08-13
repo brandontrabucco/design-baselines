@@ -1,4 +1,4 @@
-# Design Baselines for Model Based Optimization
+# Design Baselines for Model-Based Optimization
 
 This repository contains several design baselines for model-based optimization. Our hope is that a common evaluation protocol will encourage future research and comparability in model-based design.
 
