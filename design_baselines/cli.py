@@ -378,7 +378,7 @@ def conservative_ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel
         "perturbation_steps": 100,
         "solver_samples": 128,
         "solver_lr": 0.0005,
-        "solver_steps": 100},
+        "solver_steps": 1000},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,

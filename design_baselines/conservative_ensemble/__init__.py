@@ -130,7 +130,7 @@ def conservative_ensemble_predictions(config):
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'],
-        act=tfkl.ReLU) for b in range(config['bootstraps'])]
+        act=tfkl.LeakyReLU) for b in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
     conservative_trainer = ConservativeEnsemble(
@@ -161,7 +161,7 @@ def conservative_ensemble_predictions(config):
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'],
-        act=tfkl.ReLU) for b in range(config['bootstraps'])]
+        act=lambda: tfkl.Activation('tanh')) for b in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
     vanilla_trainer = ConservativeEnsemble(
