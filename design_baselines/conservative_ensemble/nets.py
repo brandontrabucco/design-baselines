@@ -35,11 +35,13 @@ class ForwardModel(tf.keras.Sequential):
         self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_min_std).astype(np.float32)), trainable=True)
 
+        p = hidden // 4
+
         super(ForwardModel, self).__init__([
             tfkl.Flatten(input_shape=input_shape),
-            tfkl.Dense(hidden),
+            tfkl.Dense(hidden + np.random.randint(p * 2) - p),
             act(),
-            tfkl.Dense(hidden),
+            tfkl.Dense(hidden + np.random.randint(p * 2) - p),
             act(),
             tfkl.Dense(2)])
 
