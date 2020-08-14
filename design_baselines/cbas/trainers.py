@@ -1,6 +1,7 @@
-from forward_model.utils import spearman
+from design_baselines.utils import spearman
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
+import tensorflow_probability as tfp
 import tensorflow as tf
 
 
@@ -204,8 +205,7 @@ class Ensemble(tf.Module):
                validate_data,
                logger,
                epochs,
-               start_epoch=0,
-               header=""):
+               start_epoch=0):
         """Launch training and validation for the model for the specified
         number of epochs, and log statistics
 
@@ -223,9 +223,9 @@ class Ensemble(tf.Module):
 
         for e in range(start_epoch, start_epoch + epochs):
             for name, loss in self.train(train_data).items():
-                logger.record(header + name, loss, e)
+                logger.record(name, loss, e)
             for name, loss in self.validate(validate_data).items():
-                logger.record(header + name, loss, e)
+                logger.record(name, loss, e)
 
     def get_saveables(self):
         """Collects and returns stateful objects that are serializeable
@@ -244,17 +244,14 @@ class Ensemble(tf.Module):
         return saveables
 
 
-class WeightedGAN(tf.Module):
+class WeightedVAE(tf.Module):
 
     def __init__(self,
-                 generator,
-                 discriminator,
-                 generator_lr=0.001,
-                 generator_beta_1=0.5,
-                 generator_beta_2=0.999,
-                 discriminator_lr=0.001,
-                 discriminator_beta_1=0.5,
-                 discriminator_beta_2=0.999):
+                 encoder,
+                 decoder,
+                 vae_optim=tf.keras.optimizers.Adam,
+                 vae_lr=0.001,
+                 vae_beta=1.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -273,20 +270,14 @@ class WeightedGAN(tf.Module):
         """
 
         super().__init__()
-        self.generator = generator
-        self.discriminator = discriminator
-        self.generator_optim = tf.keras.optimizers.Adam(
-            learning_rate=generator_lr,
-            beta_1=generator_beta_1,
-            beta_2=generator_beta_2)
-        self.discriminator_optim = tf.keras.optimizers.Adam(
-            learning_rate=discriminator_lr,
-            beta_1=discriminator_beta_1,
-            beta_2=discriminator_beta_2)
+        self.encoder = encoder
+        self.decoder = decoder
+        self.optim = vae_optim(learning_rate=vae_lr)
+        self.vae_beta = vae_beta
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
-                   x,
+                   X,
                    y,
                    w):
         """Perform a training step of gradient descent on an ensemble
@@ -294,7 +285,7 @@ class WeightedGAN(tf.Module):
 
         Args:
 
-        x: tf.Tensor
+        X: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of training labels shaped like [batch_size, 1]
@@ -308,59 +299,46 @@ class WeightedGAN(tf.Module):
         """
 
         statistics = dict()
+        var_list = []
+        var_list.extend(self.encoder.trainable_variables)
+        var_list.extend(self.decoder.trainable_variables)
 
         with tf.GradientTape() as tape:
 
-            # sample designs from the generator
-            x_fake = self.generator.sample(y, training=True)
+            # build distributions for the data x and latent variable z
+            dz = self.encoder.get_distribution(X, training=True)
+            z = dz.sample()
+            dx = self.decoder.get_distribution(z, training=True)
 
-            # evaluate the sampled designs using the discriminator
-            d_real = self.discriminator.loss(x, y, real=True, training=True)
-            d_fake = self.discriminator.loss(x_fake, y, real=False, training=True)
+            # build the reconstruction loss
+            nll = -dx.log_prob(X)[..., tf.newaxis]
+            while len(nll.shape) > 2:
+                nll = tf.reduce_sum(nll, axis=1)
+            prior = tfpd.MultivariateNormalDiag(
+                loc=tf.zeros_like(z), scale_diag=tf.ones_like(z))
 
-            # calculate discriminative accuracy
-            acc_real = tf.cast(d_real < 0.25, tf.float32)
-            acc_fake = tf.cast(d_fake < 0.25, tf.float32)
+            # build the kl loss
+            kl = dz.kl_divergence(prior)[:, tf.newaxis]
+            total_loss = tf.reduce_mean(w * (nll + self.vae_beta * kl))
 
-            # build the total loss
-            total_loss = tf.reduce_mean(w * (d_real + d_fake))
-
-        var_list = self.discriminator.trainable_variables
         grads = tape.gradient(total_loss, var_list)
-        self.discriminator_optim.apply_gradients(zip(grads, var_list))
+        self.optim.apply_gradients(zip(grads, var_list))
 
-        statistics[f'discriminator/train/d_real'] = d_real
-        statistics[f'discriminator/train/d_fake'] = d_fake
-        statistics[f'discriminator/train/acc_real'] = acc_real
-        statistics[f'discriminator/train/acc_fake'] = acc_fake
-
-        with tf.GradientTape() as tape:
-
-            # sample designs from the generator
-            x_fake = self.generator.sample(y, training=True)
-
-            # evaluate the sampled designs using the discriminator
-            d_fake = self.discriminator.loss(x_fake, y, real=True, training=True)
-
-            # build the total loss
-            total_loss = tf.reduce_mean(w * d_fake)
-
-        var_list = self.generator.trainable_variables
-        grads = tape.gradient(total_loss, var_list)
-        self.generator_optim.apply_gradients(zip(grads, var_list))
+        statistics[f'vae/train/nll'] = nll
+        statistics[f'vae/train/kl'] = kl
 
         return statistics
 
     @tf.function(experimental_relax_shapes=True)
     def validate_step(self,
-                      x,
+                      X,
                       y):
         """Perform a validation step on an ensemble of models
         without using bootstrapping weights
 
         Args:
 
-        x: tf.Tensor
+        X: tf.Tensor
             a batch of validation inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of validation labels shaped like [batch_size, 1]
@@ -373,21 +351,23 @@ class WeightedGAN(tf.Module):
 
         statistics = dict()
 
-        # sample designs from the generator
-        x_fake = self.generator.sample(y, training=False)
+        # build distributions for the data x and latent variable z
+        dz = self.encoder.get_distribution(X, training=False)
+        z = dz.sample()
+        dx = self.decoder.get_distribution(z, training=False)
 
-        # evaluate the sampled designs using the discriminator
-        d_real = self.discriminator.loss(x, y, real=True, training=False)
-        d_fake = self.discriminator.loss(x_fake, y, real=False, training=False)
+        # build the reconstruction loss
+        nll = -dx.log_prob(X)[..., tf.newaxis]
+        while len(nll.shape) > 2:
+            nll = tf.reduce_sum(nll, axis=1)
+        prior = tfpd.MultivariateNormalDiag(
+            loc=tf.zeros_like(z), scale_diag=tf.ones_like(z))
 
-        # calculate discriminative accuracy
-        acc_real = tf.cast(d_real < 0.25, tf.float32)
-        acc_fake = tf.cast(d_fake < 0.25, tf.float32)
+        # build the kl loss
+        kl = dz.kl_divergence(prior)[:, tf.newaxis]
 
-        statistics[f'discriminator/validate/d_real'] = d_real
-        statistics[f'discriminator/validate/d_fake'] = d_fake
-        statistics[f'discriminator/validate/acc_real'] = acc_real
-        statistics[f'discriminator/validate/acc_fake'] = acc_fake
+        statistics[f'vae/validate/nll'] = nll
+        statistics[f'vae/validate/kl'] = kl
 
         return statistics
 
@@ -444,8 +424,7 @@ class WeightedGAN(tf.Module):
                validate_data,
                logger,
                epochs,
-               start_epoch=0,
-               header=""):
+               start_epoch=0):
         """Launch training and validation for the model for the specified
         number of epochs, and log statistics
 
@@ -463,9 +442,9 @@ class WeightedGAN(tf.Module):
 
         for e in range(start_epoch, start_epoch + epochs):
             for name, loss in self.train(train_data).items():
-                logger.record(header + name, loss, e)
+                logger.record(name, loss, e)
             for name, loss in self.validate(validate_data).items():
-                logger.record(header + name, loss, e)
+                logger.record(name, loss, e)
 
     def get_saveables(self):
         """Collects and returns stateful objects that are serializeable
@@ -478,8 +457,101 @@ class WeightedGAN(tf.Module):
         """
 
         saveables = dict()
-        saveables['generator'] = self.generator
-        saveables['discriminator'] = self.discriminator
-        saveables['generator_optim'] = self.generator_optim
-        saveables['discriminator_optim'] = self.discriminator_optim
+        saveables['encoder'] = self.encoder
+        saveables['decoder'] = self.decoder
+        saveables['optim'] = self.optim
         return saveables
+
+
+class CBAS(tf.Module):
+
+    def __init__(self,
+                 ensemble,
+                 p_vae,
+                 q_vae,
+                 latent_size=20):
+        """Build a trainer for an ensemble of probabilistic neural networks
+        trained on bootstraps of a dataset
+
+        Args:
+
+        encoder: tf.keras.Model
+            the encoder neural network that outputs parameters for a gaussian
+        decoder: tf.keras.Model
+            the decoder neural network that outputs parameters for a gaussian
+        vae_optim: __class__
+            the optimizer class to use for optimizing the oracle model
+        vae_lr: float
+            the learning rate for the oracle model optimizer
+        vae_beta: float
+            the variational beta for the oracle model optimizer
+        """
+
+        super().__init__()
+        self.ensemble = ensemble
+        self.p_vae = p_vae
+        self.q_vae = q_vae
+        self.latent_size = latent_size
+
+    @tf.function(experimental_relax_shapes=True)
+    def generate_data(self,
+                      num_batches,
+                      num_samples,
+                      percentile):
+        """A function for generating a data set of samples of a particular
+        size using two adaptively sampled vaes
+
+        Args:
+
+        num_batches: int
+            the number of batches of samples to generate
+        num_samples: int
+            the number of samples to generate all at once using the vae
+        percentile: float
+            the percentile in [0, 100] that determines importance weights
+
+        Returns:
+
+        xs: tf.Tensor
+            the dataset x values sampled from the vaes
+        ys: tf.Tensor
+            the dataset y values predicted by the ensemble
+        ws: tf.Tensor
+            the dataset importance weights calculated using the vaes
+        """
+
+        xs = []
+        ys = []
+        ws = []
+
+        for j in range(num_batches):
+
+            # sample designs from the prior
+            z = tf.random.normal([num_samples, self.latent_size])
+            q_dx = self.q_vae.decoder.get_distribution(z, training=False)
+            p_dx = self.p_vae.decoder.get_distribution(z, training=False)
+
+            # evaluate the score and importance weights
+            x = q_dx.sample()
+            y = self.ensemble.get_distribution(x).mean()
+            log_w = p_dx.log_prob(x)[..., tf.newaxis] - \
+                    q_dx.log_prob(x)[..., tf.newaxis]
+            while len(log_w.shape) > 2:
+                log_w = tf.reduce_sum(log_w, axis=1)
+
+            xs.append(x)
+            ys.append(y)
+            ws.append(tf.math.exp(log_w))
+
+        # locate the cutoff for the scores below the percentile
+        gamma = tfp.stats.percentile(ys, percentile)
+
+        for j in range(num_batches):
+
+            # re-weight by the cumulative probability of the score
+            d = self.ensemble.get_distribution(xs[j])
+            ws[j] *= 1.0 - d.cdf(tf.fill([num_samples, 1], gamma))
+
+        return tf.concat(xs, axis=0), \
+               tf.concat(ys, axis=0), \
+               tf.concat(ws, axis=0)

@@ -1,4 +1,4 @@
-from forward_model.utils import spearman
+from design_baselines.utils import spearman
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
 import tensorflow as tf

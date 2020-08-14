@@ -15,12 +15,12 @@ def cli():
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='ensemble')
+@click.option('--local-dir', type=str, default='forward-ensemble')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def ensemble_policy(local_dir, cpus, gpus, num_parallel, num_samples):
+def forward_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
 
@@ -38,11 +38,11 @@ def ensemble_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.ensemble import ensemble
+    from design_baselines.forward_ensemble import forward_ensemble
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(ensemble, config={
+    tune.run(forward_ensemble, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
         "task_kwargs": {},
@@ -57,19 +57,19 @@ def ensemble_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_samples": 128,
         "solver_lr": 0.0005,
         "solver_steps": 1000},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
-                             'gpu': gpus / num_parallel - 0.01})
+         num_samples=num_samples,
+         local_dir=local_dir,
+         resources_per_trial={'cpu': cpus // num_parallel,
+                              'gpu': gpus / num_parallel - 0.01})
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='ensemble-predictions')
+@click.option('--local-dir', type=str, default='forward-ensemble-predictions-policy')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel, num_samples):
+def forward_ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
 
@@ -87,11 +87,11 @@ def ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel, num_samples
         the number of samples to take per configuration
     """
 
-    from forward_model.ensemble import second_model_predictions
+    from design_baselines.forward_ensemble import forward_ensemble_predictions
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(second_model_predictions, config={
+    tune.run(forward_ensemble_predictions, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
         "task_kwargs": {},
@@ -138,7 +138,7 @@ def noisy_conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_
         the number of samples to take per configuration
     """
 
-    from forward_model.noisy_conservative_ensemble import noisy_conservative_ensemble
+    from design_baselines.noisy_conservative_ensemble import noisy_conservative_ensemble
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -193,7 +193,7 @@ def noisy_conservative_ensemble_predictions_policy(local_dir, cpus, gpus, num_pa
         the number of samples to take per configuration
     """
 
-    from forward_model.noisy_conservative_ensemble import noisy_conservative_ensemble_predictions
+    from design_baselines.noisy_conservative_ensemble import noisy_conservative_ensemble_predictions
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -250,7 +250,7 @@ def conservative_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.conservative import conservative
+    from design_baselines.conservative import conservative
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -301,7 +301,7 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         the number of samples to take per configuration
     """
 
-    from forward_model.conservative_ensemble import conservative_ensemble
+    from design_baselines.conservative_ensemble import conservative_ensemble
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -355,7 +355,7 @@ def conservative_ensemble_predictions_policy(local_dir, cpus, gpus, num_parallel
         the number of samples to take per configuration
     """
 
-    from forward_model.conservative_ensemble import conservative_ensemble_predictions
+    from design_baselines.conservative_ensemble import conservative_ensemble_predictions
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -412,7 +412,7 @@ def conservative_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.conservative import conservative
+    from design_baselines.conservative import conservative
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -463,7 +463,7 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.conservative_ensemble import conservative_ensemble
+    from design_baselines.conservative_ensemble import conservative_ensemble
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -517,7 +517,7 @@ def second_model_predictions_gfp(local_dir, cpus, gpus, num_parallel, num_sample
         the number of samples to take per configuration
     """
 
-    from forward_model.conservative_ensemble import conservative_ensemble_predictions
+    from design_baselines.conservative_ensemble import conservative_ensemble_predictions
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -574,7 +574,7 @@ def cbas_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.cbas import condition_by_adaptive_sampling
+    from design_baselines.cbas import condition_by_adaptive_sampling
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -631,7 +631,7 @@ def cbas_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.cbas import condition_by_adaptive_sampling
+    from design_baselines.cbas import condition_by_adaptive_sampling
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -691,7 +691,7 @@ def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.mins import model_inversion
+    from design_baselines.mins import model_inversion
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -748,7 +748,7 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.mins import model_inversion
+    from design_baselines.mins import model_inversion
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
@@ -805,7 +805,7 @@ def mins_quadratic(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from forward_model.mins import model_inversion
+    from design_baselines.mins import model_inversion
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))

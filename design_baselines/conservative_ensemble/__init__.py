@@ -1,14 +1,16 @@
-from forward_model.data import StaticGraphTask
-from forward_model.logger import Logger
-from forward_model.noisy_conservative_ensemble.trainers import NoisyConservativeEnsemble
-from forward_model.noisy_conservative_ensemble.nets import ForwardModel
+from design_baselines.data import StaticGraphTask
+from design_baselines.logger import Logger
+from design_baselines.utils import spearman
+from design_baselines.conservative_ensemble.trainers import ConservativeEnsemble
+from design_baselines.conservative_ensemble.nets import ForwardModel
 import tensorflow.keras.layers as tfkl
+import tensorflow_probability as tfp
 import tensorflow as tf
 import numpy as np
 import os
 
 
-def noisy_conservative_ensemble(config):
+def conservative_ensemble(config):
     """Train a forward model and perform model based optimization
     using a conservative objective function
 
@@ -19,13 +21,11 @@ def noisy_conservative_ensemble(config):
     """
 
     # create the training task and logger
-    logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    train_data, validate_data = task.build(
-        bootstraps=config['bootstraps'],
-        bootstraps_noise=config['bootstraps_noise'],
-        batch_size=config['batch_size'],
-        val_size=config['val_size'])
+    train_data, validate_data = task.build(bootstraps=config['bootstraps'],
+                                           batch_size=config['batch_size'],
+                                           val_size=config['val_size'])
+    logger = Logger(config['logging_dir'])
 
     # make several keras neural networks with two hidden layers
     forward_models = [ForwardModel(
@@ -36,7 +36,7 @@ def noisy_conservative_ensemble(config):
         act=tfkl.LeakyReLU) for b in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
-    trainer = NoisyConservativeEnsemble(
+    trainer = ConservativeEnsemble(
         forward_models,
         forward_model_optim=tf.keras.optimizers.Adam,
         forward_model_lr=config['forward_model_lr'],
@@ -50,7 +50,8 @@ def noisy_conservative_ensemble(config):
     # create a manager for saving algorithms state to the disk
     manager = tf.train.CheckpointManager(
         tf.train.Checkpoint(**trainer.get_saveables()),
-        os.path.join(config['logging_dir'], 'ckpt'), 1)
+        directory=os.path.join(config['logging_dir'], 'ckpt'),
+        max_to_keep=1)
 
     # train the model for an additional number of epochs
     manager.restore_or_initialize()
@@ -79,14 +80,14 @@ def noisy_conservative_ensemble(config):
         # back propagate through the forward model
         with tf.GradientTape() as tape:
             tape.watch(solution)
-            score = trainer.get_distribution(solution).sample()
+            score = trainer.get_distribution(solution).mean()
         grads = tape.gradient(score, solution)
         solution = solution + config['solver_lr'] * grads
 
         # evaluate the design using the oracle and the forward model
         gradient_norm = tf.linalg.norm(grads, axis=1)
         score = task.score(solution)
-        prediction = trainer.get_distribution(solution).sample()
+        prediction = trainer.get_distribution(solution).mean()
 
         # record the prediction and score to the logger
         logger.record("gradient_norm", gradient_norm, i)
@@ -106,7 +107,7 @@ def noisy_conservative_ensemble(config):
         config['logging_dir'], 'design.npy'), best_design)
 
 
-def noisy_conservative_ensemble_predictions(config):
+def conservative_ensemble_predictions(config):
     """Train a forward model and perform model based optimization
     using a conservative objective function
 
@@ -119,23 +120,21 @@ def noisy_conservative_ensemble_predictions(config):
     # create the training task and logger
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    train_data, validate_data = task.build(
-        bootstraps=2,
-        bootstraps_noise=config['bootstraps_noise'],
-        batch_size=config['batch_size'],
-        val_size=config['val_size'])
+    train_data, validate_data = task.build(bootstraps=config['bootstraps'],
+                                           batch_size=config['batch_size'],
+                                           val_size=config['val_size'])
 
     # make several keras neural networks with two hidden layers
-    forward_models = [ForwardModel(
+    conservative_forward_models = [ForwardModel(
         task.input_shape,
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'],
-        act=tfkl.LeakyReLU) for b in range(config['bootstraps'])]
+        act=tfkl.ReLU) for b in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
-    trainer = NoisyConservativeEnsemble(
-        forward_models,
+    conservative_trainer = ConservativeEnsemble(
+        conservative_forward_models,
         forward_model_optim=tf.keras.optimizers.Adam,
         forward_model_lr=config['forward_model_lr'],
         target_conservative_gap=config['target_conservative_gap'],
@@ -146,14 +145,46 @@ def noisy_conservative_ensemble_predictions(config):
         perturbation_steps=config['perturbation_steps'])
 
     # create a manager for saving algorithms state to the disk
-    manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**trainer.get_saveables()),
-        os.path.join(config['logging_dir'], 'ckpt'), 1)
+    conservative_manager = tf.train.CheckpointManager(
+        tf.train.Checkpoint(**conservative_trainer.get_saveables()),
+        os.path.join(config['logging_dir'], 'conservative'), 1)
 
     # train the model for an additional number of epochs
-    manager.restore_or_initialize()
-    trainer.launch(train_data, validate_data, logger, config['epochs'])
-    manager.save()
+    conservative_manager.restore_or_initialize()
+    conservative_trainer.launch(train_data, validate_data, logger,
+                                config['epochs'], header='conservative/')
+    conservative_manager.save()
+
+    # make several keras neural networks with two hidden layers
+    vanilla_forward_models = [ForwardModel(
+        task.input_shape,
+        hidden=config['hidden_size'],
+        initial_max_std=config['initial_max_std'],
+        initial_min_std=config['initial_min_std'],
+        act=tfkl.ReLU) for b in range(config['bootstraps'])]
+
+    # create a trainer for a forward model with a conservative objective
+    vanilla_trainer = ConservativeEnsemble(
+        vanilla_forward_models,
+        forward_model_optim=tf.keras.optimizers.Adam,
+        forward_model_lr=config['forward_model_lr'],
+        target_conservative_gap=0.0,
+        initial_alpha=0.0,
+        alpha_optim=tf.keras.optimizers.Adam,
+        alpha_lr=0.0,
+        perturbation_lr=0.0,
+        perturbation_steps=0)
+
+    # create a manager for saving algorithms state to the disk
+    vanilla_manager = tf.train.CheckpointManager(
+        tf.train.Checkpoint(**vanilla_trainer.get_saveables()),
+        os.path.join(config['logging_dir'], 'vanilla'), 1)
+
+    # train the model for an additional number of epochs
+    vanilla_manager.restore_or_initialize()
+    vanilla_trainer.launch(train_data, validate_data, logger,
+                           config['epochs'], header='vanilla/')
+    vanilla_manager.save()
 
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
@@ -161,32 +192,58 @@ def noisy_conservative_ensemble_predictions(config):
     # evaluate the initial design using the oracle and the forward model
     solution = tf.gather(task.x, indices, axis=0)
     score = task.score(solution)
-    prediction0 = forward_models[0].get_distribution(solution).sample()
-    prediction1 = forward_models[1].get_distribution(solution).sample()
+    prediction0 = conservative_trainer.get_distribution(solution).mean()
+    prediction1 = vanilla_trainer.get_distribution(solution).mean()
 
     # record the prediction and score to the logger
     logger.record("score", score, 0)
-    logger.record("model_0/prediction", prediction0, 0)
-    logger.record("model_1/prediction", prediction1, 0)
+    logger.record("conservative/prediction", prediction0, 0)
+    logger.record("vanilla/prediction", prediction1, 0)
+    logger.record("rank_corr/conservative_to_vanilla",
+                  spearman(prediction0[:, 0], prediction1[:, 0]), 0)
+    logger.record("rank_corr/conservative_to_real",
+                  spearman(prediction0[:, 0], score[:, 0]), 0)
+    logger.record("rank_corr/real_to_vanilla",
+                  spearman(score[:, 0], prediction1[:, 0]), 0)
 
     # perform gradient ascent on the score through the forward model
     for i in range(1, config['solver_steps'] + 1):
 
-        # back propagate through the forward model
+        # back propagate through the conservative model
         with tf.GradientTape() as tape:
             tape.watch(solution)
-            score = forward_models[0].get_distribution(solution).sample()
-        grads = tape.gradient(score, solution)
-        solution = solution + config['solver_lr'] * grads
+            score = conservative_trainer.get_distribution(solution).mean()
+        conservative_grads = tape.gradient(score, solution)
+
+        # back propagate through the vanilla model
+        with tf.GradientTape() as tape:
+            tape.watch(solution)
+            score = vanilla_trainer.get_distribution(solution).mean()
+        vanilla_grads = tape.gradient(score, solution)
+
+        # use the conservative optimizer to update the solution
+        solution = solution + config['solver_lr'] * conservative_grads
+
+        # calculate the element-wise gradient correlation
+        gradient_corr = tfp.stats.correlation(
+            conservative_grads, vanilla_grads,
+            sample_axis=0, event_axis=None)
 
         # evaluate the design using the oracle and the forward model
-        gradient_norm = tf.linalg.norm(grads, axis=1)
+        gradient_norm = tf.linalg.norm(conservative_grads, axis=1)
         score = task.score(solution)
-        prediction0 = forward_models[0].get_distribution(solution).sample()
-        prediction1 = forward_models[1].get_distribution(solution).sample()
+        prediction0 = conservative_trainer.get_distribution(solution).mean()
+        prediction1 = vanilla_trainer.get_distribution(solution).mean()
 
         # record the prediction and score to the logger
+        logger.record("gradient_corr", gradient_corr, i)
         logger.record("gradient_norm", gradient_norm, i)
         logger.record("score", score, i)
-        logger.record("model_0/prediction", prediction0, i)
-        logger.record("model_1/prediction", prediction1, i)
+        logger.record("conservative/prediction", prediction0, i)
+        logger.record("vanilla/prediction", prediction1, i)
+        logger.record("rank_corr/conservative_to_vanilla",
+                      spearman(prediction0[:, 0], prediction1[:, 0]), i)
+        logger.record("rank_corr/conservative_to_real",
+                      spearman(prediction0[:, 0], score[:, 0]), i)
+        logger.record("rank_corr/real_to_vanilla",
+                      spearman(score[:, 0], prediction1[:, 0]), i)

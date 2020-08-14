@@ -1,6 +1,6 @@
-from forward_model.data import StaticGraphTask
-from forward_model.logger import Logger
-from forward_model.conservative.trainers import Conservative
+from design_baselines.data import StaticGraphTask
+from design_baselines.logger import Logger
+from design_baselines.conservative.trainers import Conservative
 import tensorflow.keras.layers as tfkl
 import tensorflow as tf
 import os
