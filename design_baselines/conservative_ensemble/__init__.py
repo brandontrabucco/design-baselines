@@ -21,7 +21,10 @@ def conservative_ensemble(config):
     """
 
     # create the training task and logger
-    task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    task = StaticGraphTask(config['task'],
+                           normalize_x=not config['is_discrete'],
+                           normalize_y=True,
+                           **config['task_kwargs'])
     train_data, validate_data = task.build(bootstraps=config['bootstraps'],
                                            batch_size=config['batch_size'],
                                            val_size=config['val_size'])
@@ -45,13 +48,13 @@ def conservative_ensemble(config):
         alpha_optim=tf.keras.optimizers.Adam,
         alpha_lr=config['alpha_lr'],
         perturbation_lr=config['perturbation_lr'],
-        perturbation_steps=config['perturbation_steps'])
+        perturbation_steps=config['perturbation_steps'],
+        is_discrete=config['is_discrete'])
 
     # create a manager for saving algorithms state to the disk
     manager = tf.train.CheckpointManager(
         tf.train.Checkpoint(**trainer.get_saveables()),
-        directory=os.path.join(config['logging_dir'], 'ckpt'),
-        max_to_keep=1)
+        os.path.join(config['logging_dir'], 'ckpt'), 1)
 
     # train the model for an additional number of epochs
     manager.restore_or_initialize()
@@ -62,13 +65,16 @@ def conservative_ensemble(config):
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
 
     # evaluate the initial design using the oracle and the forward model
-    solution = tf.gather(task.x, indices, axis=0)
+    x = tf.gather(task.x, indices, axis=0)
+
+    x = tf.math.log(x) if config['is_discrete'] else x
+    solution = tf.math.softmax(x) if config['is_discrete'] else x
     score = task.score(solution)
     prediction = trainer.get_distribution(solution).mean()
 
     # record the prediction and score to the logger
-    logger.record("score", score, 0)
-    logger.record("prediction", prediction, 0)
+    logger.record("score", score * task.y_std + task.y_mean, 0)
+    logger.record("prediction", prediction * task.y_std + task.y_mean, 0)
 
     # and keep track of the best design sampled so far
     best_design = None
@@ -79,20 +85,22 @@ def conservative_ensemble(config):
 
         # back propagate through the forward model
         with tf.GradientTape() as tape:
-            tape.watch(solution)
+            tape.watch(x)
+            solution = tf.math.softmax(x) if config['is_discrete'] else x
             score = trainer.get_distribution(solution).mean()
-        grads = tape.gradient(score, solution)
-        solution = solution + config['solver_lr'] * grads
+        grads = tape.gradient(score, x)
+        x = x + config['solver_lr'] * grads
 
         # evaluate the design using the oracle and the forward model
         gradient_norm = tf.linalg.norm(grads, axis=1)
+        solution = tf.math.softmax(x) if config['is_discrete'] else x
         score = task.score(solution)
         prediction = trainer.get_distribution(solution).mean()
 
         # record the prediction and score to the logger
         logger.record("gradient_norm", gradient_norm, i)
-        logger.record("score", score, i)
-        logger.record("prediction", prediction, i)
+        logger.record("score", score * task.y_std + task.y_mean, i)
+        logger.record("prediction", prediction * task.y_std + task.y_mean, i)
 
         # update the best design every iteration
         idx = np.argmax(score.numpy())
@@ -118,11 +126,14 @@ def conservative_ensemble_predictions(config):
     """
 
     # create the training task and logger
-    logger = Logger(config['logging_dir'])
-    task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    task = StaticGraphTask(config['task'],
+                           normalize_x=not config['is_discrete'],
+                           normalize_y=True,
+                           **config['task_kwargs'])
     train_data, validate_data = task.build(bootstraps=config['bootstraps'],
                                            batch_size=config['batch_size'],
                                            val_size=config['val_size'])
+    logger = Logger(config['logging_dir'])
 
     # make several keras neural networks with two hidden layers
     conservative_forward_models = [ForwardModel(
@@ -130,7 +141,7 @@ def conservative_ensemble_predictions(config):
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'],
-        act=tfkl.LeakyReLU) for b in range(config['bootstraps'])]
+        act=lambda: tfkl.LeakyReLU(alpha=0.3)) for b in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
     conservative_trainer = ConservativeEnsemble(
@@ -142,7 +153,8 @@ def conservative_ensemble_predictions(config):
         alpha_optim=tf.keras.optimizers.Adam,
         alpha_lr=config['alpha_lr'],
         perturbation_lr=config['perturbation_lr'],
-        perturbation_steps=config['perturbation_steps'])
+        perturbation_steps=config['perturbation_steps'],
+        is_discrete=config['is_discrete'])
 
     # create a manager for saving algorithms state to the disk
     conservative_manager = tf.train.CheckpointManager(
@@ -161,7 +173,7 @@ def conservative_ensemble_predictions(config):
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'],
-        act=lambda: tfkl.Activation('tanh')) for b in range(config['bootstraps'])]
+        act=lambda: tfkl.LeakyReLU(alpha=0.7)) for b in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
     vanilla_trainer = ConservativeEnsemble(
@@ -173,7 +185,8 @@ def conservative_ensemble_predictions(config):
         alpha_optim=tf.keras.optimizers.Adam,
         alpha_lr=0.0,
         perturbation_lr=0.0,
-        perturbation_steps=0)
+        perturbation_steps=0,
+        is_discrete=config['is_discrete'])
 
     # create a manager for saving algorithms state to the disk
     vanilla_manager = tf.train.CheckpointManager(
@@ -190,15 +203,18 @@ def conservative_ensemble_predictions(config):
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
 
     # evaluate the initial design using the oracle and the forward model
-    solution = tf.gather(task.x, indices, axis=0)
+    x = tf.gather(task.x, indices, axis=0)
+
+    x = tf.math.log(x) if config['is_discrete'] else x
+    solution = tf.math.softmax(x) if config['is_discrete'] else x
     score = task.score(solution)
     prediction0 = conservative_trainer.get_distribution(solution).mean()
     prediction1 = vanilla_trainer.get_distribution(solution).mean()
 
     # record the prediction and score to the logger
-    logger.record("score", score, 0)
-    logger.record("conservative/prediction", prediction0, 0)
-    logger.record("vanilla/prediction", prediction1, 0)
+    logger.record("score", score * task.y_std + task.y_mean, 0)
+    logger.record("conservative/prediction", prediction0 * task.y_std + task.y_mean, 0)
+    logger.record("vanilla/prediction", prediction1 * task.y_std + task.y_mean, 0)
     logger.record("rank_corr/conservative_to_vanilla",
                   spearman(prediction0[:, 0], prediction1[:, 0]), 0)
     logger.record("rank_corr/conservative_to_real",
@@ -211,18 +227,21 @@ def conservative_ensemble_predictions(config):
 
         # back propagate through the conservative model
         with tf.GradientTape() as tape:
-            tape.watch(solution)
+            tape.watch(x)
+            solution = tf.math.softmax(x) if config['is_discrete'] else x
             score = conservative_trainer.get_distribution(solution).mean()
         conservative_grads = tape.gradient(score, solution)
 
         # back propagate through the vanilla model
         with tf.GradientTape() as tape:
-            tape.watch(solution)
+            tape.watch(x)
+            solution = tf.math.softmax(x) if config['is_discrete'] else x
             score = vanilla_trainer.get_distribution(solution).mean()
         vanilla_grads = tape.gradient(score, solution)
 
         # use the conservative optimizer to update the solution
-        solution = solution + config['solver_lr'] * conservative_grads
+        x = x + config['solver_lr'] * conservative_grads
+        solution = tf.math.softmax(x) if config['is_discrete'] else x
 
         # calculate the element-wise gradient correlation
         gradient_corr = tfp.stats.correlation(
@@ -238,9 +257,9 @@ def conservative_ensemble_predictions(config):
         # record the prediction and score to the logger
         logger.record("gradient_corr", gradient_corr, i)
         logger.record("gradient_norm", gradient_norm, i)
-        logger.record("score", score, i)
-        logger.record("conservative/prediction", prediction0, i)
-        logger.record("vanilla/prediction", prediction1, i)
+        logger.record("score", score * task.y_std + task.y_mean, i)
+        logger.record("conservative/prediction", prediction0 * task.y_std + task.y_mean, i)
+        logger.record("vanilla/prediction", prediction1 * task.y_std + task.y_mean, i)
         logger.record("rank_corr/conservative_to_vanilla",
                       spearman(prediction0[:, 0], prediction1[:, 0]), i)
         logger.record("rank_corr/conservative_to_real",

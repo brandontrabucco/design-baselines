@@ -8,6 +8,8 @@ class StaticGraphTask(Task):
 
     def __init__(self,
                  task_name,
+                 normalize_x=True,
+                 normalize_y=True,
                  **task_kwargs):
         """An interface to a static-graph task which includes a validation
         set and a non differentiable score function
@@ -18,38 +20,80 @@ class StaticGraphTask(Task):
             the name to a valid task using design_bench.make(task_name)
             such as 'HopperController-v0'
         **task_kwargs: dict
-            additional keyword arguments that are passed to the design_eanch task
+            additional keyword arguments that are passed to the design_bench task
             when it is created using design_bench.make
         """
 
+        # use the design_bench registry to make a task
         self.wrapped_task = make(task_name, **task_kwargs)
+
+        # normalize the input x data to a unit gaussian
+        if normalize_x:
+            x = self.wrapped_task.x.astype(np.float32)
+            self.x_mean = np.mean(x, axis=0, keepdims=True)
+            self.x_std = np.std(x - self.x_mean, axis=0, keepdims=True)
+        else:
+            self.x_mean = np.zeros([1, 1], dtype=np.float32)
+            self.x_std = np.ones([1, 1], dtype=np.float32)
+
+        # normalize the output y data to a unit gaussian
+        if normalize_y:
+            y = self.wrapped_task.y.astype(np.float32).reshape([-1, 1])
+            self.y_mean = np.mean(y, axis=0, keepdims=True)
+            self.y_std = np.std(y - self.y_mean, axis=0, keepdims=True)
+        else:
+            self.y_mean = np.zeros([1, 1], dtype=np.float32)
+            self.y_std = np.ones([1, 1], dtype=np.float32)
 
     @property
     def x(self):
-        return self.wrapped_task.x.astype(np.float32)
+        """Returns the x data from the data set normalized to a unit gaussian
+        and cast to a float 32 (discrete points are one-hot)
+        """
+
+        return (self.wrapped_task.x.astype(
+            np.float32) - self.x_mean) / self.x_std
 
     @property
     def y(self):
-        return self.wrapped_task.y.astype(np.float32).reshape([-1, 1])
+        """Returns the y data from the data set normalized to a unit gaussian
+        and cast to a float 32 (the true score is un-normalized)
+        """
+
+        return (self.wrapped_task.y.astype(
+            np.float32).reshape([-1, 1]) - self.y_mean) / self.y_std
 
     @x.setter
     def x(self, x):
-        self.wrapped_task.x = x
+        """Set the x data in the data set by first un-normalizing the
+        x data provided to the setter function
+        """
+
+        self.wrapped_task.x = x * self.x_std + self.x_mean
 
     @y.setter
     def y(self, y):
-        self.wrapped_task.y = y
+        """Set the y data in the data set by first un-normalizing the
+        y data provided to the setter function
+        """
+
+        self.wrapped_task.y = y * self.y_std + self.y_mean
 
     @property
     def input_shape(self):
+        """Return a tuple that corresponds to the shape of a single
+        element of x from the data set
+        """
+
         return self.wrapped_task.input_shape
 
     @property
     def input_size(self):
-        return self.wrapped_task.input_size
+        """Return an int that corresponds to the size of a single
+        element of x from the data set
+        """
 
-    def score_np(self, x):
-        return self.wrapped_task.score(x).astype(np.float32)
+        return self.wrapped_task.input_size
 
     def build(self,
               x=None,
@@ -111,9 +155,8 @@ class StaticGraphTask(Task):
             train_inputs.append(tf.stack([
                 tf.math.bincount(tf.random.uniform(
                     [size],
-                    minval=0, maxval=size, dtype=tf.int32),
-                    minlength=size, dtype=tf.float32)
-                for b in range(bootstraps)], axis=1))
+                    minval=0, maxval=size, dtype=tf.int32), minlength=size,
+                    dtype=tf.float32) for b in range(bootstraps)], axis=1))
 
             # add noise to the labels to increase diversity
             if bootstraps_noise is not None:
@@ -135,6 +178,26 @@ class StaticGraphTask(Task):
         validate = validate.batch(batch_size)
         return train.prefetch(tf.data.experimental.AUTOTUNE),\
             validate.prefetch(tf.data.experimental.AUTOTUNE)
+
+    def score_np(self, x):
+        """Calculates a score for the provided tensor x using a ground truth
+        oracle function (the goal of the task is to maximize this)
+
+        Args:
+
+        x: np.ndarray
+            a batch of sampled designs that will be evaluated by
+            an oracle score function
+
+        Returns:
+
+        scores: np.ndarray
+            a batch of scores that correspond to the x values provided
+            in the function argument
+        """
+
+        y = self.wrapped_task.score(x * self.x_std + self.x_mean).reshape([-1, 1])
+        return (y.astype(np.float32) - self.y_mean) / self.y_std
 
     @tf.function(experimental_relax_shapes=True)
     def score(self, x):

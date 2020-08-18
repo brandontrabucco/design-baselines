@@ -17,7 +17,8 @@ class ConservativeEnsemble(tf.Module):
                  alpha_optim=tf.keras.optimizers.Adam,
                  alpha_lr=0.001,
                  perturbation_lr=0.001,
-                 perturbation_steps=100):
+                 perturbation_steps=100,
+                 is_discrete=False):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -56,6 +57,7 @@ class ConservativeEnsemble(tf.Module):
         # create machinery for sampling adversarial examples
         self.perturbation_lr = perturbation_lr
         self.perturbation_steps = perturbation_steps
+        self.is_discrete = is_discrete
 
     def get_distribution(self,
                          x,
@@ -110,12 +112,14 @@ class ConservativeEnsemble(tf.Module):
         """
 
         # use the selected forward model to find adversarial examples
+        x = tf.math.log(x) if self.is_discrete else x
         for step in range(self.perturbation_steps):
             with tf.GradientTape() as tape:
                 tape.watch(x)
-                score = fm.get_distribution(x, **kwargs).mean()
+                solution = tf.math.softmax(x) if self.is_discrete else x
+                score = fm.get_distribution(solution, **kwargs).mean()
             x = x + self.perturbation_lr * tape.gradient(score, x)
-        return x
+        return tf.math.softmax(x) if self.is_discrete else x
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
