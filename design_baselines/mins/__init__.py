@@ -24,7 +24,10 @@ def model_inversion(config):
 
     # create the training task and logger
     logger = Logger(config['logging_dir'])
-    task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    task = StaticGraphTask(config['task'],
+                           normalize_x=not config['is_discrete'],
+                           normalize_y=True,
+                           **config['task_kwargs'])
 
     if config['fully_offline']:
 
@@ -82,7 +85,9 @@ def model_inversion(config):
 
     # build the neural network GAN components
     exploration_discriminator = Discriminator(
-        task.input_shape, hidden=config['hidden_size'])
+        task.input_shape,
+        input_noise_std=config['input_noise_std'],
+        hidden=config['hidden_size'])
     exploration_gan = WeightedGAN(
         exploration_generator, exploration_discriminator,
         generator_lr=config['generator_lr'],
@@ -99,7 +104,9 @@ def model_inversion(config):
 
     # build the neural network GAN components
     exploitation_discriminator = Discriminator(
-        task.input_shape, hidden=config['hidden_size'])
+        task.input_shape,
+        input_noise_std=config['input_noise_std'],
+        hidden=config['hidden_size'])
     exploitation_gan = WeightedGAN(
         exploitation_generator, exploitation_discriminator,
         generator_lr=config['generator_lr'],
@@ -170,8 +177,8 @@ def model_inversion(config):
             if config['fully_offline'] else task.score(solver_xs)
 
         # record score percentiles
-        logger.record("exploration/condition_ys", condition_ys, iteration)
-        logger.record("exploration/actual_ys", actual_ys, iteration)
+        logger.record("exploration/condition_ys", condition_ys * task.y_std + task.y_mean, iteration)
+        logger.record("exploration/actual_ys", actual_ys * task.y_std + task.y_mean, iteration)
 
         # concatenate newly paired samples with the existing data set
         x = tf.concat([x, solver_xs], 0)
@@ -200,8 +207,8 @@ def model_inversion(config):
         actual_ys = task.score(solver_xs)
 
         # record score percentiles
-        logger.record("exploitation/condition_ys", condition_ys, iteration)
-        logger.record("exploitation/actual_ys", actual_ys, iteration)
+        logger.record("exploitation/condition_ys", condition_ys * task.y_std + task.y_mean, iteration)
+        logger.record("exploitation/actual_ys", actual_ys * task.y_std + task.y_mean, iteration)
 
     # save every model to the disk
     exploration_gan_manager.save()

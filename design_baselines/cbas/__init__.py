@@ -25,7 +25,10 @@ def condition_by_adaptive_sampling(config):
     logger = Logger(config['logging_dir'])
 
     # create the training task and logger
-    task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    task = StaticGraphTask(config['task'],
+                           normalize_x=not config['is_discrete'],
+                           normalize_y=True,
+                           **config['task_kwargs'])
     train_data, val_data = task.build(bootstraps=config['bootstraps'],
                                       batch_size=config['ensemble_batch_size'],
                                       val_size=config['val_size'])
@@ -124,7 +127,8 @@ def condition_by_adaptive_sampling(config):
                                      config['percentile'])
 
         # evaluate the sampled designs
-        logger.record("score", task.score(x[:config['solver_samples']]), i)
+        score = task.score(x[:config['solver_samples']])
+        logger.record("score", score * task.y_std + task.y_mean, i)
 
         # build a weighted data set
         train_data, val_data = task.build(x=x.numpy(),
@@ -149,5 +153,5 @@ def condition_by_adaptive_sampling(config):
     # sample designs from the prior
     q_dx = q_decoder.get_distribution(tf.random.normal([
         config['solver_samples'], config['latent_size']]), training=False)
-    logger.record("score", task.score(
-        q_dx.sample()), config['iterations'])
+    score = task.score(q_dx.sample())
+    logger.record("score", score * task.y_std + task.y_mean, config['iterations'])
