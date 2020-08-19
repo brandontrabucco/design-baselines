@@ -84,8 +84,7 @@ class Discriminator(tf.keras.Sequential):
 
     def __init__(self,
                  design_shape,
-                 hidden=50,
-                 input_noise_std=0.0):
+                 hidden=50):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
@@ -100,7 +99,6 @@ class Discriminator(tf.keras.Sequential):
         """
 
         self.design_shape = design_shape
-        self.input_noise_std = input_noise_std
         super(Discriminator, self).__init__([
             tfkl.Dense(hidden, input_shape=(np.prod(design_shape) + 1,)),
             tfkl.LeakyReLU(),
@@ -130,8 +128,7 @@ class Discriminator(tf.keras.Sequential):
         """
 
         x = tf.reshape(x, [tf.shape(y)[0], np.prod(self.design_shape)])
-        z = tf.random.normal(tf.shape(x)) * self.input_noise_std
-        inputs = tf.cast(tf.concat([x + z, y], 1), tf.float32)
+        inputs = tf.cast(tf.concat([x, y], 1), tf.float32)
         mu = super(Discriminator, self).__call__(inputs, **kwargs)
         return (mu - (1.0 if real else 0.0)) ** 2
 

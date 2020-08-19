@@ -1,8 +1,9 @@
 from design_baselines.utils import spearman
+from design_baselines.utils import add_noise
 from collections import defaultdict
+from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
 import tensorflow_probability as tfp
-from tensorflow_probability import distributions as tfpd
 import numpy as np
 
 
@@ -18,7 +19,8 @@ class ConservativeEnsemble(tf.Module):
                  alpha_lr=0.001,
                  perturbation_lr=0.001,
                  perturbation_steps=100,
-                 is_discrete=False):
+                 is_discrete=False,
+                 input_noise=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -58,6 +60,7 @@ class ConservativeEnsemble(tf.Module):
         self.perturbation_lr = perturbation_lr
         self.perturbation_steps = perturbation_steps
         self.is_discrete = is_discrete
+        self.input_noise = input_noise
 
     def get_distribution(self,
                          x,
@@ -123,7 +126,7 @@ class ConservativeEnsemble(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
-                   X,
+                   x,
                    y,
                    b):
         """Perform a training step of gradient descent on an ensemble
@@ -131,7 +134,7 @@ class ConservativeEnsemble(tf.Module):
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of training labels shaped like [batch_size, 1]
@@ -153,17 +156,18 @@ class ConservativeEnsemble(tf.Module):
             log_alpha = self.log_alphas[i]
             alpha_optim = self.alpha_optims[i]
 
+            x0 = add_noise(x, self.input_noise, self.is_discrete)
             with tf.GradientTape(persistent=True) as tape:
 
                 # calculate the prediction error and accuracy of the model
-                d = fm.get_distribution(X, training=True)
+                d = fm.get_distribution(x0, training=True)
                 nll = -d.log_prob(y)
 
                 # evaluate how correct the rank fo the model predictions are
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
                 # calculate the conservative gap
-                perturb = tf.stop_gradient(self.optimize(X, fm))
+                perturb = tf.stop_gradient(self.optimize(x0, fm))
 
                 # calculate the prediction error and accuracy of the model
                 perturb_d = fm.get_distribution(perturb, training=True)
@@ -200,14 +204,14 @@ class ConservativeEnsemble(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def validate_step(self,
-                      X,
+                      x,
                       y):
         """Perform a validation step on an ensemble of models
         without using bootstrapping weights
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of validation inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of validation labels shaped like [batch_size, 1]
@@ -224,14 +228,14 @@ class ConservativeEnsemble(tf.Module):
             fm = self.forward_models[i]
 
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(X, training=False)
+            d = fm.get_distribution(x, training=False)
             nll = -d.log_prob(y)
 
             # evaluate how correct the rank fo the model predictions are
             rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
             # calculate the conservative gap
-            perturb = tf.stop_gradient(self.optimize(X, fm))
+            perturb = tf.stop_gradient(self.optimize(x, fm))
 
             # calculate the prediction error and accuracy of the model
             perturb_d = fm.get_distribution(perturb, training=False)

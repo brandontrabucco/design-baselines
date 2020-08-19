@@ -85,9 +85,7 @@ def model_inversion(config):
 
     # build the neural network GAN components
     exploration_discriminator = Discriminator(
-        task.input_shape,
-        input_noise_std=config['input_noise_std'],
-        hidden=config['hidden_size'])
+        task.input_shape, hidden=config['hidden_size'])
     exploration_gan = WeightedGAN(
         exploration_generator, exploration_discriminator,
         generator_lr=config['generator_lr'],
@@ -104,9 +102,7 @@ def model_inversion(config):
 
     # build the neural network GAN components
     exploitation_discriminator = Discriminator(
-        task.input_shape,
-        input_noise_std=config['input_noise_std'],
-        hidden=config['hidden_size'])
+        task.input_shape, hidden=config['hidden_size'])
     exploitation_gan = WeightedGAN(
         exploitation_generator, exploitation_discriminator,
         generator_lr=config['generator_lr'],

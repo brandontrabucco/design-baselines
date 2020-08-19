@@ -162,7 +162,7 @@ def get_synthetic_data(x,
 
     if is_discrete:
 
-        # randomly sample data points from teh space of valid samples
+        # randomly sample data points from the space of valid samples
         log_prob = tf.zeros(tf.shape(x)[1:])
         d = tfpd.OneHotCategorical(logits=log_prob, dtype=tf.float32)
         xs = d.sample(sample_shape=(exploration_samples,))
