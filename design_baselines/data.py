@@ -45,14 +45,25 @@ class StaticGraphTask(Task):
             self.y_mean = np.zeros([1, 1], dtype=np.float32)
             self.y_std = np.ones([1, 1], dtype=np.float32)
 
+    def normalize_x(self, x):
+        return (x - self.x_mean) / self.x_std
+
+    def normalize_y(self, y):
+        return (y - self.y_mean) / self.y_std
+
+    def denormalize_x(self, x):
+        return x * self.x_std + self.x_mean
+
+    def denormalize_y(self, y):
+        return y * self.y_std + self.y_mean
+
     @property
     def x(self):
         """Returns the x data from the data set normalized to a unit gaussian
         and cast to a float 32 (discrete points are one-hot)
         """
 
-        return (self.wrapped_task.x.astype(
-            np.float32) - self.x_mean) / self.x_std
+        return self.normalize_x(self.wrapped_task.x.astype(np.float32))
 
     @property
     def y(self):
@@ -60,8 +71,7 @@ class StaticGraphTask(Task):
         and cast to a float 32 (the true score is un-normalized)
         """
 
-        return (self.wrapped_task.y.astype(
-            np.float32).reshape([-1, 1]) - self.y_mean) / self.y_std
+        return self.normalize_y(self.wrapped_task.y.astype(np.float32))
 
     @x.setter
     def x(self, x):
@@ -69,7 +79,7 @@ class StaticGraphTask(Task):
         x data provided to the setter function
         """
 
-        self.wrapped_task.x = x * self.x_std + self.x_mean
+        self.wrapped_task.x = self.denormalize_x(x)
 
     @y.setter
     def y(self, y):
@@ -77,7 +87,7 @@ class StaticGraphTask(Task):
         y data provided to the setter function
         """
 
-        self.wrapped_task.y = y * self.y_std + self.y_mean
+        self.wrapped_task.y = self.denormalize_y(y)
 
     @property
     def input_shape(self):
@@ -154,8 +164,7 @@ class StaticGraphTask(Task):
             # sample the data set with replacement
             train_inputs.append(tf.stack([
                 tf.math.bincount(tf.random.uniform(
-                    [size],
-                    minval=0, maxval=size, dtype=tf.int32), minlength=size,
+                    [size], minval=0, maxval=size, dtype=tf.int32), minlength=size,
                     dtype=tf.float32) for b in range(bootstraps)], axis=1))
 
             # add noise to the labels to increase diversity
@@ -196,8 +205,8 @@ class StaticGraphTask(Task):
             in the function argument
         """
 
-        y = self.wrapped_task.score(x * self.x_std + self.x_mean).reshape([-1, 1])
-        return (y.astype(np.float32) - self.y_mean) / self.y_std
+        return self.denormalize_y(self.wrapped_task.score(
+            self.normalize_x(x)).astype(np.float32)).reshape([-1, 1])
 
     @tf.function(experimental_relax_shapes=True)
     def score(self, x):
