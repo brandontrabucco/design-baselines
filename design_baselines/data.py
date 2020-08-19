@@ -27,20 +27,20 @@ class StaticGraphTask(Task):
         # use the design_bench registry to make a task
         self.wrapped_task = make(task_name, **task_kwargs)
 
-        # normalize the input x data to a unit gaussian
         if normalize_x:
             x = self.wrapped_task.x.astype(np.float32)
             self.x_mean = np.mean(x, axis=0, keepdims=True)
             self.x_std = np.std(x - self.x_mean, axis=0, keepdims=True)
+
         else:
             self.x_mean = np.zeros([1, 1], dtype=np.float32)
             self.x_std = np.ones([1, 1], dtype=np.float32)
 
-        # normalize the output y data to a unit gaussian
         if normalize_y:
             y = self.wrapped_task.y.astype(np.float32).reshape([-1, 1])
             self.y_mean = np.mean(y, axis=0, keepdims=True)
             self.y_std = np.std(y - self.y_mean, axis=0, keepdims=True)
+
         else:
             self.y_mean = np.zeros([1, 1], dtype=np.float32)
             self.y_std = np.ones([1, 1], dtype=np.float32)
@@ -59,34 +59,18 @@ class StaticGraphTask(Task):
 
     @property
     def x(self):
-        """Returns the x data from the data set normalized to a unit gaussian
-        and cast to a float 32 (discrete points are one-hot)
-        """
-
         return self.normalize_x(self.wrapped_task.x.astype(np.float32))
 
     @property
     def y(self):
-        """Returns the y data from the data set normalized to a unit gaussian
-        and cast to a float 32 (the true score is un-normalized)
-        """
-
         return self.normalize_y(self.wrapped_task.y.astype(np.float32))
 
     @x.setter
     def x(self, x):
-        """Set the x data in the data set by first un-normalizing the
-        x data provided to the setter function
-        """
-
         self.wrapped_task.x = self.denormalize_x(x)
 
     @y.setter
     def y(self, y):
-        """Set the y data in the data set by first un-normalizing the
-        y data provided to the setter function
-        """
-
         self.wrapped_task.y = self.denormalize_y(y)
 
     @property
@@ -145,22 +129,20 @@ class StaticGraphTask(Task):
             with an optional sample weight included
         """
 
+        # shuffle the dataset using a common set of indices
         x = self.x if x is None else x
         y = self.y if y is None else y
-
-        # shuffle the dataset using a common set of indices
         indices = np.arange(x.shape[0])
         np.random.shuffle(indices)
-        x = x[indices]
-        y = y[indices]
 
         # create a training and validation split
+        x = x[indices]
+        y = y[indices]
         train_inputs = [x[val_size:], y[val_size:]]
         validate_inputs = [x[:val_size], y[:val_size]]
         size = x.shape[0] - val_size
 
         if bootstraps > 0:
-
             # sample the data set with replacement
             train_inputs.append(tf.stack([
                 tf.math.bincount(tf.random.uniform(
@@ -205,8 +187,8 @@ class StaticGraphTask(Task):
             in the function argument
         """
 
-        return self.denormalize_y(self.wrapped_task.score(
-            self.normalize_x(x)).astype(np.float32)).reshape([-1, 1])
+        return self.normalize_y(self.wrapped_task.score(
+            self.denormalize_x(x)).astype(np.float32)).reshape([-1, 1])
 
     @tf.function(experimental_relax_shapes=True)
     def score(self, x):
