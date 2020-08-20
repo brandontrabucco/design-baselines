@@ -79,8 +79,8 @@ class ForwardModel(tf.keras.Sequential):
         return self.distribution(**self.get_params(inputs, **kwargs))
 
 
-class Discriminator(tf.keras.Sequential):
-    """A Fully Connected Network with 2 trainable layers"""
+class Discriminator(tf.keras.Model):
+    """A Fully Connected Network conditioned on a score"""
 
     def __init__(self,
                  design_shape,
@@ -90,19 +90,34 @@ class Discriminator(tf.keras.Sequential):
 
         Args:
 
-        inp_size: int
-            the size of the input vector of this network
-        out_size: int
-            the size of the output vector of this network
+        design_shape: List[int]
+            a list of tuple of integers that represents the shape of a
+            single design for a particular task
         hidden: int
-            the global hidden size of the network
+            the number of hidden units in every layer of the
+            discriminator neural network
         """
 
+        super(Discriminator, self).__init__()
         self.design_shape = design_shape
-        super(Discriminator, self).__init__([
-            tfkl.Dense(hidden, input_shape=(np.prod(design_shape) + 1,)),
-            tfkl.LeakyReLU(),
-            tfkl.Dense(1)])
+
+        # define a layer of the neural net with two pathways
+        self.score_0 = tfkl.Dense(hidden)
+        self.score_0.build((1,))
+        self.dense_0 = tfkl.Dense(hidden)
+        self.dense_0.build((np.prod(design_shape),))
+
+        # define a layer of the neural net with two pathways
+        self.score_1 = tfkl.Dense(hidden)
+        self.score_1.build((1,))
+        self.dense_1 = tfkl.Dense(hidden)
+        self.dense_1.build((hidden,))
+
+        # define a layer of the neural net with two pathways
+        self.score_2 = tfkl.Dense(1)
+        self.score_2.build((1,))
+        self.dense_2 = tfkl.Dense(1)
+        self.dense_2.build((hidden,))
 
     def loss(self, x, y, real=True, **kwargs):
         """Use a neural network to discriminate the log probability that a
@@ -127,14 +142,19 @@ class Discriminator(tf.keras.Sequential):
             real of X being fake depending on the value of 'real'
         """
 
+        x = tf.cast(x, tf.float32)
+        y = tf.cast(y, tf.float32)
         x = tf.reshape(x, [tf.shape(y)[0], np.prod(self.design_shape)])
-        inputs = tf.cast(tf.concat([x, y], 1), tf.float32)
-        mu = super(Discriminator, self).__call__(inputs, **kwargs)
-        return (mu - (1.0 if real else 0.0)) ** 2
+        x = self.dense_0(x, **kwargs) * self.score_0(y, **kwargs)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
+        x = self.dense_1(x, **kwargs) * self.score_1(y, **kwargs)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
+        x = self.dense_2(x, **kwargs) * self.score_2(y, **kwargs)
+        return (x - (1.0 if real else 0.0)) ** 2
 
 
-class DiscreteGenerator(tf.keras.Sequential):
-    """A Fully Connected Network with 2 trainable layers"""
+class DiscreteGenerator(tf.keras.Model):
+    """A Fully Connected Network conditioned on a score"""
 
     def __init__(self,
                  design_shape,
@@ -145,20 +165,38 @@ class DiscreteGenerator(tf.keras.Sequential):
 
         Args:
 
-        inp_size: int
-            the size of the input vector of this network
-        out_size: int
-            the size of the output vector of this network
+        design_shape: List[int]
+            a list of tuple of integers that represents the shape of a
+            float design for a particular task
+        temp: int
+            the temperature of the Gumbel-Softmax distribution that
+            the GAN outputs parameterize
         hidden: int
-            the global hidden size of the network
+            the number of hidden units in every layer of the
+            discriminator neural network
         """
 
+        super(DiscreteGenerator, self).__init__()
+        self.design_shape = design_shape
         self.temp = temp
-        super(DiscreteGenerator, self).__init__([
-            tfkl.Dense(hidden, input_shape=(1,)),
-            tfkl.LeakyReLU(),
-            tfkl.Dense(np.prod(design_shape)),
-            tfkl.Reshape(design_shape)])
+
+        # define a layer of the neural net with one pathway
+        self.score_0 = tfkl.Dense(hidden)
+        self.score_0.build((1,))
+        self.bn_0 = tfkl.BatchNormalization()
+
+        # define a layer of the neural net with two pathways
+        self.score_1 = tfkl.Dense(hidden)
+        self.score_1.build((1,))
+        self.dense_1 = tfkl.Dense(hidden)
+        self.dense_1.build((hidden,))
+        self.bn_1 = tfkl.BatchNormalization()
+
+        # define a layer of the neural net with two pathways
+        self.score_2 = tfkl.Dense(np.prod(design_shape))
+        self.score_2.build((1,))
+        self.dense_2 = tfkl.Dense(np.prod(design_shape))
+        self.dense_2.build((hidden,))
 
     def sample(self, y, **kwargs):
         """Generate samples of designs X that have a score y where y is
@@ -177,13 +215,18 @@ class DiscreteGenerator(tf.keras.Sequential):
             conditioned on the score y achieved by that design
         """
 
-        inputs = tf.cast(y, tf.float32)
-        logits = super(DiscreteGenerator, self).__call__(inputs, **kwargs)
+        y = tf.cast(y, tf.float32)
+        x = self.score_0(y, **kwargs)
+        x = tf.nn.relu(self.bn_0(x, **kwargs))
+        x = self.dense_1(x, **kwargs) * self.score_1(y, **kwargs)
+        x = tf.nn.relu(self.bn_1(x, **kwargs))
+        x = self.dense_2(x, **kwargs) * self.score_2(y, **kwargs)
+        logits = tf.reshape(x, [tf.shape(y)[0], *self.design_shape])
         return tfpd.RelaxedOneHotCategorical(self.temp, logits).sample()
 
 
-class ContinuousGenerator(tf.keras.Sequential):
-    """A Fully Connected Network with 2 trainable layers"""
+class ContinuousGenerator(tf.keras.Model):
+    """A Fully Connected Network conditioned on a score"""
 
     def __init__(self,
                  design_shape,
@@ -194,20 +237,39 @@ class ContinuousGenerator(tf.keras.Sequential):
 
         Args:
 
-        inp_size: int
-            the size of the input vector of this network
-        out_size: int
-            the size of the output vector of this network
+        design_shape: List[int]
+            a list of tuple of integers that represents the shape of a
+            single design for a particular task
+        latent_size: int
+            the number of hidden units in the latent space used to
+            condition the neural network generator
         hidden: int
-            the global hidden size of the network
+            the number of hidden units in every layer of the
+            discriminator neural network
         """
 
-        self.latent_size = latent_size
-        super(ContinuousGenerator, self).__init__([
-            tfkl.Dense(hidden, input_shape=(latent_size + 1,)),
-            tfkl.LeakyReLU(),
-            tfkl.Dense(np.prod(design_shape)),
-            tfkl.Reshape(design_shape)])
+        super(ContinuousGenerator, self).__init__()
+        self.design_shape = design_shape
+
+        # define a layer of the neural net with two pathways
+        self.score_0 = tfkl.Dense(hidden)
+        self.score_0.build((1,))
+        self.dense_0 = tfkl.Dense(hidden)
+        self.dense_0.build((latent_size,))
+        self.bn_0 = tfkl.BatchNormalization()
+
+        # define a layer of the neural net with two pathways
+        self.score_1 = tfkl.Dense(hidden)
+        self.score_1.build((1,))
+        self.dense_1 = tfkl.Dense(hidden)
+        self.dense_1.build((hidden,))
+        self.bn_1 = tfkl.BatchNormalization()
+
+        # define a layer of the neural net with two pathways
+        self.score_2 = tfkl.Dense(np.prod(design_shape))
+        self.score_2.build((1,))
+        self.dense_2 = tfkl.Dense(np.prod(design_shape))
+        self.dense_2.build((hidden,))
 
     def sample(self, y, **kwargs):
         """Generate samples of designs X that have a score y where y is
@@ -227,5 +289,11 @@ class ContinuousGenerator(tf.keras.Sequential):
         """
 
         z = tf.random.normal([tf.shape(y)[0], self.latent_size])
-        inputs = tf.cast(tf.concat([z, y], 1), tf.float32)
-        return super(ContinuousGenerator, self).__call__(inputs, **kwargs)
+        x = tf.cast(z, tf.float32)
+        y = tf.cast(y, tf.float32)
+        x = self.dense_0(x, **kwargs) * self.score_0(y, **kwargs)
+        x = tf.nn.relu(self.bn_0(x, **kwargs))
+        x = self.dense_1(x, **kwargs) * self.score_1(y, **kwargs)
+        x = tf.nn.relu(self.bn_1(x, **kwargs))
+        x = self.dense_2(x, **kwargs) * self.score_2(y, **kwargs)
+        return tf.reshape(x, [tf.shape(y)[0], *self.design_shape])
