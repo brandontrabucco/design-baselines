@@ -1,5 +1,6 @@
 from design_baselines.utils import spearman
-from design_baselines.utils import add_noise
+from design_baselines.utils import add_discrete_noise
+from design_baselines.utils import add_continuous_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
@@ -20,7 +21,9 @@ class ConservativeEnsemble(tf.Module):
                  perturbation_lr=0.001,
                  perturbation_steps=100,
                  is_discrete=False,
-                 input_noise=0.0):
+                 noise_std=0.0,
+                 keep=0.0,
+                 temp=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -60,7 +63,9 @@ class ConservativeEnsemble(tf.Module):
         self.perturbation_lr = perturbation_lr
         self.perturbation_steps = perturbation_steps
         self.is_discrete = is_discrete
-        self.input_noise = input_noise
+        self.noise_std = noise_std
+        self.keep = keep
+        self.temp = temp
 
     def get_distribution(self,
                          x,
@@ -156,7 +161,10 @@ class ConservativeEnsemble(tf.Module):
             log_alpha = self.log_alphas[i]
             alpha_optim = self.alpha_optims[i]
 
-            x0 = add_noise(x, self.input_noise, self.is_discrete)
+            # corrupt the inputs with noise
+            x0 = add_discrete_noise(x, self.keep, self.temp) \
+                if self.is_discrete else add_continuous_noise(x, self.noise_std)
+
             with tf.GradientTape(persistent=True) as tape:
 
                 # calculate the prediction error and accuracy of the model
@@ -227,15 +235,19 @@ class ConservativeEnsemble(tf.Module):
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
 
+            # corrupt the inputs with noise
+            x0 = add_discrete_noise(x, self.keep, self.temp) \
+                if self.is_discrete else add_continuous_noise(x, self.noise_std)
+
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(x, training=False)
+            d = fm.get_distribution(x0, training=False)
             nll = -d.log_prob(y)
 
             # evaluate how correct the rank fo the model predictions are
             rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
             # calculate the conservative gap
-            perturb = tf.stop_gradient(self.optimize(x, fm))
+            perturb = tf.stop_gradient(self.optimize(x0, fm))
 
             # calculate the prediction error and accuracy of the model
             perturb_d = fm.get_distribution(perturb, training=False)
