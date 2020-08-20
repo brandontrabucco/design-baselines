@@ -477,7 +477,7 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "epochs_per_iteration": 2,
         "iterations": 100,
         "exploration_samples": 100,
-        "exploration_rate": 10.0,
+        "exploration_rate": 5.0,
         "thompson_samples": 100,
         "solver_samples": 100},
         num_samples=num_samples,
