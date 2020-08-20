@@ -1,14 +1,15 @@
+from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
 import tensorflow_probability as tfp
 
 
-@tf.function
+@tf.function(experimental_relax_shapes=True)
 def get_rank(x):
     return tf.cast(tf.argsort(tf.argsort(
         x, axis=-1, direction="ASCENDING"), axis=-1) + 1, x.dtype)
 
 
-@tf.function
+@tf.function(experimental_relax_shapes=True)
 def spearman(a, b):
     """Computes the Spearman Rank-Correlation Coefficient for two
     continuous-valued tensors with the same shape
@@ -40,8 +41,8 @@ def spearman(a, b):
     return cov / (sd_x * sd_y)
 
 
-@tf.function
-def add_noise(x, extent, is_discrete=False):
+@tf.function(experimental_relax_shapes=True)
+def add_discrete_noise(x, keep=1.0, temp=1.0):
     """Add noise to a input that is either a continuous value or a probability
     distribution over discrete categorical values
 
@@ -50,12 +51,12 @@ def add_noise(x, extent, is_discrete=False):
     x: tf.Tensor
         a tensor that will have noise added to it, such that the resulting
         tensor is sound given its definition
-    extent: float
-        the extent to which noise will be added, which is positive-valued when
-        continuous and in (0, 1) when continuous
-    is_discrete: bool
-        determines the type of noise to add to the input, such as a mixture of
-        distributions, when discrete x is provided
+    keep: float
+        the amount of probability mass to keep on the element that is activated
+        teh rest is redistributed evenly to all elements
+    temp: float
+        the temperature of teh gumbel distribution that is used to corrupt
+        the input probabilities x
 
     Returns:
 
@@ -64,10 +65,31 @@ def add_noise(x, extent, is_discrete=False):
         the original tensor (such as a probability distribution)
     """
 
-    if is_discrete:
-        noise = tf.random.uniform(tf.shape(x))
-        noise = noise / tf.reduce_sum(noise, axis=-1, keepdims=True)
-        return (1.0 - extent) * x + extent * noise
-    else:
-        noise = tf.random.normal(tf.shape(x))
-        return x + extent * noise
+    noise = tf.ones_like(x)
+    noise = noise / tf.reduce_sum(noise, axis=-1, keepdims=True)
+    return tfpd.RelaxedOneHotCategorical(
+        temp, probs=keep * x + (1.0 - keep) * noise).sample()
+
+
+@tf.function(experimental_relax_shapes=True)
+def add_continuous_noise(x, noise_std=1.0):
+    """Add noise to a input that is either a continuous value or a probability
+    distribution over discrete categorical values
+
+    Args:
+
+    x: tf.Tensor
+        a tensor that will have noise added to it, such that the resulting
+        tensor is sound given its definition
+    noise_std: float
+        the standard deviation of the gaussian noise that will be added
+        to the continuous design parameters x
+
+    Returns:
+
+    noisy_x: tf.Tensor
+        a tensor that has noise added to it, which has the interpretation of
+        the original tensor (such as a probability distribution)
+    """
+
+    return x + noise_std * tf.random.normal(tf.shape(x))

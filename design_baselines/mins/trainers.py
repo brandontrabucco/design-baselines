@@ -1,5 +1,6 @@
 from design_baselines.utils import spearman
-from design_baselines.utils import add_noise
+from design_baselines.utils import add_discrete_noise
+from design_baselines.utils import add_continuous_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
@@ -12,7 +13,9 @@ class Ensemble(tf.Module):
                  forward_model_optim=tf.keras.optimizers.Adam,
                  forward_model_lr=0.001,
                  is_discrete=False,
-                 input_noise=0.0):
+                 noise_std=0.0,
+                 keep=0.0,
+                 temp=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -36,7 +39,9 @@ class Ensemble(tf.Module):
 
         # create machinery for adding noise to the inputs
         self.is_discrete = is_discrete
-        self.input_noise = input_noise
+        self.noise_std = noise_std
+        self.keep = keep
+        self.temp = temp
 
     def get_distribution(self,
                          x,
@@ -99,7 +104,10 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
             fm_optim = self.forward_model_optims[i]
 
-            x0 = add_noise(x, self.input_noise, self.is_discrete)
+            # corrupt the inputs with noise
+            x0 = add_discrete_noise(x, self.keep, self.temp) \
+                if self.is_discrete else add_continuous_noise(x, self.noise_std)
+
             with tf.GradientTape(persistent=True) as tape:
 
                 # calculate the prediction error and accuracy of the model
@@ -147,6 +155,10 @@ class Ensemble(tf.Module):
 
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
+
+            # corrupt the inputs with noise
+            x0 = add_discrete_noise(x, self.keep, self.temp) \
+                if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
             # calculate the prediction error and accuracy of the model
             d = fm.get_distribution(x, training=False)
@@ -265,7 +277,9 @@ class WeightedGAN(tf.Module):
                  discriminator_beta_1=0.5,
                  discriminator_beta_2=0.999,
                  is_discrete=False,
-                 input_noise=0.0):
+                 noise_std=0.0,
+                 keep=0.0,
+                 temp=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -299,7 +313,9 @@ class WeightedGAN(tf.Module):
 
         # create machinery for adding noise to the inputs
         self.is_discrete = is_discrete
-        self.input_noise = input_noise
+        self.noise_std = noise_std
+        self.keep = keep
+        self.temp = temp
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
@@ -326,13 +342,14 @@ class WeightedGAN(tf.Module):
 
         statistics = dict()
 
-        x_real = add_noise(x, self.input_noise, self.is_discrete)
+        # corrupt the inputs with noise
+        x_real = add_discrete_noise(x, self.keep, self.temp) \
+            if self.is_discrete else add_continuous_noise(x, self.noise_std)
+
         with tf.GradientTape() as tape:
 
             # sample designs from the generator
-            x_fake = self.generator.sample(y, training=True)
-
-            # evaluate the sampled designs using the discriminator
+            x_fake = self.generator.sample(y, temp=self.temp, training=True)
             d_real = self.discriminator.loss(x_real, y, real=True, training=True)
             d_fake = self.discriminator.loss(x_fake, y, real=False, training=True)
 
@@ -357,10 +374,8 @@ class WeightedGAN(tf.Module):
         with tf.GradientTape() as tape:
 
             # sample designs from the generator
-            x_fake = self.generator.sample(y, training=True)
-
-            # evaluate the sampled designs using the discriminator
-            d_fake = self.discriminator.loss(x_fake, y, real=True, training=True)
+            x_fake = self.generator.sample(y, training=False)
+            d_fake = self.discriminator.loss(x_fake, y, real=True, training=False)
 
             # build the total loss
             total_loss = tf.reduce_mean(w * d_fake)
@@ -393,11 +408,13 @@ class WeightedGAN(tf.Module):
 
         statistics = dict()
 
-        # sample designs from the generator
-        x_fake = self.generator.sample(y, training=False)
+        # corrupt the inputs with noise
+        x_real = add_discrete_noise(x, self.keep, self.temp) \
+            if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
-        # evaluate the sampled designs using the discriminator
-        d_real = self.discriminator.loss(x, y, real=True, training=False)
+        # sample designs from the generator
+        x_fake = self.generator.sample(y, temp=self.temp, training=False)
+        d_real = self.discriminator.loss(x_real, y, real=True, training=False)
         d_fake = self.discriminator.loss(x_fake, y, real=False, training=False)
 
         # calculate discriminative accuracy
@@ -409,7 +426,7 @@ class WeightedGAN(tf.Module):
         statistics[f'discriminator/validate/acc_real'] = acc_real
         statistics[f'discriminator/validate/acc_fake'] = acc_fake
         statistics[f'generator/validate/x_fake'] = x_fake
-        statistics[f'generator/validate/x_real'] = x
+        statistics[f'generator/validate/x_real'] = x_real
 
         return statistics
 

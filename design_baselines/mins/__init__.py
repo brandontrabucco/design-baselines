@@ -69,10 +69,10 @@ def model_inversion(config):
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
         exploration_generator = DiscreteGenerator(
-            task.input_shape, config['temperature'],
+            task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
         exploitation_generator = DiscreteGenerator(
-            task.input_shape, config['temperature'],
+            task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
     else:
@@ -97,7 +97,9 @@ def model_inversion(config):
         discriminator_beta_1=config['discriminator_beta_1'],
         discriminator_beta_2=config['discriminator_beta_2'],
         is_discrete=config['is_discrete'],
-        input_noise=config['input_noise'])
+        noise_std=config.get('noise_std', 0.0),
+        keep=config.get('keep', 1.0),
+        temp=config.get('temp', 0.001))
 
     # create a manager for saving algorithms state to the disk
     exploration_gan_manager = tf.train.CheckpointManager(
@@ -116,7 +118,9 @@ def model_inversion(config):
         discriminator_beta_1=config['discriminator_beta_1'],
         discriminator_beta_2=config['discriminator_beta_2'],
         is_discrete=config['is_discrete'],
-        input_noise=config['input_noise'])
+        noise_std=config.get('noise_std', 0.0),
+        keep=config.get('keep', 1.0),
+        temp=config.get('temp', 0.001))
 
     # create a manager for saving algorithms state to the disk
     exploitation_gan_manager = tf.train.CheckpointManager(
@@ -174,13 +178,7 @@ def model_inversion(config):
             tilde_y, keepdims=True), [config['thompson_samples'], 1])
 
         # generate samples for exploration
-        if config['is_discrete']:
-            exploration_generator.temp = 0.001
-        solver_xs = exploration_generator.sample(condition_ys)
-        if config['is_discrete']:
-            exploration_generator.temp = config['temperature']
-
-        # evaluate samples using an ensemble
+        solver_xs = exploration_generator.sample(condition_ys, temp=0.001)
         actual_ys = ensemble.get_distribution(solver_xs).mean() \
             if config['fully_offline'] else task.score(solver_xs)
 
@@ -213,13 +211,7 @@ def model_inversion(config):
             y, keepdims=True), [config['solver_samples'], 1])
 
         # generate samples for exploitation
-        if config['is_discrete']:
-            exploration_generator.temp = 0.001
-        solver_xs = exploration_generator.sample(condition_ys)
-        if config['is_discrete']:
-            exploration_generator.temp = config['temperature']
-
-        # evaluate using the ground truth score function
+        solver_xs = exploration_generator.sample(condition_ys, temp=0.001)
         actual_ys = task.score(solver_xs)
 
         # record score percentiles
