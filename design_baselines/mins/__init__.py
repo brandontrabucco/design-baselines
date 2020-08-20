@@ -44,7 +44,9 @@ def model_inversion(config):
                             forward_model_optim=tf.keras.optimizers.Adam,
                             forward_model_lr=config['ensemble_lr'],
                             is_discrete=config['is_discrete'],
-                            input_noise=config['input_noise'])
+                            noise_std=config.get('noise_std', 0.0),
+                            keep=config.get('keep', 1.0),
+                            temp=config.get('temp', 0.001))
 
         # create a manager for saving algorithms state to the disk
         ensemble_manager = tf.train.CheckpointManager(
@@ -151,6 +153,11 @@ def model_inversion(config):
 
     # train the gan using an importance sampled data set
     for iteration in range(config['iterations']):
+
+        # anneal the temperature linearly to zero wile training
+        if config['is_discrete']:
+            temp = config['temp'] * (1. - iteration / config['iterations'])
+            exploration_gan.temp = exploitation_gan.temp = temp
 
         # generate synthetic x paired with high performing scores
         tilde_x, tilde_y = get_synthetic_data(
