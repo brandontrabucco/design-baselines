@@ -161,7 +161,7 @@ class Ensemble(tf.Module):
                 if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(x, training=False)
+            d = fm.get_distribution(x0, training=False)
             nll = -d.log_prob(y)
 
             # evaluate how correct the rank fo the model predictions are

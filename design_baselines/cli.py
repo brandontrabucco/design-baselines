@@ -63,7 +63,7 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "initial_alpha": 0.01,
         "alpha_lr": 0.0,
         "perturbation_lr": 1.0,
-        "perturbation_steps": 100,
+        "perturbation_steps": tune.grid_search([0, 10, 50, 100, 500, 1000]),
         "solver_samples": 128,
         "solver_lr": 1.0,
         "solver_steps": 1000},
