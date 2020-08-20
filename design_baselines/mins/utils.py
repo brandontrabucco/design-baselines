@@ -22,7 +22,7 @@ def adaptive_temp_v2(scores_np):
     max_score = inverse_arr.max()
     scores_new = inverse_arr - max_score
     quantile_ninety = np.quantile(scores_new, q=0.9)
-    return np.abs(quantile_ninety)
+    return np.maximum(np.abs(quantile_ninety), 0.001)
 
 
 def softmax(arr,
