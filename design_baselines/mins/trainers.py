@@ -326,14 +326,14 @@ class WeightedGAN(tf.Module):
 
         statistics = dict()
 
-        x0 = add_noise(x, self.input_noise, self.is_discrete)
+        x_real = add_noise(x, self.input_noise, self.is_discrete)
         with tf.GradientTape() as tape:
 
             # sample designs from the generator
             x_fake = self.generator.sample(y, training=True)
 
             # evaluate the sampled designs using the discriminator
-            d_real = self.discriminator.loss(x0, y, real=True, training=True)
+            d_real = self.discriminator.loss(x_real, y, real=True, training=True)
             d_fake = self.discriminator.loss(x_fake, y, real=False, training=True)
 
             # calculate discriminative accuracy
@@ -351,6 +351,8 @@ class WeightedGAN(tf.Module):
         statistics[f'discriminator/train/d_fake'] = d_fake
         statistics[f'discriminator/train/acc_real'] = acc_real
         statistics[f'discriminator/train/acc_fake'] = acc_fake
+        statistics[f'generator/train/x_fake'] = x_fake
+        statistics[f'generator/train/x_real'] = x_real
 
         with tf.GradientTape() as tape:
 
@@ -406,6 +408,8 @@ class WeightedGAN(tf.Module):
         statistics[f'discriminator/validate/d_fake'] = d_fake
         statistics[f'discriminator/validate/acc_real'] = acc_real
         statistics[f'discriminator/validate/acc_fake'] = acc_fake
+        statistics[f'generator/validate/x_fake'] = x_fake
+        statistics[f'generator/validate/x_real'] = x
 
         return statistics
 

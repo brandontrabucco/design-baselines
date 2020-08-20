@@ -222,7 +222,8 @@ class DiscreteGenerator(tf.keras.Model):
         x = tf.nn.relu(self.bn_1(x, **kwargs))
         x = self.dense_2(x, **kwargs) * self.score_2(y, **kwargs)
         logits = tf.reshape(x, [tf.shape(y)[0], *self.design_shape])
-        return tfpd.RelaxedOneHotCategorical(self.temp, logits).sample()
+        return tfpd.RelaxedOneHotCategorical(
+            self.temp, logits=tf.math.log_softmax(logits)).sample()
 
 
 class ContinuousGenerator(tf.keras.Model):
