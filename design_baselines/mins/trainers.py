@@ -352,13 +352,17 @@ class WeightedGAN(tf.Module):
             x_fake = self.generator.sample(y, temp=self.temp, training=True)
             d_real = self.discriminator.loss(x_real, y, real=True, training=True)
             d_fake = self.discriminator.loss(x_fake, y, real=False, training=True)
+            penalty = self.discriminator.penalty(x_real, y, training=False)
 
             # calculate discriminative accuracy
             acc_real = tf.cast(d_real < 0.25, tf.float32)
             acc_fake = tf.cast(d_fake < 0.25, tf.float32)
 
             # build the total loss
-            total_loss = tf.reduce_mean(w * (d_real + d_fake))
+            total_loss = tf.reduce_mean(w * (
+                d_real +
+                d_fake +
+                10.0 * penalty))
 
         var_list = self.discriminator.trainable_variables
         grads = tape.gradient(total_loss, var_list)
@@ -366,6 +370,7 @@ class WeightedGAN(tf.Module):
 
         statistics[f'discriminator/train/d_real'] = d_real
         statistics[f'discriminator/train/d_fake'] = d_fake
+        statistics[f'discriminator/train/penalty'] = penalty
         statistics[f'discriminator/train/acc_real'] = acc_real
         statistics[f'discriminator/train/acc_fake'] = acc_fake
         statistics[f'generator/train/x_fake'] = x_fake
@@ -416,6 +421,7 @@ class WeightedGAN(tf.Module):
         x_fake = self.generator.sample(y, temp=self.temp, training=False)
         d_real = self.discriminator.loss(x_real, y, real=True, training=False)
         d_fake = self.discriminator.loss(x_fake, y, real=False, training=False)
+        penalty = self.discriminator.penalty(x_real, y, training=False)
 
         # calculate discriminative accuracy
         acc_real = tf.cast(d_real < 0.25, tf.float32)
@@ -423,6 +429,7 @@ class WeightedGAN(tf.Module):
 
         statistics[f'discriminator/validate/d_real'] = d_real
         statistics[f'discriminator/validate/d_fake'] = d_fake
+        statistics[f'discriminator/validate/penalty'] = penalty
         statistics[f'discriminator/validate/acc_real'] = acc_real
         statistics[f'discriminator/validate/acc_fake'] = acc_fake
         statistics[f'generator/validate/x_fake'] = x_fake

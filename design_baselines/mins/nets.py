@@ -128,6 +128,42 @@ class Discriminator(tf.keras.Model):
         self.dense_3 = tfkl.Dense(1)
         self.dense_3.build((hidden,))
 
+    def penalty(self, h, y, **kwargs):
+        """Calculate a gradient penalty for the discriminator and return
+        a loss that will be minimized
+
+        Args:
+
+        X: tf.Tensor
+            a design the generator is trained to sample from a distribution
+            conditioned on the score y achieved by that design
+        y: tf.Tensor
+            a batch of scalar scores wherein the generator is trained to
+            produce designs that have score y
+
+        Args:
+
+        penalty: tf.Tensor
+            a tensor that represents the penalty for gradients of the
+            discriminator for regularizing the discriminator
+        """
+
+        h = tf.cast(h, tf.float32)
+        y = tf.cast(y, tf.float32)
+        h = tf.reshape(h, [tf.shape(y)[0], np.prod(self.design_shape)])
+        with tf.GradientTape() as tape:
+            tape.watch(h)
+            x = self.dense_0(h, **kwargs) * self.score_0(y, **kwargs)
+            x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
+            x = self.dense_1(x, **kwargs) * self.score_1(y, **kwargs)
+            x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
+            x = self.dense_2(x, **kwargs) * self.score_2(y, **kwargs)
+            x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
+            x = self.dense_3(x, **kwargs) * self.score_3(y, **kwargs)
+        grads = tape.gradient(x, h)
+        norm = tf.linalg.norm(grads, axis=-1, keepdims=True)
+        return (1. - norm) ** 2
+
     def loss(self, x, y, real=True, **kwargs):
         """Use a neural network to discriminate the log probability that a
         sampled design X has score y
