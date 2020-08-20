@@ -1,4 +1,5 @@
 from design_baselines.utils import spearman
+from design_baselines.utils import add_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
@@ -9,7 +10,9 @@ class Ensemble(tf.Module):
     def __init__(self,
                  forward_models,
                  forward_model_optim=tf.keras.optimizers.Adam,
-                 forward_model_lr=0.001):
+                 forward_model_lr=0.001,
+                 is_discrete=False,
+                 input_noise=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -27,10 +30,13 @@ class Ensemble(tf.Module):
         self.forward_models = forward_models
         self.bootstraps = len(forward_models)
 
-        # create optimizers for each model in the ensemble
         self.forward_model_optims = [
             forward_model_optim(learning_rate=forward_model_lr)
             for i in range(self.bootstraps)]
+
+        # create machinery for adding noise to the inputs
+        self.is_discrete = is_discrete
+        self.input_noise = input_noise
 
     def get_distribution(self,
                          x,
@@ -40,7 +46,7 @@ class Ensemble(tf.Module):
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
 
         Returns:
@@ -52,12 +58,12 @@ class Ensemble(tf.Module):
         # get the distribution parameters for all models
         params = defaultdict(list)
         for fm in self.forward_models:
-            for key, val in fm.get_params(x, **kwargs).items():
+            for key, val in fm.get_parameters(x, **kwargs).items():
                 params[key].append(val)
 
         # stack the parameters in a new component axis
         for key, val in params.items():
-            params[key] = tf.stack(val, axis=-1)
+            params[key] = tf.stack(val, axis=1)
 
         # build the mixture distribution using the family of component one
         weights = tf.fill([self.bootstraps], 1 / self.bootstraps)
@@ -66,7 +72,7 @@ class Ensemble(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
-                   X,
+                   x,
                    y,
                    b):
         """Perform a training step of gradient descent on an ensemble
@@ -74,7 +80,7 @@ class Ensemble(tf.Module):
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of training labels shaped like [batch_size, 1]
@@ -93,16 +99,17 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
             fm_optim = self.forward_model_optims[i]
 
+            x0 = add_noise(x, self.input_noise, self.is_discrete)
             with tf.GradientTape(persistent=True) as tape:
 
                 # calculate the prediction error and accuracy of the model
-                d = fm.get_distribution(X, training=True)
-                nll = -d.log_prob(y)[:, 0]
+                d = fm.get_distribution(x0, training=True)
+                nll = -d.log_prob(y)
 
                 # evaluate how correct the rank fo the model predictions are
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
-                # build the total loss and weight by the bootstrap
+                # build the total loss
                 total_loss = tf.math.divide_no_nan(
                     tf.reduce_sum(b[:, i] * nll), tf.reduce_sum(b[:, i]))
 
@@ -110,20 +117,22 @@ class Ensemble(tf.Module):
             fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
 
             statistics[f'oracle_{i}/train/nll'] = nll
+            statistics[f'oracle_{i}/train/max_logstd'] = fm.max_logstd
+            statistics[f'oracle_{i}/train/min_logstd'] = fm.min_logstd
             statistics[f'oracle_{i}/train/rank_corr'] = rank_correlation
 
         return statistics
 
     @tf.function(experimental_relax_shapes=True)
     def validate_step(self,
-                      X,
+                      x,
                       y):
         """Perform a validation step on an ensemble of models
         without using bootstrapping weights
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of validation inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of validation labels shaped like [batch_size, 1]
@@ -140,8 +149,8 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
 
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(X, training=False)
-            nll = -d.log_prob(y)[:, 0]
+            d = fm.get_distribution(x, training=False)
+            nll = -d.log_prob(y)
 
             # evaluate how correct the rank fo the model predictions are
             rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
@@ -168,8 +177,8 @@ class Ensemble(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for X, y, b in dataset:
-            for name, tensor in self.train_step(X, y, b).items():
+        for x, y, b in dataset:
+            for name, tensor in self.train_step(x, y, b).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -192,8 +201,8 @@ class Ensemble(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for X, y in dataset:
-            for name, tensor in self.validate_step(X, y).items():
+        for x, y in dataset:
+            for name, tensor in self.validate_step(x, y).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -254,7 +263,9 @@ class WeightedGAN(tf.Module):
                  generator_beta_2=0.999,
                  discriminator_lr=0.001,
                  discriminator_beta_1=0.5,
-                 discriminator_beta_2=0.999):
+                 discriminator_beta_2=0.999,
+                 is_discrete=False,
+                 input_noise=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -275,6 +286,8 @@ class WeightedGAN(tf.Module):
         super().__init__()
         self.generator = generator
         self.discriminator = discriminator
+
+        # create optimizers for the generator and discriminator
         self.generator_optim = tf.keras.optimizers.Adam(
             learning_rate=generator_lr,
             beta_1=generator_beta_1,
@@ -283,6 +296,10 @@ class WeightedGAN(tf.Module):
             learning_rate=discriminator_lr,
             beta_1=discriminator_beta_1,
             beta_2=discriminator_beta_2)
+
+        # create machinery for adding noise to the inputs
+        self.is_discrete = is_discrete
+        self.input_noise = input_noise
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
@@ -309,13 +326,14 @@ class WeightedGAN(tf.Module):
 
         statistics = dict()
 
+        x0 = add_noise(x, self.input_noise, self.is_discrete)
         with tf.GradientTape() as tape:
 
             # sample designs from the generator
             x_fake = self.generator.sample(y, training=True)
 
             # evaluate the sampled designs using the discriminator
-            d_real = self.discriminator.loss(x, y, real=True, training=True)
+            d_real = self.discriminator.loss(x0, y, real=True, training=True)
             d_fake = self.discriminator.loss(x_fake, y, real=False, training=True)
 
             # calculate discriminative accuracy

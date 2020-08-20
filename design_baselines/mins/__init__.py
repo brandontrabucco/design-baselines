@@ -42,7 +42,9 @@ def model_inversion(config):
         # create a trainer for a forward model with a conservative objective
         ensemble = Ensemble(forward_models,
                             forward_model_optim=tf.keras.optimizers.Adam,
-                            forward_model_lr=config['ensemble_lr'])
+                            forward_model_lr=config['ensemble_lr'],
+                            is_discrete=config['is_discrete'],
+                            input_noise=config['input_noise'])
 
         # create a manager for saving algorithms state to the disk
         ensemble_manager = tf.train.CheckpointManager(
@@ -93,7 +95,9 @@ def model_inversion(config):
         generator_beta_2=config['generator_beta_2'],
         discriminator_lr=config['discriminator_lr'],
         discriminator_beta_1=config['discriminator_beta_1'],
-        discriminator_beta_2=config['discriminator_beta_2'])
+        discriminator_beta_2=config['discriminator_beta_2'],
+        is_discrete=config['is_discrete'],
+        input_noise=config['input_noise'])
 
     # create a manager for saving algorithms state to the disk
     exploration_gan_manager = tf.train.CheckpointManager(
@@ -110,7 +114,9 @@ def model_inversion(config):
         generator_beta_2=config['generator_beta_2'],
         discriminator_lr=config['discriminator_lr'],
         discriminator_beta_1=config['discriminator_beta_1'],
-        discriminator_beta_2=config['discriminator_beta_2'])
+        discriminator_beta_2=config['discriminator_beta_2'],
+        is_discrete=config['is_discrete'],
+        input_noise=config['input_noise'])
 
     # create a manager for saving algorithms state to the disk
     exploitation_gan_manager = tf.train.CheckpointManager(
