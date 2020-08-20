@@ -173,14 +173,22 @@ def model_inversion(config):
         condition_ys = tf.tile(tf.reduce_max(
             tilde_y, keepdims=True), [config['thompson_samples'], 1])
 
-        # generate samples and evaluate using an ensemble
+        # generate samples for exploration
+        if config['is_discrete']:
+            exploration_generator.temp = 0.001
         solver_xs = exploration_generator.sample(condition_ys)
+        if config['is_discrete']:
+            exploration_generator.temp = config['temperature']
+
+        # evaluate samples using an ensemble
         actual_ys = ensemble.get_distribution(solver_xs).mean() \
             if config['fully_offline'] else task.score(solver_xs)
 
         # record score percentiles
-        logger.record("exploration/condition_ys", condition_ys * task.y_std + task.y_mean, iteration)
-        logger.record("exploration/actual_ys", actual_ys * task.y_std + task.y_mean, iteration)
+        logger.record("exploration/condition_ys",
+                      task.denormalize_y(condition_ys), iteration)
+        logger.record("exploration/actual_ys",
+                      task.denormalize_y(actual_ys), iteration)
 
         # concatenate newly paired samples with the existing data set
         x = tf.concat([x, solver_xs], 0)
@@ -204,13 +212,21 @@ def model_inversion(config):
         condition_ys = tf.tile(tf.reduce_max(
             y, keepdims=True), [config['solver_samples'], 1])
 
-        # generate samples and evaluate using the task
+        # generate samples for exploitation
+        if config['is_discrete']:
+            exploration_generator.temp = 0.001
         solver_xs = exploration_generator.sample(condition_ys)
+        if config['is_discrete']:
+            exploration_generator.temp = config['temperature']
+
+        # evaluate using the ground truth score function
         actual_ys = task.score(solver_xs)
 
         # record score percentiles
-        logger.record("exploitation/condition_ys", condition_ys * task.y_std + task.y_mean, iteration)
-        logger.record("exploitation/actual_ys", actual_ys * task.y_std + task.y_mean, iteration)
+        logger.record("exploitation/condition_ys",
+                      task.denormalize_y(condition_ys), iteration)
+        logger.record("exploitation/actual_ys",
+                      task.denormalize_y(actual_ys), iteration)
 
     # save every model to the disk
     exploration_gan_manager.save()
