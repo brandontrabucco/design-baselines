@@ -60,12 +60,12 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.0,
-        "initial_alpha": 0.01,
+        "initial_alpha": tune.grid_search([0.0, 0.0001, 0.001, 0.01, 0.1]),
         "alpha_lr": 0.0,
-        "perturbation_lr": 1.0,
+        "perturbation_lr": tune.grid_search([0.1, 0.5, 1.0, 2.0, 5.0]),
         "perturbation_steps": tune.grid_search([0, 10, 50, 100, 500, 1000]),
         "solver_samples": 128,
-        "solver_lr": 1.0,
+        "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 1000},
         num_samples=num_samples,
         local_dir=local_dir,
@@ -120,12 +120,12 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.0,
-        "initial_alpha": 0.001,
+        "initial_alpha": tune.grid_search([0.0, 0.0001, 0.001, 0.01, 0.1]),
         "alpha_lr": 0.0,
-        "perturbation_lr": 1.0,
-        "perturbation_steps": 100,
+        "perturbation_lr": tune.grid_search([0.1, 0.5, 1.0, 2.0, 5.0]),
+        "perturbation_steps": tune.grid_search([0, 10, 50, 100, 500, 1000]),
         "solver_samples": 128,
-        "solver_lr": 1.0,
+        "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 1000},
         num_samples=num_samples,
         local_dir=local_dir,
@@ -179,12 +179,12 @@ def conservative_ensemble_superconductor(local_dir, cpus, gpus, num_parallel, nu
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.0,
-        "initial_alpha": 0.01,
+        "initial_alpha": tune.grid_search([0.0, 0.0001, 0.001, 0.01, 0.1]),
         "alpha_lr": 0.0,
-        "perturbation_lr": 1.0,
-        "perturbation_steps": 100,
+        "perturbation_lr": tune.grid_search([0.1, 0.5, 1.0, 2.0, 5.0]),
+        "perturbation_steps": tune.grid_search([0, 10, 50, 100, 500, 1000]),
         "solver_samples": 128,
-        "solver_lr": 1.0,
+        "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 1000},
         num_samples=num_samples,
         local_dir=local_dir,
@@ -656,7 +656,7 @@ def plot(dir, tag, xlabel, ylabel):
     # locate the params of variation in this experiment
     params_of_variation = []
     for key, val in all_params.items():
-        if len(val) > 1:
+        if len(val) > 1 and not isinstance(val[0], dict):
             params_of_variation.append(key)
 
     # get the task and algorithm name
