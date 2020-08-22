@@ -10,30 +10,6 @@ import numpy as np
 import os
 
 
-CONSERVATIVE_ENSEMBLE_PARAMS = {
-    "logging_dir": "data",
-    "task": "Superconductor-v0",
-    "task_kwargs": {},
-    "is_discrete": False,
-    "val_size": 200,
-    "batch_size": 128,
-    "epochs": 50,
-    "activations": (('relu', 'relu'), ('tanh', 'tanh')),
-    "hidden_size": 2048,
-    "initial_max_std": 0.2,
-    "initial_min_std": 0.1,
-    "forward_model_lr": 0.001,
-    "target_conservative_gap": 0.0,
-    "initial_alpha": 0.001,
-    "alpha_lr": 0.0,
-    "perturbation_lr": 1.0,
-    "perturbation_steps": 100,
-    "solver_samples": 128,
-    "solver_lr": 1.0,
-    "solver_steps": 100
-}
-
-
 def conservative_ensemble(config):
     """Train a forward model and perform model based optimization
     using a conservative objective function
