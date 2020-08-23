@@ -8,8 +8,6 @@ class StaticGraphTask(Task):
 
     def __init__(self,
                  task_name,
-                 normalize_x=True,
-                 normalize_y=True,
                  **task_kwargs):
         """An interface to a static-graph task which includes a validation
         set and a non differentiable score function
@@ -27,51 +25,21 @@ class StaticGraphTask(Task):
         # use the design_bench registry to make a task
         self.wrapped_task = make(task_name, **task_kwargs)
 
-        if normalize_x:
-            x = self.wrapped_task.x.astype(np.float32)
-            self.x_mean = np.mean(x, axis=0, keepdims=True)
-            self.x_std = np.std(x - self.x_mean, axis=0, keepdims=True)
-
-        else:
-            self.x_mean = np.zeros([1, 1], dtype=np.float32)
-            self.x_std = np.ones([1, 1], dtype=np.float32)
-
-        if normalize_y:
-            y = self.wrapped_task.y.astype(np.float32).reshape([-1, 1])
-            self.y_mean = np.mean(y, axis=0, keepdims=True)
-            self.y_std = np.std(y - self.y_mean, axis=0, keepdims=True)
-
-        else:
-            self.y_mean = np.zeros([1, 1], dtype=np.float32)
-            self.y_std = np.ones([1, 1], dtype=np.float32)
-
-    def normalize_x(self, x):
-        return (x - self.x_mean) / self.x_std
-
-    def normalize_y(self, y):
-        return (y - self.y_mean) / self.y_std
-
-    def denormalize_x(self, x):
-        return x * self.x_std + self.x_mean
-
-    def denormalize_y(self, y):
-        return y * self.y_std + self.y_mean
-
     @property
     def x(self):
-        return self.normalize_x(self.wrapped_task.x.astype(np.float32))
+        return self.wrapped_task.x.astype(np.float32)
 
     @property
     def y(self):
-        return self.normalize_y(self.wrapped_task.y.astype(np.float32))
+        return self.wrapped_task.y.astype(np.float32)
 
     @x.setter
     def x(self, x):
-        self.wrapped_task.x = self.denormalize_x(x)
+        self.wrapped_task.x = x
 
     @y.setter
     def y(self, y):
-        self.wrapped_task.y = self.denormalize_y(y)
+        self.wrapped_task.y = y
 
     @property
     def input_shape(self):
@@ -187,8 +155,8 @@ class StaticGraphTask(Task):
             in the function argument
         """
 
-        return self.normalize_y(self.wrapped_task.score(
-            self.denormalize_x(x)).astype(np.float32)).reshape([-1, 1])
+        return self.wrapped_task.score(
+            x).astype(np.float32).reshape([-1, 1])
 
     @tf.function(experimental_relax_shapes=True)
     def score(self, x):

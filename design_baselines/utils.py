@@ -93,3 +93,31 @@ def add_continuous_noise(x, noise_std=1.0):
     """
 
     return x + noise_std * tf.random.normal(tf.shape(x))
+
+
+def generate_ensemble(num_layers, *activations):
+    """Given a set of string names and a number of target layers, generate
+    a list of ensemble architectures with those activations
+
+    Args:
+
+    num_layers: int
+        the number of hidden layers in the neural network, and also
+        the number of activation functions
+    activations: list of str
+        a list of strings that indicates the candidates for activation
+        functions at for every layer
+
+    Returns:
+
+    ensemble: list of list of str
+        a list of architectures, where an architecture is given by a
+        list of activation function names
+    """
+
+    if num_layers == 0:
+        return []
+    if num_layers == 1:
+        return [(act,) for act in activations]
+    return [(act, *o) for act in activations
+            for o in generate_ensemble(num_layers - 1, *activations)]

@@ -22,11 +22,7 @@ def conservative_ensemble(config):
 
     # create the training task and logger
     logger = Logger(config['logging_dir'])
-    task = StaticGraphTask(
-        config['task'],
-        normalize_x=not config['is_discrete'],
-        normalize_y=True,
-        **config['task_kwargs'])
+    task = StaticGraphTask(config['task'], **config['task_kwargs'])
     train_data, validate_data = task.build(
         bootstraps=len(config['activations']),
         batch_size=config['batch_size'],
@@ -73,10 +69,9 @@ def conservative_ensemble(config):
         solution).mean() for fm in forward_models]
 
     # record the prediction and score to the logger
-    logger.record("score", task.denormalize_y(score), 0)
+    logger.record("score", score, 0)
     for n, prediction_i in enumerate(preds):
-        logger.record(f"oracle_{n}/prediction",
-                      task.denormalize_y(prediction_i), 0)
+        logger.record(f"oracle_{n}/prediction", prediction_i, 0)
         logger.record(f"rank_corr/{n}_to_real",
                       spearman(prediction_i[:, 0], score[:, 0]), 0)
         if n > 0:
@@ -99,7 +94,7 @@ def conservative_ensemble(config):
             grads.append(tape.gradient(score, x))
 
         # use the conservative optimizer to update the solution
-        x = x + config['solver_lr'] * grads[0]
+        x = x + config['solver_lr'] * grads[np.random.randint(len(grads))]
         solution = tf.math.softmax(x) if config['is_discrete'] else x
 
         # evaluate the design using the oracle and the forward model
@@ -108,10 +103,9 @@ def conservative_ensemble(config):
             solution).mean() for fm in forward_models]
 
         # record the prediction and score to the logger
-        logger.record("score", task.denormalize_y(score), i)
+        logger.record("score", score, i)
         for n, prediction_i in enumerate(preds):
-            logger.record(f"oracle_{n}/prediction",
-                          task.denormalize_y(prediction_i), i)
+            logger.record(f"oracle_{n}/prediction", prediction_i, i)
             logger.record(f"oracle_{n}/grad_norm", tf.linalg.norm(
                 tf.reshape(grads[n], [-1, task.input_size]), axis=-1), i)
             logger.record(f"rank_corr/{n}_to_real",

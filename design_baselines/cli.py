@@ -1,4 +1,5 @@
 from ray import tune
+from design_baselines.utils import generate_ensemble
 import click
 import ray
 import os
@@ -51,22 +52,19 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "val_size": 200,
         "batch_size": 128,
         "epochs": 50,
-        "activations": (('relu', 'relu'),
-                        ('tanh', 'relu'),
-                        ('relu', 'tanh'),
-                        ('tanh', 'tanh')),
-        "hidden_size": 2048,
+        "activations": generate_ensemble(5, 'relu', 'tanh'),
+        "hidden_size": 32,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.0,
-        "initial_alpha": 0.01,
+        "initial_alpha": 100.0,
         "alpha_lr": 0.0,
-        "perturbation_lr": 2.0,
+        "perturbation_lr": 0.001,
         "perturbation_steps": 100,
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
-        "solver_steps": 100},
+        "solver_steps": tune.sample_from(lambda c: c['config']['perturbation_steps'])},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
