@@ -62,7 +62,7 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "target_conservative_gap": 0.0,
         "initial_alpha": 0.01,
         "alpha_lr": 0.0,
-        "perturbation_lr": 5.0,
+        "perturbation_lr": 2.0,
         "perturbation_steps": 100,
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),

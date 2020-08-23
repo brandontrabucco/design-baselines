@@ -57,15 +57,8 @@ def conservative_ensemble(config):
         keep=config.get('keep', 1.0),
         temp=config.get('temp', 0.001))
 
-    # create a manager for saving algorithms state to the disk
-    manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**trainer.get_saveables()),
-        os.path.join(config['logging_dir'], 'ckpt'), 1)
-
     # train the model for an additional number of epochs
-    manager.restore_or_initialize()
     trainer.launch(train_data, validate_data, logger, config['epochs'])
-    manager.save()
 
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
