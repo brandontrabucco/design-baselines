@@ -94,7 +94,11 @@ def conservative_ensemble(config):
             grads.append(tape.gradient(score, x))
 
         # use the conservative optimizer to update the solution
-        x = x + config['solver_lr'] * grads[np.random.randint(len(grads))]
+        g = grads[np.random.randint(len(grads))]
+        norm = tf.linalg.norm(tf.reshape(g, [tf.shape(x)[0], -1]), axis=-1)
+        while len(norm.shape) < len(x.shape):
+            norm = norm[..., tf.newaxis]
+        x = x + config['solver_lr'] * g / (norm + 1e-7)
         solution = tf.math.softmax(x) if config['is_discrete'] else x
 
         # evaluate the design using the oracle and the forward model

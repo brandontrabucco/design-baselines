@@ -126,7 +126,11 @@ class ConservativeEnsemble(tf.Module):
                 tape.watch(x)
                 solution = tf.math.softmax(x) if self.is_discrete else x
                 score = fm.get_distribution(solution, **kwargs).mean()
-            x = x + self.perturbation_lr * tape.gradient(score, x)
+            g = tape.gradient(score, x)
+            norm = tf.linalg.norm(tf.reshape(g, [tf.shape(x)[0], -1]), axis=-1)
+            while len(norm.shape) < len(x.shape):
+                norm = norm[..., tf.newaxis]
+            x = x + self.perturbation_lr * g / (norm + 1e-7)
         return tf.math.softmax(x) if self.is_discrete else x
 
     @tf.function(experimental_relax_shapes=True)

@@ -118,6 +118,6 @@ def generate_ensemble(num_layers, *activations):
     if num_layers == 0:
         return []
     if num_layers == 1:
-        return [(act,) for act in activations]
-    return [(act, *o) for act in activations
+        return [[act] for act in activations]
+    return [[act, *o] for act in activations
             for o in generate_ensemble(num_layers - 1, *activations)]

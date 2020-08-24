@@ -37,7 +37,9 @@ class ForwardModel(tf.keras.Sequential):
 
         layers = [tfkl.Flatten(input_shape=input_shape)]
         for act in activations:
-            layers.extend([tfkl.Dense(hidden), tfkl.Activation(act)])
+            layers.extend([tfkl.Dense(hidden),
+                           tfkl.BatchNormalization(),
+                           tfkl.Activation(act)])
         layers.append(tfkl.Dense(2))
         super(ForwardModel, self).__init__(layers)
 
