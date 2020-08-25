@@ -251,12 +251,12 @@ def conservative_ensemble_superconductor(local_dir, cpus, gpus, num_parallel, nu
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='forward-model-policy')
+@click.option('--local-dir', type=str, default='forward-ensemble-policy')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def forward_model_policy(local_dir, cpus, gpus, num_parallel, num_samples):
+def forward_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
 
@@ -302,12 +302,12 @@ def forward_model_policy(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='forward-model-gfp')
+@click.option('--local-dir', type=str, default='forward-ensemble-gfp')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def forward_model_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
+def forward_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
 
@@ -354,12 +354,12 @@ def forward_model_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='forward-model-superconductor')
+@click.option('--local-dir', type=str, default='forward-ensemble-superconductor')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def forward_model_superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
+def forward_ensemble_superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
 
