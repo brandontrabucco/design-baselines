@@ -1,4 +1,6 @@
 from design_baselines.utils import spearman
+from design_baselines.utils import add_discrete_noise
+from design_baselines.utils import add_continuous_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
@@ -9,7 +11,11 @@ class Ensemble(tf.Module):
     def __init__(self,
                  forward_models,
                  forward_model_optim=tf.keras.optimizers.Adam,
-                 forward_model_lr=0.001):
+                 forward_model_lr=0.001,
+                 is_discrete=False,
+                 noise_std=0.0,
+                 keep=0.0,
+                 temp=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -25,8 +31,13 @@ class Ensemble(tf.Module):
 
         super().__init__()
         self.forward_models = forward_models
-        self.bootstraps = len(forward_models)
+        self.is_discrete = is_discrete
+        self.noise_std = noise_std
+        self.keep = keep
+        self.temp = temp
 
+        # create machinery for training a forward model
+        self.bootstraps = len(forward_models)
         self.forward_model_optims = [
             forward_model_optim(learning_rate=forward_model_lr)
             for i in range(self.bootstraps)]
@@ -65,7 +76,7 @@ class Ensemble(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
-                   X,
+                   x,
                    y,
                    b):
         """Perform a training step of gradient descent on an ensemble
@@ -73,7 +84,7 @@ class Ensemble(tf.Module):
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of training labels shaped like [batch_size, 1]
@@ -90,42 +101,43 @@ class Ensemble(tf.Module):
 
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
-            fm_optim = self.forward_model_optims[i]
+            optim = self.forward_model_optims[i]
 
-            with tf.GradientTape(persistent=True) as tape:
+            # corrupt the inputs with noise
+            x0 = add_discrete_noise(x, self.keep, self.temp) \
+                if self.is_discrete else add_continuous_noise(x, self.noise_std)
+
+            with tf.GradientTape() as tape:
 
                 # calculate the prediction error and accuracy of the model
-                d = fm.get_distribution(X, training=True)
+                d = fm.get_distribution(x0, training=True)
                 nll = -d.log_prob(y)
 
                 # evaluate how correct the rank fo the model predictions are
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
                 # build the total and lagrangian losses
-                denom = tf.reduce_sum(b[:, i])
                 total_loss = tf.math.divide_no_nan(
-                    tf.reduce_sum(b[:, i] * nll), denom)
+                    tf.reduce_sum(b[:, i] * nll), tf.reduce_sum(b[:, i]))
 
             grads = tape.gradient(total_loss, fm.trainable_variables)
-            fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
+            optim.apply_gradients(zip(grads, fm.trainable_variables))
 
             statistics[f'oracle_{i}/train/nll'] = nll
-            statistics[f'oracle_{i}/train/max_logstd'] = fm.max_logstd
-            statistics[f'oracle_{i}/train/min_logstd'] = fm.min_logstd
             statistics[f'oracle_{i}/train/rank_corr'] = rank_correlation
 
         return statistics
 
     @tf.function(experimental_relax_shapes=True)
     def validate_step(self,
-                      X,
+                      x,
                       y):
         """Perform a validation step on an ensemble of models
         without using bootstrapping weights
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of validation inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of validation labels shaped like [batch_size, 1]
@@ -141,8 +153,12 @@ class Ensemble(tf.Module):
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
 
+            # corrupt the inputs with noise
+            x0 = add_discrete_noise(x, self.keep, self.temp) \
+                if self.is_discrete else add_continuous_noise(x, self.noise_std)
+
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(X, training=False)
+            d = fm.get_distribution(x0, training=False)
             nll = -d.log_prob(y)
 
             # evaluate how correct the rank fo the model predictions are
@@ -206,7 +222,8 @@ class Ensemble(tf.Module):
                validate_data,
                logger,
                epochs,
-               start_epoch=0):
+               start_epoch=0,
+               header=""):
         """Launch training and validation for the model for the specified
         number of epochs, and log statistics
 
@@ -224,9 +241,9 @@ class Ensemble(tf.Module):
 
         for e in range(start_epoch, start_epoch + epochs):
             for name, loss in self.train(train_data).items():
-                logger.record(name, loss, e)
+                logger.record(header + name, loss, e)
             for name, loss in self.validate(validate_data).items():
-                logger.record(name, loss, e)
+                logger.record(header + name, loss, e)
 
     def get_saveables(self):
         """Collects and returns stateful objects that are serializeable

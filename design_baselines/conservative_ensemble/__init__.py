@@ -67,7 +67,8 @@ def conservative_ensemble(config):
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
     x = tf.gather(task.x, indices, axis=0)
-    x = tf.math.log(add_discrete_noise(x, 0.5, config.get('temp', 0.001))) \
+    x = tf.math.log(add_discrete_noise(
+        x, config.get('keep', 0.001), config.get('temp', 0.001))) \
         if config['is_discrete'] else x
 
     # evaluate the starting point
@@ -102,11 +103,7 @@ def conservative_ensemble(config):
             grads.append(tape.gradient(score, x))
 
         # use the conservative optimizer to update the solution
-        g = grads[np.random.randint(len(grads))]
-        norm = tf.linalg.norm(tf.reshape(g, [tf.shape(x)[0], -1]), axis=-1)
-        while len(norm.shape) < len(x.shape):
-            norm = norm[..., tf.newaxis]
-        x = x + config['solver_lr'] * g / (norm + 1e-7)
+        x = x + config['solver_lr'] * grads[np.random.randint(len(grads))]
         solution = tf.math.softmax(x) if config['is_discrete'] else x
 
         # evaluate the design using the oracle and the forward model

@@ -67,8 +67,8 @@ def add_discrete_noise(x, keep=1.0, temp=1.0):
 
     noise = tf.ones_like(x)
     noise = noise / tf.reduce_sum(noise, axis=-1, keepdims=True)
-    return tfpd.RelaxedOneHotCategorical(
-        temp, probs=keep * x + (1.0 - keep) * noise).sample()
+    noise = tfpd.RelaxedOneHotCategorical(temp, probs=noise).sample()
+    return keep * x + (1.0 - keep) * noise
 
 
 @tf.function(experimental_relax_shapes=True)

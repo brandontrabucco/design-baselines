@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow_probability as tfp
 
 
 class Logger(object):
@@ -42,15 +43,15 @@ class Logger(object):
         with self.writer.as_default():
 
             # log several statistics of the incoming tensors
-            tf.summary.scalar(key + '/mean',
-                              tf.math.reduce_mean(value),
+            tf.summary.scalar(key + '/100th',
+                              tfp.stats.percentile(value, 100),
                               step=step)
-            tf.summary.scalar(key + '/max',
-                              tf.math.reduce_max(value),
+            tf.summary.scalar(key + '/90th',
+                              tfp.stats.percentile(value, 90),
                               step=step)
-            tf.summary.scalar(key + '/min',
-                              tf.math.reduce_min(value),
+            tf.summary.scalar(key + '/80th',
+                              tfp.stats.percentile(value, 80),
                               step=step)
-            tf.summary.scalar(key + '/std',
-                              tf.math.reduce_std(value),
+            tf.summary.scalar(key + '/50th',
+                              tfp.stats.percentile(value, 50),
                               step=step)
