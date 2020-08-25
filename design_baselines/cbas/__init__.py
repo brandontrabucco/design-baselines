@@ -25,10 +25,7 @@ def condition_by_adaptive_sampling(config):
     logger = Logger(config['logging_dir'])
 
     # create the training task and logger
-    task = StaticGraphTask(config['task'],
-                           normalize_x=not config['is_discrete'],
-                           normalize_y=True,
-                           **config['task_kwargs'])
+    task = StaticGraphTask(config['task'], **config['task_kwargs'])
     train_data, val_data = task.build(bootstraps=config['bootstraps'],
                                       batch_size=config['ensemble_batch_size'],
                                       val_size=config['val_size'])
@@ -49,8 +46,7 @@ def condition_by_adaptive_sampling(config):
     # create a manager for saving algorithms state to the disk
     ensemble_manager = tf.train.CheckpointManager(
         tf.train.Checkpoint(**ensemble.get_saveables()),
-        directory=os.path.join(config['logging_dir'], 'ensemble'),
-        max_to_keep=1)
+        os.path.join(config['logging_dir'], 'ensemble'), 1)
 
     # train the model for an additional number of epochs
     ensemble_manager.restore_or_initialize()
@@ -59,12 +55,15 @@ def condition_by_adaptive_sampling(config):
                     logger,
                     config['ensemble_epochs'])
 
+    # determine which arcitecture for the decoder to use
+    decoder = DiscreteDecoder \
+        if config['is_discrete'] else ContinuousDecoder
+
     # build the encoder and decoder distribution and the p model
-    Decoder = DiscreteDecoder if config['is_discrete'] else ContinuousDecoder
     p_encoder = Encoder(task.input_shape,
                         config['latent_size'],
                         hidden=config['hidden_size'])
-    p_decoder = Decoder(task.input_shape,
+    p_decoder = decoder(task.input_shape,
                         config['latent_size'],
                         hidden=config['hidden_size'])
     p_vae = WeightedVAE(p_encoder,
@@ -76,8 +75,7 @@ def condition_by_adaptive_sampling(config):
     # create a manager for saving algorithms state to the disk
     p_manager = tf.train.CheckpointManager(
         tf.train.Checkpoint(**p_vae.get_saveables()),
-        directory=os.path.join(config['logging_dir'], 'p_vae'),
-        max_to_keep=1)
+        os.path.join(config['logging_dir'], 'p_vae'), 1)
 
     # build a weighted data set
     train_data, val_data = task.build(importance_weights=np.ones_like(task.y),
@@ -95,7 +93,7 @@ def condition_by_adaptive_sampling(config):
     q_encoder = Encoder(task.input_shape,
                         config['latent_size'],
                         hidden=config['hidden_size'])
-    q_decoder = Decoder(task.input_shape,
+    q_decoder = decoder(task.input_shape,
                         config['latent_size'],
                         hidden=config['hidden_size'])
     q_vae = WeightedVAE(q_encoder,
@@ -128,14 +126,15 @@ def condition_by_adaptive_sampling(config):
 
         # evaluate the sampled designs
         score = task.score(x[:config['solver_samples']])
-        logger.record("score", score * task.y_std + task.y_mean, i)
+        logger.record("score", score, i)
 
         # build a weighted data set
-        train_data, val_data = task.build(x=x.numpy(),
-                                          y=y.numpy(),
-                                          importance_weights=w.numpy(),
-                                          batch_size=config['vae_batch_size'],
-                                          val_size=config['val_size'])
+        train_data, val_data = task.build(
+            x=x.numpy(),
+            y=y.numpy(),
+            importance_weights=w.numpy(),
+            batch_size=config['vae_batch_size'],
+            val_size=config['val_size'])
 
         # train a vae fit using weighted maximum likelihood
         start_epoch = config['online_epochs'] * i + config['offline_epochs']
@@ -154,4 +153,4 @@ def condition_by_adaptive_sampling(config):
     q_dx = q_decoder.get_distribution(tf.random.normal([
         config['solver_samples'], config['latent_size']]), training=False)
     score = task.score(q_dx.sample())
-    logger.record("score", score * task.y_std + task.y_mean, config['iterations'])
+    logger.record("score", score, config['iterations'])
