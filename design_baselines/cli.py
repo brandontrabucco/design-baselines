@@ -431,16 +431,19 @@ def vary_architecture_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from design_baselines.forward_ensemble import forward_ensemble
+    from design_baselines.vary_architecture import vary_architecture
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(forward_ensemble, config={
+    tune.run(vary_architecture, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
         "task_kwargs": {},
         "is_discrete": False,
-        "activations": [['swish', 'swish']],
+        "activations": [['swish', 'swish'],
+                        ['swish', 'tanh'],
+                        ['tanh', 'swish'],
+                        ['tanh', 'tanh']],
         "noise_std": 0.1,
         "val_size": 200,
         "batch_size": 128,
@@ -482,16 +485,19 @@ def vary_architecture_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from design_baselines.forward_ensemble import forward_ensemble
+    from design_baselines.vary_architecture import vary_architecture
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(forward_ensemble, config={
+    tune.run(vary_architecture, config={
         "logging_dir": "data",
         "task": "GFP-v0",
         "task_kwargs": {'seed': tune.randint(1000)},
         "is_discrete": True,
-        "activations": [['swish', 'swish']] * 5,
+        "activations": [['swish', 'swish'],
+                        ['swish', 'tanh'],
+                        ['tanh', 'swish'],
+                        ['tanh', 'tanh']],
         "keep": 0.5,
         "temp": 100.0,
         "val_size": 200,
@@ -534,16 +540,19 @@ def vary_architecture_superconductor(local_dir, cpus, gpus, num_parallel, num_sa
         the number of samples to take per configuration
     """
 
-    from design_baselines.forward_ensemble import forward_ensemble
+    from design_baselines.vary_architecture import vary_architecture
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(forward_ensemble, config={
+    tune.run(vary_architecture, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
         "task_kwargs": {},
         "is_discrete": False,
-        "activations": [['swish', 'swish']] * 5,
+        "activations": [['swish', 'swish'],
+                        ['swish', 'tanh'],
+                        ['tanh', 'swish'],
+                        ['tanh', 'tanh']],
         "noise_std": 0.1,
         "val_size": 200,
         "batch_size": 128,
