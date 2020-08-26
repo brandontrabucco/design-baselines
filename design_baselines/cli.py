@@ -880,7 +880,7 @@ def plot(dir, tag, xlabel, ylabel):
     # read data from tensor board
     data = pd.DataFrame(columns=[xlabel, ylabel] + params_of_variation)
     for d, p in tqdm.tqdm(zip(dirs, params)):
-        for f in glob.glob(os.path.join(d, 'data/events.out*')):
+        for f in glob.glob(os.path.join(d, '*/events.out*')):
             for e in tf.compat.v1.train.summary_iterator(f):
                 for v in e.summary.value:
                     if v.tag == tag:
