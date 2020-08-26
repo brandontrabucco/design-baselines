@@ -10,7 +10,7 @@ import numpy as np
 import os
 
 
-def forward_ensemble(config):
+def vary_architecture(config):
     """Train a forward model and perform model based optimization
     using a bootstrap ensemble
 
