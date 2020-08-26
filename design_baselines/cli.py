@@ -408,6 +408,163 @@ def forward_ensemble_superconductor(local_dir, cpus, gpus, num_parallel, num_sam
 
 
 @cli.command()
+@click.option('--local-dir', type=str, default='vary-architecture-policy')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def vary_architecture_policy(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from design_baselines.forward_ensemble import forward_ensemble
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(forward_ensemble, config={
+        "logging_dir": "data",
+        "task": "HopperController-v0",
+        "task_kwargs": {},
+        "is_discrete": False,
+        "activations": [['swish', 'swish']],
+        "noise_std": 0.1,
+        "val_size": 200,
+        "batch_size": 128,
+        "epochs": 200,
+        "hidden_size": 128,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "forward_model_lr": 0.001,
+        "solver_samples": 128,
+        "solver_lr": 0.0005,
+        "solver_steps": 200},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='vary-architecture-gfp')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def vary_architecture_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from design_baselines.forward_ensemble import forward_ensemble
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(forward_ensemble, config={
+        "logging_dir": "data",
+        "task": "GFP-v0",
+        "task_kwargs": {'seed': tune.randint(1000)},
+        "is_discrete": True,
+        "activations": [['swish', 'swish']] * 5,
+        "keep": 0.5,
+        "temp": 100.0,
+        "val_size": 200,
+        "batch_size": 128,
+        "epochs": 200,
+        "hidden_size": 50,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "forward_model_lr": 0.001,
+        "solver_samples": 128,
+        "solver_lr": 10.0,
+        "solver_steps": 200},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='vary-architecture-superconductor')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def vary_architecture_superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from design_baselines.forward_ensemble import forward_ensemble
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(forward_ensemble, config={
+        "logging_dir": "data",
+        "task": "Superconductor-v0",
+        "task_kwargs": {},
+        "is_discrete": False,
+        "activations": [['swish', 'swish']] * 5,
+        "noise_std": 0.1,
+        "val_size": 200,
+        "batch_size": 128,
+        "epochs": 200,
+        "hidden_size": 256,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "forward_model_lr": 0.001,
+        "solver_samples": 128,
+        "solver_lr": 0.01,
+        "solver_steps": 200},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+#############
+
+
+@cli.command()
 @click.option('--local-dir', type=str, default='cbas')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
