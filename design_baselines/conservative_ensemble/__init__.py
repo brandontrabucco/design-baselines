@@ -33,6 +33,7 @@ def conservative_ensemble(config):
         initial_min_std=config['initial_min_std'])
         for activations in config['activations']]
 
+    trs = []
     for i, fm in enumerate(forward_models):
 
         # create a bootstrapped data set
@@ -58,11 +59,12 @@ def conservative_ensemble(config):
             temp=config.get('temp', 0.001))
 
         # train the model for an additional number of epochs
+        trs.append(trainer)
         trainer.launch(train_data,
                        validate_data,
                        logger,
                        config['epochs'],
-                       header=f'oracle_{i}/')
+                       header=f'ensemble_{i}/')
 
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
@@ -111,9 +113,18 @@ def conservative_ensemble(config):
         preds = [fm.get_distribution(
             solution).mean() for fm in forward_models]
 
+        # evaluate the conservative gap for every model
+        perturb_solution = [tr.optimize(
+            solution, fm) for fm, tr in zip(forward_models, trs)]
+        perturb_preds = [fm.get_distribution(
+            solution).mean() for fm in forward_models]
+        perturb_gap = [
+            b - a for a, b in zip(preds, perturb_preds)]
+
         # record the prediction and score to the logger
         logger.record("score", score, i)
         for n, prediction_i in enumerate(preds):
+            logger.record(f"oracle_{n}/gap", perturb_gap[n], i)
             logger.record(f"oracle_{n}/prediction", prediction_i, i)
             logger.record(f"oracle_{n}/grad_norm", tf.linalg.norm(
                 tf.reshape(grads[n], [-1, task.input_size]), axis=-1), i)
