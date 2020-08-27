@@ -785,6 +785,7 @@ def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         "discriminator_lr": 1e-4,
         "discriminator_beta_1": 0.5,
         "discriminator_beta_2": 0.999,
+        "initial_epochs": 200,
         "epochs_per_iteration": 10,
         "iterations": 100,
         "exploration_samples": 100,
