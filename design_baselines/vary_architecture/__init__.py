@@ -69,7 +69,7 @@ def vary_architecture(config):
     preds = [fm.get_distribution(solution).mean() for fm in forward_models]
 
     # record the prediction and score to the logger
-    logger.record("score", score, 0)
+    logger.record("score", score, 0, percentile=True)
     for n, prediction_i in enumerate(preds):
         logger.record(f"oracle_{n}/prediction", prediction_i, 0)
         logger.record(f"rank_corr/{n}_to_real",
@@ -121,7 +121,7 @@ def vary_architecture(config):
             solution).mean() for fm in forward_models]
 
         # record the prediction and score to the logger
-        logger.record("score", score, i)
+        logger.record("score", score, i, percentile=True)
         for n, prediction_i in enumerate(preds):
             logger.record(f"oracle_{n}/prediction", prediction_i, i)
             logger.record(f"oracle_{n}/grad_norm", tf.linalg.norm(

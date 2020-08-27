@@ -126,7 +126,7 @@ def condition_by_adaptive_sampling(config):
 
         # evaluate the sampled designs
         score = task.score(x[:config['solver_samples']])
-        logger.record("score", score, i)
+        logger.record("score", score, i, percentile=True)
 
         # build a weighted data set
         train_data, val_data = task.build(
@@ -153,4 +153,4 @@ def condition_by_adaptive_sampling(config):
     q_dx = q_decoder.get_distribution(tf.random.normal([
         config['solver_samples'], config['latent_size']]), training=False)
     score = task.score(q_dx.sample())
-    logger.record("score", score, config['iterations'])
+    logger.record("score", score, config['iterations'], percentile=True)

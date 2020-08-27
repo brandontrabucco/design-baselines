@@ -82,9 +82,9 @@ def conservative_ensemble(config):
         b - a for a, b in zip(preds, perturb_preds)]
 
     # record the prediction and score to the logger
-    logger.record("score", score, 0)
+    logger.record("score", score, 0, percentile=True)
     for n, prediction_i in enumerate(preds):
-        logger.record(f"oracle_{n}/gap", perturb_gap[n], i)
+        logger.record(f"oracle_{n}/gap", perturb_gap[n], 0)
         logger.record(f"oracle_{n}/prediction", prediction_i, 0)
         logger.record(f"rank_corr/{n}_to_real",
                       spearman(prediction_i[:, 0], score[:, 0]), 0)
@@ -123,7 +123,7 @@ def conservative_ensemble(config):
             b - a for a, b in zip(preds, perturb_preds)]
 
         # record the prediction and score to the logger
-        logger.record("score", score, i)
+        logger.record("score", score, i, percentile=True)
         for n, prediction_i in enumerate(preds):
             logger.record(f"oracle_{n}/gap", perturb_gap[n], i)
             logger.record(f"oracle_{n}/prediction", prediction_i, i)

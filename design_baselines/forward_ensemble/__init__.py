@@ -68,7 +68,7 @@ def forward_ensemble(config):
     model = trainer.get_distribution(solution).mean()
 
     # record the prediction and score to the logger
-    logger.record("score", score, 0)
+    logger.record("score", score, 0, percentile=True)
     logger.record("model", model, 0)
     logger.record(f"rank_corr/model_to_real",
                   spearman(model[:, 0], score[:, 0]), 0)
@@ -95,7 +95,7 @@ def forward_ensemble(config):
         model = trainer.get_distribution(solution).mean()
 
         # record the prediction and score to the logger
-        logger.record("score", score, i)
+        logger.record("score", score, i, percentile=True)
         logger.record("model", model, i)
         logger.record(f"rank_corr/model_to_real",
                       spearman(model[:, 0], score[:, 0]), i)

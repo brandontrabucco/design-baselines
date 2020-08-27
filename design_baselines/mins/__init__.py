@@ -24,10 +24,7 @@ def model_inversion(config):
 
     # create the training task and logger
     logger = Logger(config['logging_dir'])
-    task = StaticGraphTask(config['task'],
-                           normalize_x=not config['is_discrete'],
-                           normalize_y=True,
-                           **config['task_kwargs'])
+    task = StaticGraphTask(config['task'], **config['task_kwargs'])
 
     if config['fully_offline']:
 
@@ -191,9 +188,9 @@ def model_inversion(config):
 
         # record score percentiles
         logger.record("exploration/condition_ys",
-                      task.denormalize_y(condition_ys), iteration)
+                      condition_ys, iteration, percentile=True)
         logger.record("exploration/actual_ys",
-                      task.denormalize_y(actual_ys), iteration)
+                      actual_ys, iteration, percentile=True)
 
         # concatenate newly paired samples with the existing data set
         x = tf.concat([x, solver_xs], 0)
@@ -223,12 +220,6 @@ def model_inversion(config):
 
         # record score percentiles
         logger.record("exploitation/condition_ys",
-                      task.denormalize_y(condition_ys), iteration)
+                      condition_ys, iteration, percentile=True)
         logger.record("exploitation/actual_ys",
-                      task.denormalize_y(actual_ys), iteration)
-
-    # save every model to the disk
-    exploration_gan_manager.save()
-    exploitation_gan_manager.save()
-    if config['fully_offline']:
-        ensemble_manager.save()
+                      actual_ys, iteration, percentile=True)

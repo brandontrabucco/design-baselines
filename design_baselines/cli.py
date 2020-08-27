@@ -966,7 +966,7 @@ def mins_superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
         "iterations": 100,
         "exploration_samples": 100,
         "exploration_rate": 5.0,
-        "exploration_noise_std": 0.2,
+        "exploration_noise_std": 0.1,
         "thompson_samples": 100,
         "solver_samples": 100},
         num_samples=num_samples,
