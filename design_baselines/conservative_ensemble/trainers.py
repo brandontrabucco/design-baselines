@@ -2,16 +2,15 @@ from design_baselines.utils import spearman
 from design_baselines.utils import add_discrete_noise
 from design_baselines.utils import add_continuous_noise
 from collections import defaultdict
-from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
 import tensorflow_probability as tfp
 import numpy as np
 
 
-class ConservativeEnsemble(tf.Module):
+class Conservative(tf.Module):
 
     def __init__(self,
-                 forward_models,
+                 forward_model,
                  forward_model_optim=tf.keras.optimizers.Adam,
                  forward_model_lr=0.001,
                  target_conservative_gap=tf.constant(10.0),
@@ -38,26 +37,14 @@ class ConservativeEnsemble(tf.Module):
         """
 
         super().__init__()
-        self.forward_models = forward_models
+        self.fm = forward_model
+        self.fm_optim = forward_model_optim(learning_rate=forward_model_lr)
         self.target_conservative_gap = target_conservative_gap
-        self.bootstraps = len(forward_models)
-
-        self.forward_model_optims = [
-            forward_model_optim(learning_rate=forward_model_lr)
-            for i in range(self.bootstraps)]
 
         # create training machinery for lagrange multiplier
-        self.log_alphas = [
-            tf.Variable(np.log(initial_alpha).astype(np.float32))
-            for i in range(self.bootstraps)]
-
-        self.alphas = [
-            tfp.util.DeferredTensor(self.log_alphas[i], tf.exp)
-            for i in range(self.bootstraps)]
-
-        self.alpha_optims = [
-            alpha_optim(learning_rate=alpha_lr)
-            for i in range(self.bootstraps)]
+        self.log_alpha = tf.Variable(np.log(initial_alpha).astype(np.float32))
+        self.alpha = tfp.util.DeferredTensor(self.log_alpha, tf.exp)
+        self.alpha_optim = alpha_optim(learning_rate=alpha_lr)
 
         # create machinery for sampling adversarial examples
         self.perturbation_lr = perturbation_lr
@@ -67,41 +54,8 @@ class ConservativeEnsemble(tf.Module):
         self.keep = keep
         self.temp = temp
 
-    def get_distribution(self,
-                         x,
-                         **kwargs):
-        """Build the mixture distribution implied by the set of oracles
-        that are trained in this module
-
-        Args:
-
-        X: tf.Tensor
-            a batch of training inputs shaped like [batch_size, channels]
-
-        Returns:
-
-        distribution: tfpd.Distribution
-            the mixture of gaussian distributions implied by the oracles
-        """
-
-        # get the distribution parameters for all models
-        params = defaultdict(list)
-        for fm in self.forward_models:
-            for key, val in fm.get_parameters(x, **kwargs).items():
-                params[key].append(val)
-
-        # stack the parameters in a new component axis
-        for key, val in params.items():
-            params[key] = tf.stack(val, axis=1)
-
-        # build the mixture distribution using the family of component one
-        weights = tf.fill([self.bootstraps], 1 / self.bootstraps)
-        return tfpd.MixtureSameFamily(tfpd.Categorical(
-            probs=weights), self.forward_models[0].distribution(**params))
-
     def optimize(self,
                  x,
-                 fm,
                  **kwargs):
         """Using gradient descent find adversarial versions of x that maximize
         the score predicted by the forward model
@@ -125,7 +79,7 @@ class ConservativeEnsemble(tf.Module):
             with tf.GradientTape() as tape:
                 tape.watch(x)
                 solution = tf.math.softmax(x) if self.is_discrete else x
-                score = fm.get_distribution(solution, **kwargs).mean()
+                score = self.fm.get_distribution(solution, **kwargs).mean()
             x = x + self.perturbation_lr * tape.gradient(score, x)
         return tf.math.softmax(x) if self.is_discrete else x
 
@@ -152,61 +106,51 @@ class ConservativeEnsemble(tf.Module):
             a dictionary that contains logging information
         """
 
+        # corrupt the inputs with noise
+        x0 = add_discrete_noise(x, self.keep, self.temp) \
+            if self.is_discrete else add_continuous_noise(x, self.noise_std)
+
         statistics = dict()
+        with tf.GradientTape(persistent=True) as tape:
 
-        for i in range(self.bootstraps):
-            fm = self.forward_models[i]
-            fm_optim = self.forward_model_optims[i]
-            alpha = self.alphas[i]
-            log_alpha = self.log_alphas[i]
-            alpha_optim = self.alpha_optims[i]
+            # calculate the prediction error and accuracy of the model
+            d = self.fm.get_distribution(x0, training=True)
+            nll = -d.log_prob(y)
 
-            # corrupt the inputs with noise
-            x0 = add_discrete_noise(x, self.keep, self.temp) \
-                if self.is_discrete else add_continuous_noise(x, self.noise_std)
+            # evaluate how correct the rank fo the model predictions are
+            rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
-            with tf.GradientTape(persistent=True) as tape:
+            # calculate the conservative gap
+            perturb = tf.stop_gradient(self.optimize(x0))
 
-                # calculate the prediction error and accuracy of the model
-                d = fm.get_distribution(x0, training=True)
-                nll = -d.log_prob(y)
+            # calculate the prediction error and accuracy of the model
+            perturb_d = self.fm.get_distribution(perturb, training=True)
 
-                # evaluate how correct the rank fo the model predictions are
-                rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+            # build the lagrangian loss
+            conservative_gap = (perturb_d.mean() - d.mean())[:, 0]
+            gap = (self.alpha * self.target_conservative_gap -
+                   self.alpha * conservative_gap)
 
-                # calculate the conservative gap
-                perturb = tf.stop_gradient(self.optimize(x0, fm))
+            # model loss that combines maximum likelihood with a constraint
+            model_loss = nll + self.alpha * conservative_gap
 
-                # calculate the prediction error and accuracy of the model
-                perturb_d = fm.get_distribution(perturb, training=True)
+            # build the total and lagrangian losses
+            denom = tf.reduce_sum(b)
+            total_loss = tf.math.divide_no_nan(
+                tf.reduce_sum(b * model_loss), denom)
+            alpha_loss = tf.math.divide_no_nan(
+                tf.reduce_sum(b * gap), denom)
 
-                # build the lagrangian loss
-                conservative_gap = (perturb_d.mean() - d.mean())[:, 0]
-                gap = (alpha * self.target_conservative_gap -
-                       alpha * conservative_gap)
+        grads = tape.gradient(total_loss, self.fm.trainable_variables)
+        self.fm_optim.apply_gradients(zip(grads, self.fm.trainable_variables))
+        grads = tape.gradient(alpha_loss, self.log_alpha)
+        self.alpha_optim.apply_gradients([[grads, self.log_alpha]])
 
-                # model loss that combines maximum likelihood with a constraint
-                model_loss = nll + alpha * conservative_gap
-
-                # build the total and lagrangian losses
-                denom = tf.reduce_sum(b[:, i])
-                total_loss = tf.math.divide_no_nan(
-                    tf.reduce_sum(b[:, i] * model_loss), denom)
-                alpha_loss = tf.math.divide_no_nan(
-                    tf.reduce_sum(b[:, i] * gap), denom)
-
-            grads = tape.gradient(total_loss, fm.trainable_variables)
-            fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
-            grads = tape.gradient(alpha_loss, log_alpha)
-            alpha_optim.apply_gradients([[grads, log_alpha]])
-
-            statistics[f'oracle_{i}/train/nll'] = nll
-            statistics[f'oracle_{i}/train/max_logstd'] = fm.max_logstd
-            statistics[f'oracle_{i}/train/min_logstd'] = fm.min_logstd
-            statistics[f'oracle_{i}/train/alpha'] = alpha
-            statistics[f'oracle_{i}/train/alpha_loss'] = gap
-            statistics[f'oracle_{i}/train/rank_corr'] = rank_correlation
-            statistics[f'oracle_{i}/train/gap'] = conservative_gap
+        statistics[f'train/nll'] = nll
+        statistics[f'train/alpha'] = self.alpha
+        statistics[f'train/alpha_loss'] = gap
+        statistics[f'train/rank_corr'] = rank_correlation
+        statistics[f'train/gap'] = conservative_gap
 
         return statistics
 
@@ -230,34 +174,31 @@ class ConservativeEnsemble(tf.Module):
             a dictionary that contains logging information
         """
 
+        # corrupt the inputs with noise
+        x0 = add_discrete_noise(x, self.keep, self.temp) \
+            if self.is_discrete else add_continuous_noise(x, self.noise_std)
+
         statistics = dict()
 
-        for i in range(self.bootstraps):
-            fm = self.forward_models[i]
+        # calculate the prediction error and accuracy of the model
+        d = self.fm.get_distribution(x0, training=False)
+        nll = -d.log_prob(y)
 
-            # corrupt the inputs with noise
-            x0 = add_discrete_noise(x, self.keep, self.temp) \
-                if self.is_discrete else add_continuous_noise(x, self.noise_std)
+        # evaluate how correct the rank fo the model predictions are
+        rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
-            # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(x0, training=False)
-            nll = -d.log_prob(y)
+        # calculate the conservative gap
+        perturb = tf.stop_gradient(self.optimize(x0))
 
-            # evaluate how correct the rank fo the model predictions are
-            rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+        # calculate the prediction error and accuracy of the model
+        perturb_d = self.fm.get_distribution(perturb, training=False)
 
-            # calculate the conservative gap
-            perturb = tf.stop_gradient(self.optimize(x0, fm))
+        # build the lagrangian loss
+        conservative_gap = (perturb_d.mean() - d.mean())[:, 0]
 
-            # calculate the prediction error and accuracy of the model
-            perturb_d = fm.get_distribution(perturb, training=False)
-
-            # build the lagrangian loss
-            conservative_gap = (perturb_d.mean() - d.mean())[:, 0]
-
-            statistics[f'oracle_{i}/validate/nll'] = nll
-            statistics[f'oracle_{i}/validate/rank_corr'] = rank_correlation
-            statistics[f'oracle_{i}/validate/gap'] = conservative_gap
+        statistics[f'validate/nll'] = nll
+        statistics[f'validate/rank_corr'] = rank_correlation
+        statistics[f'validate/gap'] = conservative_gap
 
         return statistics
 
@@ -349,8 +290,8 @@ class ConservativeEnsemble(tf.Module):
 
         saveables = dict()
         for i in range(self.bootstraps):
-            saveables[f'forward_model_{i}'] = self.forward_models[i]
-            saveables[f'forward_model_optim_{i}'] = self.forward_model_optims[i]
-            saveables[f'log_alpha_{i}'] = self.log_alphas[i]
-            saveables[f'alpha_optim_{i}'] = self.alpha_optims[i]
+            saveables[f'forward_model'] = self.fm
+            saveables[f'forward_model_optim'] = self.fm_optim
+            saveables[f'log_alpha'] = self.log_alpha
+            saveables[f'alpha_optim'] = self.alpha_optim
         return saveables

@@ -35,11 +35,15 @@ class ForwardModel(tf.keras.Sequential):
         self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_min_std).astype(np.float32)), trainable=True)
 
+        activations = [tfkl.LeakyReLU if act == 'leaky_relu' else
+                       act for act in activations]
+
         layers = [tfkl.Flatten(input_shape=input_shape)]
         for act in activations:
             layers.extend([tfkl.Dense(hidden),
                            tfkl.BatchNormalization(),
-                           tfkl.Activation(act)])
+                           tfkl.Activation(act)
+                           if isinstance(act, str) else act()])
         layers.append(tfkl.Dense(2))
         super(ForwardModel, self).__init__(layers)
 
