@@ -104,7 +104,7 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "task": "HopperController-v0",
         "task_kwargs": {},
         "is_discrete": False,
-        "noise_std": 0.1,
+        "noise_std": 0.0,
         "val_size": 200,
         "batch_size": 128,
         "epochs": 200,
@@ -114,7 +114,7 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.0,
-        "initial_alpha": 100.0,
+        "initial_alpha": 10.0,
         "alpha_lr": 0.0,
         "perturbation_lr": 0.0005,
         "perturbation_steps": 100,
@@ -983,7 +983,8 @@ def mins_superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--tag', type=str)
 @click.option('--xlabel', type=str)
 @click.option('--ylabel', type=str)
-def plot(dir, tag, xlabel, ylabel):
+@click.option('--separate-runs', is_flag=True)
+def plot(dir, tag, xlabel, ylabel, separate_runs):
 
     from collections import defaultdict
     import glob
@@ -1037,17 +1038,21 @@ def plot(dir, tag, xlabel, ylabel):
         params_of_variation.append('task')
 
     # read data from tensor board
-    data = pd.DataFrame(columns=[xlabel, ylabel] + params_of_variation)
-    for d, p in tqdm.tqdm(zip(dirs, params)):
+    data = pd.DataFrame(columns=['id', xlabel, ylabel] + params_of_variation)
+    for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
         for f in glob.glob(os.path.join(d, '*/events.out*')):
             for e in tf.compat.v1.train.summary_iterator(f):
                 for v in e.summary.value:
                     if v.tag == tag:
-                        row = {ylabel: tf.make_ndarray(v.tensor).tolist(),
+                        row = {'id': i,
+                               ylabel: tf.make_ndarray(v.tensor).tolist(),
                                xlabel: e.step}
                         for key in params_of_variation:
                             row[key] = f'{pretty(key)} = {p[key]}'
                         data = data.append(row, ignore_index=True)
+
+    if separate_runs:
+        params_of_variation.append('id')
 
     # save a separate plot for every hyper parameter
     for key in params_of_variation:
