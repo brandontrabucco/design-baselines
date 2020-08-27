@@ -116,13 +116,6 @@ class Discriminator(tf.keras.Model):
         self.bn_1 = tfkl.BatchNormalization()
 
         # define a layer of the neural net with two pathways
-        self.score_2 = tfkl.Dense(hidden)
-        self.score_2.build((1,))
-        self.dense_2 = tfkl.Dense(hidden)
-        self.dense_2.build((hidden,))
-        self.bn_2 = tfkl.BatchNormalization()
-
-        # define a layer of the neural net with two pathways
         self.score_3 = tfkl.Dense(1)
         self.score_3.build((1,))
         self.dense_3 = tfkl.Dense(1)
@@ -157,8 +150,6 @@ class Discriminator(tf.keras.Model):
             x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
             x = self.dense_1(x, **kwargs) * self.score_1(y, **kwargs)
             x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
-            x = self.dense_2(x, **kwargs) * self.score_2(y, **kwargs)
-            x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
             x = self.dense_3(x, **kwargs) * self.score_3(y, **kwargs)
         grads = tape.gradient(x, h)
         norm = tf.linalg.norm(grads, axis=-1, keepdims=True)
@@ -194,8 +185,6 @@ class Discriminator(tf.keras.Model):
         x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
         x = self.dense_1(x, **kwargs) * self.score_1(y, **kwargs)
         x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
-        x = self.dense_2(x, **kwargs) * self.score_2(y, **kwargs)
-        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
         x = self.dense_3(x, **kwargs) * self.score_3(y, **kwargs)
         return (x - (1.0 if real else 0.0)) ** 2
 
@@ -242,13 +231,6 @@ class DiscreteGenerator(tf.keras.Model):
         self.bn_1 = tfkl.BatchNormalization()
 
         # define a layer of the neural net with two pathways
-        self.score_2 = tfkl.Dense(hidden)
-        self.score_2.build((1,))
-        self.dense_2 = tfkl.Dense(hidden)
-        self.dense_2.build((hidden,))
-        self.bn_2 = tfkl.BatchNormalization()
-
-        # define a layer of the neural net with two pathways
         self.score_3 = tfkl.Dense(np.prod(design_shape))
         self.score_3.build((1,))
         self.dense_3 = tfkl.Dense(np.prod(design_shape))
@@ -279,8 +261,6 @@ class DiscreteGenerator(tf.keras.Model):
         x = tf.nn.relu(self.bn_0(x, **kwargs))
         x = self.dense_1(x, **kwargs) * self.score_1(y, **kwargs)
         x = tf.nn.relu(self.bn_1(x, **kwargs))
-        x = self.dense_2(x, **kwargs) * self.score_2(y, **kwargs)
-        x = tf.nn.relu(self.bn_2(x, **kwargs))
         x = self.dense_3(x, **kwargs) * self.score_3(y, **kwargs)
         logits = tf.reshape(x, [tf.shape(y)[0], *self.design_shape])
         return tfpd.RelaxedOneHotCategorical(
@@ -329,13 +309,6 @@ class ContinuousGenerator(tf.keras.Model):
         self.bn_1 = tfkl.BatchNormalization()
 
         # define a layer of the neural net with two pathways
-        self.score_2 = tfkl.Dense(hidden)
-        self.score_2.build((1,))
-        self.dense_2 = tfkl.Dense(hidden)
-        self.dense_2.build((hidden,))
-        self.bn_2 = tfkl.BatchNormalization()
-
-        # define a layer of the neural net with two pathways
         self.score_3 = tfkl.Dense(np.prod(design_shape))
         self.score_3.build((1,))
         self.dense_3 = tfkl.Dense(np.prod(design_shape))
@@ -366,7 +339,5 @@ class ContinuousGenerator(tf.keras.Model):
         x = tf.nn.relu(self.bn_0(x, **kwargs))
         x = self.dense_1(x, **kwargs) * self.score_1(y, **kwargs)
         x = tf.nn.relu(self.bn_1(x, **kwargs))
-        x = self.dense_2(x, **kwargs) * self.score_2(y, **kwargs)
-        x = tf.nn.relu(self.bn_2(x, **kwargs))
         x = self.dense_3(x, **kwargs) * self.score_3(y, **kwargs)
         return tf.reshape(x, [tf.shape(y)[0], *self.design_shape])
