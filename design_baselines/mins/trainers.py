@@ -343,13 +343,13 @@ class WeightedGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        x_real = add_discrete_noise(x, self.keep, self.temp) \
+        x_real = x \
             if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
         with tf.GradientTape() as tape:
 
             # sample designs from the generator
-            x_fake = self.generator.sample(y, temp=self.temp, training=True)
+            x_fake = self.generator.sample(y, temp=0.001, training=True)
             d_real = self.discriminator.loss(x_real, y, real=True, training=True)
             d_fake = self.discriminator.loss(x_fake, y, real=False, training=True)
             penalty = self.discriminator.penalty(x_real, y, training=False)
@@ -362,7 +362,7 @@ class WeightedGAN(tf.Module):
             total_loss = tf.reduce_mean(w * (
                 d_real +
                 d_fake +
-                100.0 * penalty))
+                10.0 * penalty))
 
         var_list = self.discriminator.trainable_variables
         grads = tape.gradient(total_loss, var_list)
@@ -379,7 +379,7 @@ class WeightedGAN(tf.Module):
         with tf.GradientTape() as tape:
 
             # sample designs from the generator
-            x_fake = self.generator.sample(y, training=False)
+            x_fake = self.generator.sample(y, temp=self.temp, training=False)
             d_fake = self.discriminator.loss(x_fake, y, real=True, training=False)
 
             # build the total loss
@@ -388,6 +388,8 @@ class WeightedGAN(tf.Module):
         var_list = self.generator.trainable_variables
         grads = tape.gradient(total_loss, var_list)
         self.generator_optim.apply_gradients(zip(grads, var_list))
+
+        statistics[f'generator/train/x_fake2'] = x_fake
 
         return statistics
 
@@ -414,11 +416,11 @@ class WeightedGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        x_real = add_discrete_noise(x, self.keep, self.temp) \
+        x_real = x \
             if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
         # sample designs from the generator
-        x_fake = self.generator.sample(y, temp=self.temp, training=False)
+        x_fake = self.generator.sample(y, temp=0.001, training=False)
         d_real = self.discriminator.loss(x_real, y, real=True, training=False)
         d_fake = self.discriminator.loss(x_fake, y, real=False, training=False)
         penalty = self.discriminator.penalty(x_real, y, training=False)
