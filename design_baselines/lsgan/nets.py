@@ -37,7 +37,6 @@ class Discriminator(tf.keras.Model):
         self.bn_1 = tfkl.BatchNormalization()
 
         # define a layer of the neural net with two pathways
-        self.score_3.build((1,))
         self.dense_3 = tfkl.Dense(1)
         self.dense_3.build((hidden,))
 

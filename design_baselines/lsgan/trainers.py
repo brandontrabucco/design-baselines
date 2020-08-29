@@ -195,7 +195,7 @@ class LSGAN(tf.Module):
 
         statistics = defaultdict(list)
         for X, y in dataset:
-            for name, tensor in self.train_step(X, y).items():
+            for name, tensor in self.train_step(X).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
