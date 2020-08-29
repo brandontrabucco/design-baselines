@@ -42,7 +42,7 @@ def spearman(a, b):
 
 
 @tf.function(experimental_relax_shapes=True)
-def add_discrete_noise(x, keep=1.0, temp=1.0):
+def add_discrete_noise(x, keep=0.9, temp=5.0):
     """Add noise to a input that is either a continuous value or a probability
     distribution over discrete categorical values
 
@@ -65,10 +65,10 @@ def add_discrete_noise(x, keep=1.0, temp=1.0):
         the original tensor (such as a probability distribution)
     """
 
-    noise = tf.ones_like(x)
-    noise = noise / tf.reduce_sum(noise, axis=-1, keepdims=True)
-    noise = tfpd.RelaxedOneHotCategorical(temp, probs=noise).sample()
-    return keep * x + (1.0 - keep) * noise
+    p = tf.ones_like(x)
+    p = p / tf.reduce_sum(p, axis=-1, keepdims=True)
+    h = tf.math.log(keep * x + (1.0 - keep) * p)
+    return tfpd.RelaxedOneHotCategorical(temp, logits=h).sample()
 
 
 @tf.function(experimental_relax_shapes=True)

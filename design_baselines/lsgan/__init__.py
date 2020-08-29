@@ -49,8 +49,9 @@ def least_squares_gan(config):
         discriminator_beta_2=config['discriminator_beta_2'],
         is_discrete=config['is_discrete'],
         noise_std=config.get('noise_std', 0.0),
-        keep=config.get('keep', 1.0),
-        temp=config.get('temp', 0.001))
+        keep=config.get('keep', 0.9),
+        start_temp=config.get('temp', 5.0),
+        final_temp=config.get('temp', 1.0))
 
     # create a manager for saving algorithms state to the disk
     exploration_gan_manager = tf.train.CheckpointManager(
