@@ -161,6 +161,16 @@ def get_synthetic_data(x,
     xs_ids = d.sample(sample_shape=(exploration_samples,))
     xs = tf.nn.embedding_lookup(x, xs_ids)
 
+    # sample random perturbations from real samples
+    d = tfpd.Categorical(logits=tf.zeros([tf.shape(xs)[-1]]))
+    rand_ids = d.sample(sample_shape=tf.shape(xs)[:-1])
+    rand = tf.one_hot(rand_ids, tf.shape(xs)[-1])
+
+    # randomly perturb the real samples
+    us = tf.random.uniform(tf.shape(xs)[:-1])
+    mask = tf.cast(us < 0.2, tf.float32)[..., tf.newaxis]
+    xs = xs * mask + rand * (1.0 - mask)
+
     # concatenate newly paired samples with the existing data set
     return tf.concat([x, xs], 0), \
            tf.concat([y, ys], 0)

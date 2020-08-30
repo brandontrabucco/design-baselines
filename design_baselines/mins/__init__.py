@@ -3,12 +3,13 @@ from design_baselines.logger import Logger
 from design_baselines.mins.trainers import Ensemble
 from design_baselines.mins.trainers import WeightedGAN
 from design_baselines.mins.nets import ForwardModel
-from design_baselines.mins.nets import Discriminator
-from design_baselines.mins.nets import DiscreteGenerator
+from design_baselines.mins.nets import Discriminator, DiscriminatorConv
+from design_baselines.mins.nets import DiscreteGenerator, DiscreteGenConv
 from design_baselines.mins.nets import ContinuousGenerator
 from design_baselines.mins.utils import get_weights
 from design_baselines.mins.utils import get_synthetic_data
 import tensorflow as tf
+import tensorflow_probability as tfp
 import os
 
 
@@ -67,10 +68,10 @@ def model_inversion(config):
     if config['is_discrete']:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
-        exploration_generator = DiscreteGenerator(
+        exploration_generator = DiscreteGenConv(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
-        exploitation_generator = DiscreteGenerator(
+        exploitation_generator = DiscreteGenConv(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
@@ -85,7 +86,7 @@ def model_inversion(config):
             hidden=config['hidden_size'])
 
     # build the neural network GAN components
-    exploration_discriminator = Discriminator(
+    exploration_discriminator = DiscriminatorConv(
         task.input_shape, hidden=config['hidden_size'])
     exploration_gan = WeightedGAN(
         exploration_generator, exploration_discriminator,
@@ -107,7 +108,7 @@ def model_inversion(config):
         os.path.join(config['logging_dir'], 'exploration_gan'), 1)
 
     # build the neural network GAN components
-    exploitation_discriminator = Discriminator(
+    exploitation_discriminator = DiscriminatorConv(
         task.input_shape, hidden=config['hidden_size'])
     exploitation_gan = WeightedGAN(
         exploitation_generator, exploitation_discriminator,
