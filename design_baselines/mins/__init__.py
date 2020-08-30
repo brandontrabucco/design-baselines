@@ -160,10 +160,9 @@ def model_inversion(config):
 
         # generate synthetic x paired with high performing scores
         tilde_x, tilde_y = get_synthetic_data(
-            x, y, is_discrete=config['is_discrete'],
+            x, y,
             exploration_samples=config['exploration_samples'],
-            exploration_rate=config['exploration_rate'],
-            exploration_noise_std=config.get('exploration_noise_std', 0.1))
+            exploration_rate=config['exploration_rate'])
 
         # build a weighted data set using newly collected samples
         train_data, val_data = task.build(

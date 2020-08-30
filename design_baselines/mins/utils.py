@@ -118,10 +118,8 @@ def get_p_y(scores):
 @tf.function(experimental_relax_shapes=True)
 def get_synthetic_data(x,
                        y,
-                       is_discrete=False,
                        exploration_samples=32,
-                       exploration_rate=10.0,
-                       exploration_noise_std=0.1):
+                       exploration_rate=10.0):
     """Generate a synthetic dataset of designs x and scores y using the
     Randomized Labelling algorithm
 
@@ -135,8 +133,6 @@ def get_synthetic_data(x,
         the number of samples to draw for randomized labelling
     exploration_rate: float
         the rate of the exponential noise added to y
-    exploration_noise_std: float
-        the standard deviation of the gaussian noise added to x
 
     Returns:
 
@@ -160,23 +156,10 @@ def get_synthetic_data(x,
     d = tfpd.Exponential(rate=exploration_rate)
     ys = ys + d.sample(sample_shape=tf.shape(ys))
 
-    if is_discrete:
-
-        # randomly sample data points from the space of valid samples
-        log_prob = tf.zeros(tf.shape(x)[1:])
-        d = tfpd.OneHotCategorical(logits=log_prob, dtype=tf.float32)
-        xs = d.sample(sample_shape=(exploration_samples,))
-
-    else:
-
-        # select data points randomly from the data set
-        d = tfpd.Categorical(logits=tf.zeros([tf.shape(x)[0]]))
-        xs_ids = d.sample(sample_shape=(exploration_samples,))
-        xs = tf.nn.embedding_lookup(x, xs_ids)
-
-        # add perturbation noise to the sampled xs
-        d = tfpd.Normal(0, exploration_noise_std)
-        xs = xs + d.sample(sample_shape=tf.shape(xs))
+    # select data points randomly from the data set
+    d = tfpd.Categorical(logits=tf.zeros([tf.shape(x)[0]]))
+    xs_ids = d.sample(sample_shape=(exploration_samples,))
+    xs = tf.nn.embedding_lookup(x, xs_ids)
 
     # concatenate newly paired samples with the existing data set
     return tf.concat([x, xs], 0), \
