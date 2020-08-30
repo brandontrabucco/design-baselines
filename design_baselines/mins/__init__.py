@@ -98,7 +98,8 @@ def model_inversion(config):
         is_discrete=config['is_discrete'],
         noise_std=config.get('noise_std', 0.0),
         keep=config.get('keep', 1.0),
-        temp=config.get('temp', 0.001))
+        start_temp=config.get('start_temp', 5.0),
+        final_temp=config.get('final_temp', 1.0))
 
     # create a manager for saving algorithms state to the disk
     exploration_gan_manager = tf.train.CheckpointManager(
@@ -119,7 +120,8 @@ def model_inversion(config):
         is_discrete=config['is_discrete'],
         noise_std=config.get('noise_std', 0.0),
         keep=config.get('keep', 1.0),
-        temp=config.get('temp', 0.001))
+        start_temp=config.get('start_temp', 5.0),
+        final_temp=config.get('final_temp', 1.0))
 
     # create a manager for saving algorithms state to the disk
     exploitation_gan_manager = tf.train.CheckpointManager(
@@ -148,13 +150,13 @@ def model_inversion(config):
         train_data, val_data, logger, config['initial_epochs'],
         header="exploitation/")
 
+    # prevent the temperature from being annealed further
+    if config['is_discrete']:
+        exploration_gan.start_temp = exploration_gan.final_temp
+        exploitation_gan.start_temp = exploitation_gan.final_temp
+
     # train the gan using an importance sampled data set
     for iteration in range(config['iterations']):
-
-        # anneal the temperature linearly to zero wile training
-        if config['is_discrete']:
-            temp = config['temp'] * (1. - iteration / config['iterations'])
-            exploration_gan.temp = exploitation_gan.temp = temp
 
         # generate synthetic x paired with high performing scores
         tilde_x, tilde_y = get_synthetic_data(

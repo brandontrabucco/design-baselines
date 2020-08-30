@@ -29,12 +29,12 @@ class Discriminator(tf.keras.Model):
         # define a layer of the neural net with two pathways
         self.dense_0 = tfkl.Dense(hidden)
         self.dense_0.build((np.prod(design_shape),))
-        self.bn_0 = tfkl.BatchNormalization()
+        self.bn_0 = tfkl.LayerNormalization()
 
         # define a layer of the neural net with two pathways
         self.dense_1 = tfkl.Dense(hidden)
         self.dense_1.build((hidden,))
-        self.bn_1 = tfkl.BatchNormalization()
+        self.bn_1 = tfkl.LayerNormalization()
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(1)
@@ -136,12 +136,12 @@ class DiscreteGenerator(tf.keras.Model):
         # define a layer of the neural net with two pathways
         self.dense_0 = tfkl.Dense(hidden)
         self.dense_0.build((latent_size,))
-        self.bn_0 = tfkl.BatchNormalization()
+        self.bn_0 = tfkl.LayerNormalization()
 
         # define a layer of the neural net with two pathways
         self.dense_1 = tfkl.Dense(hidden)
         self.dense_1.build((hidden,))
-        self.bn_1 = tfkl.BatchNormalization()
+        self.bn_1 = tfkl.LayerNormalization()
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(np.prod(design_shape))
@@ -207,12 +207,12 @@ class ContinuousGenerator(tf.keras.Model):
         # define a layer of the neural net with two pathways
         self.dense_0 = tfkl.Dense(hidden)
         self.dense_0.build((latent_size,))
-        self.bn_0 = tfkl.BatchNormalization()
+        self.bn_0 = tfkl.LayerNormalization()
 
         # define a layer of the neural net with two pathways
         self.dense_1 = tfkl.Dense(hidden)
         self.dense_1.build((hidden,))
-        self.bn_1 = tfkl.BatchNormalization()
+        self.bn_1 = tfkl.LayerNormalization()
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(np.prod(design_shape))

@@ -93,7 +93,7 @@ class LSGAN(tf.Module):
             # sample designs from the generator
             x_fake = self.generator.sample(x.shape[0], temp=self.temp, training=True)
             d_real = self.discriminator.loss(x_real, real=True, training=True)
-            d_fake = self.discriminator.loss(x_fake, real=False, training=True)
+            d_fake = self.discriminator.loss(x_fake, real=False, training=False)
             penalty = self.discriminator.penalty(x_real, training=False)
 
             # calculate discriminative accuracy

@@ -279,7 +279,8 @@ class WeightedGAN(tf.Module):
                  is_discrete=False,
                  noise_std=0.0,
                  keep=0.0,
-                 temp=0.0):
+                 start_temp=0.0,
+                 final_temp=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -315,7 +316,9 @@ class WeightedGAN(tf.Module):
         self.is_discrete = is_discrete
         self.noise_std = noise_std
         self.keep = keep
-        self.temp = temp
+        self.start_temp = start_temp
+        self.final_temp = final_temp
+        self.temp = tf.Variable(0.0, dtype=tf.float32)
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
@@ -343,7 +346,7 @@ class WeightedGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        x_real = x \
+        x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
             if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
         with tf.GradientTape() as tape:
@@ -351,7 +354,7 @@ class WeightedGAN(tf.Module):
             # sample designs from the generator
             x_fake = self.generator.sample(y, temp=0.001, training=True)
             d_real = self.discriminator.loss(x_real, y, real=True, training=True)
-            d_fake = self.discriminator.loss(x_fake, y, real=False, training=True)
+            d_fake = self.discriminator.loss(x_fake, y, real=False, training=False)
             penalty = self.discriminator.penalty(x_real, y, training=False)
 
             # calculate discriminative accuracy
@@ -416,7 +419,7 @@ class WeightedGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        x_real = x \
+        x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
             if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
         # sample designs from the generator
@@ -510,6 +513,8 @@ class WeightedGAN(tf.Module):
         """
 
         for e in range(start_epoch, start_epoch + epochs):
+            self.temp.assign(self.start_temp * (1.0 - e / epochs) +
+                             self.final_temp * e / epochs)
             for name, loss in self.train(train_data).items():
                 logger.record(header + name, loss, e)
             for name, loss in self.validate(validate_data).items():
@@ -530,4 +535,5 @@ class WeightedGAN(tf.Module):
         saveables['discriminator'] = self.discriminator
         saveables['generator_optim'] = self.generator_optim
         saveables['discriminator_optim'] = self.discriminator_optim
+        saveables['temp'] = self.temp
         return saveables
