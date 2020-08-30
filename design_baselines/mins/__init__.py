@@ -65,13 +65,23 @@ def model_inversion(config):
                         logger,
                         config['ensemble_epochs'])
 
-    if config['is_discrete']:
+    if config['is_discrete'] and len(task.input_shape) == 2:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
         exploration_generator = DiscreteGenConv(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
         exploitation_generator = DiscreteGenConv(
+            task.input_shape, config['latent_size'],
+            hidden=config['hidden_size'])
+
+    elif config['is_discrete'] and len(task.input_shape) == 1:
+
+        # build a Gumbel-Softmax GAN to sample discrete outputs
+        exploration_generator = DiscreteGenerator(
+            task.input_shape, config['latent_size'],
+            hidden=config['hidden_size'])
+        exploitation_generator = DiscreteGenerator(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
