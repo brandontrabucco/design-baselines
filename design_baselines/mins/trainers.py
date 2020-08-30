@@ -352,7 +352,7 @@ class WeightedGAN(tf.Module):
         with tf.GradientTape() as tape:
 
             # sample designs from the generator
-            x_fake = self.generator.sample(y, temp=0.001, training=True)
+            x_fake = self.generator.sample(y, temp=self.temp, training=True)
             d_real = self.discriminator.loss(x_real, y, real=True, training=True)
             d_fake = self.discriminator.loss(x_fake, y, real=False, training=False)
             penalty = self.discriminator.penalty(x_real, y, training=False)
@@ -423,7 +423,7 @@ class WeightedGAN(tf.Module):
             if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
         # sample designs from the generator
-        x_fake = self.generator.sample(y, temp=0.001, training=False)
+        x_fake = self.generator.sample(y, temp=self.temp, training=False)
         d_real = self.discriminator.loss(x_real, y, real=True, training=False)
         d_fake = self.discriminator.loss(x_fake, y, real=False, training=False)
         penalty = self.discriminator.penalty(x_real, y, training=False)
