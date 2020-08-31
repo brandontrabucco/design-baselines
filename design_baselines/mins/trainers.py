@@ -346,6 +346,7 @@ class WeightedGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
+        v = tf.random.shuffle(y)
         x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
             if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
@@ -355,22 +356,26 @@ class WeightedGAN(tf.Module):
             x_fake = self.generator.sample(y, temp=self.temp, training=True)
             d_real, acc_real = self.discriminator.loss(
                 x_real, y, target_real=True, input_real=True, training=True)
+            d_pair, acc_pair = self.discriminator.loss(
+                x_fake, v, target_real=False, input_real=False, training=False)
             d_fake, acc_fake = self.discriminator.loss(
                 x_fake, y, target_real=False, input_real=False, training=False)
             penalty = self.discriminator.penalty(x_real, y, training=False)
 
             # build the total loss
             total_loss = tf.reduce_mean(w * (
-                d_real + d_fake + 10.0 * penalty))
+                d_real + d_pair + d_fake + 10.0 * penalty))
 
         var_list = self.discriminator.trainable_variables
         grads = tape.gradient(total_loss, var_list)
         self.discriminator_optim.apply_gradients(zip(grads, var_list))
 
         statistics[f'discriminator/train/d_real'] = d_real
+        statistics[f'discriminator/train/d_pair'] = d_pair
         statistics[f'discriminator/train/d_fake'] = d_fake
         statistics[f'discriminator/train/penalty'] = penalty
         statistics[f'discriminator/train/acc_real'] = acc_real
+        statistics[f'discriminator/train/acc_pair'] = acc_pair
         statistics[f'discriminator/train/acc_fake'] = acc_fake
         statistics[f'generator/train/x_fake'] = x_fake
         statistics[f'generator/train/x_real'] = x_real
@@ -417,6 +422,7 @@ class WeightedGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
+        v = tf.random.shuffle(y)
         x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
             if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
@@ -424,14 +430,18 @@ class WeightedGAN(tf.Module):
         x_fake = self.generator.sample(y, temp=self.temp, training=False)
         d_real, acc_real = self.discriminator.loss(
             x_real, y, target_real=True, input_real=True, training=False)
+        d_pair, acc_pair = self.discriminator.loss(
+            x_fake, v, target_real=False, input_real=False, training=False)
         d_fake, acc_fake = self.discriminator.loss(
             x_fake, y, target_real=False, input_real=False, training=False)
         penalty = self.discriminator.penalty(x_real, y, training=False)
 
         statistics[f'discriminator/validate/d_real'] = d_real
+        statistics[f'discriminator/validate/d_pair'] = d_pair
         statistics[f'discriminator/validate/d_fake'] = d_fake
         statistics[f'discriminator/validate/penalty'] = penalty
         statistics[f'discriminator/validate/acc_real'] = acc_real
+        statistics[f'discriminator/validate/acc_pair'] = acc_pair
         statistics[f'discriminator/validate/acc_fake'] = acc_fake
         statistics[f'generator/validate/x_fake'] = x_fake
         statistics[f'generator/validate/x_real'] = x_real
