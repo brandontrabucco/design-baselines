@@ -66,40 +66,40 @@ def model_inversion(config):
     if config['is_discrete'] and config['is_conv']:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
-        exploration_generator = DiscreteGenConv(
+        explore_gen = DiscreteGenConv(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
-        exploitation_generator = DiscreteGenConv(
+        exploit_gen = DiscreteGenConv(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
     elif config['is_discrete']:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
-        exploration_generator = DiscreteGenerator(
+        explore_gen = DiscreteGenerator(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
-        exploitation_generator = DiscreteGenerator(
+        exploit_gen = DiscreteGenerator(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
     elif config['is_conv']:
 
         # build an LS-GAN to sample continuous outputs
-        exploration_generator = ContinuousGenConv(
+        explore_gen = ContinuousGenConv(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
-        exploitation_generator = ContinuousGenConv(
+        exploit_gen = ContinuousGenConv(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
     else:
 
         # build an LS-GAN to sample continuous outputs
-        exploration_generator = ContinuousGenerator(
+        explore_gen = ContinuousGenerator(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
-        exploitation_generator = ContinuousGenerator(
+        exploit_gen = ContinuousGenerator(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
@@ -108,10 +108,10 @@ def model_inversion(config):
         if config['is_conv'] else Discriminator
 
     # build the neural network GAN components
-    exploration_discriminator = discrimimator(
+    explore_discriminator = discrimimator(
         task.input_shape, hidden=config['hidden_size'])
-    exploration_gan = WeightedGAN(
-        exploration_generator, exploration_discriminator,
+    explore_gan = WeightedGAN(
+        explore_gen, explore_discriminator,
         generator_lr=config['generator_lr'],
         generator_beta_1=config['generator_beta_1'],
         generator_beta_2=config['generator_beta_2'],
@@ -125,15 +125,15 @@ def model_inversion(config):
         final_temp=config.get('final_temp', 1.0))
 
     # create a manager for saving algorithms state to the disk
-    exploration_gan_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**exploration_gan.get_saveables()),
+    explore_gan_manager = tf.train.CheckpointManager(
+        tf.train.Checkpoint(**explore_gan.get_saveables()),
         os.path.join(config['logging_dir'], 'exploration_gan'), 1)
 
     # build the neural network GAN components
-    exploitation_discriminator = discrimimator(
+    exploit_discriminator = discrimimator(
         task.input_shape, hidden=config['hidden_size'])
-    exploitation_gan = WeightedGAN(
-        exploitation_generator, exploitation_discriminator,
+    exploit_gan = WeightedGAN(
+        exploit_gen, exploit_discriminator,
         generator_lr=config['generator_lr'],
         generator_beta_1=config['generator_beta_1'],
         generator_beta_2=config['generator_beta_2'],
@@ -147,13 +147,13 @@ def model_inversion(config):
         final_temp=config.get('final_temp', 1.0))
 
     # create a manager for saving algorithms state to the disk
-    exploitation_gan_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**exploitation_gan.get_saveables()),
+    exploit_gan_manager = tf.train.CheckpointManager(
+        tf.train.Checkpoint(**exploit_gan.get_saveables()),
         os.path.join(config['logging_dir'], 'exploitation_gan'), 1)
 
     # restore tha GANS if a checkpoint exists
-    exploration_gan_manager.restore_or_initialize()
-    exploitation_gan_manager.restore_or_initialize()
+    explore_gan_manager.restore_or_initialize()
+    exploit_gan_manager.restore_or_initialize()
 
     # save the initial dataset statistics for safe keeping
     x = task.x
@@ -166,20 +166,44 @@ def model_inversion(config):
         val_size=config['val_size'])
 
     # train the gan for several epochs
-    exploration_gan.launch(
+    explore_gan.launch(
         train_data, val_data, logger, config['initial_epochs'],
         header="exploration/")
-    exploitation_gan.launch(
+    exploit_gan.launch(
         train_data, val_data, logger, config['initial_epochs'],
         header="exploitation/")
 
     # prevent the temperature from being annealed further
     if config['is_discrete']:
-        exploration_gan.start_temp = exploration_gan.final_temp
-        exploitation_gan.start_temp = exploitation_gan.final_temp
+        explore_gan.start_temp = explore_gan.final_temp
+        exploit_gan.start_temp = exploit_gan.final_temp
+
+    # sample designs from the GAN and evaluate them
+    condition_ys = tf.tile(tf.reduce_max(
+        y, keepdims=True), [config['solver_samples'], 1])
+
+    # generate samples for exploitation
+    solver_xs = explore_gen.sample(condition_ys, temp=0.001)
+    actual_ys = task.score(solver_xs)
+
+    # record score percentiles
+    logger.record("exploration/condition_ys",
+                  condition_ys, 0, percentile=True)
+    logger.record("exploration/actual_ys",
+                  actual_ys, 0, percentile=True)
+
+    # generate samples for exploitation
+    solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
+    actual_ys = task.score(solver_xs)
+
+    # record score percentiles
+    logger.record("exploitation/condition_ys",
+                  condition_ys, 0, percentile=True)
+    logger.record("exploitation/actual_ys",
+                  actual_ys, 0, percentile=True)
 
     # train the gan using an importance sampled data set
-    for iteration in range(config['iterations']):
+    for iteration in range(1, 1 + config['iterations']):
 
         # generate synthetic x paired with high performing scores
         tilde_x, tilde_y = get_synthetic_data(
@@ -195,7 +219,7 @@ def model_inversion(config):
             val_size=config['val_size'])
 
         # train the gan for several epochs
-        exploration_gan.launch(
+        explore_gan.launch(
             train_data, val_data, logger, config['epochs_per_iteration'],
             start_epoch=config['epochs_per_iteration'] * iteration +
                         config['initial_epochs'],
@@ -206,7 +230,7 @@ def model_inversion(config):
             tilde_y, keepdims=True), [config['thompson_samples'], 1])
 
         # generate samples for exploration
-        solver_xs = exploration_generator.sample(condition_ys, temp=0.001)
+        solver_xs = explore_gen.sample(condition_ys, temp=0.001)
         actual_ys = ensemble.get_distribution(solver_xs).mean() \
             if config['fully_offline'] else task.score(solver_xs)
 
@@ -228,7 +252,7 @@ def model_inversion(config):
             val_size=config['val_size'])
 
         # train the gan for several epochs
-        exploitation_gan.launch(
+        exploit_gan.launch(
             train_data, val_data, logger, config['epochs_per_iteration'],
             start_epoch=config['epochs_per_iteration'] * iteration +
                         config['initial_epochs'],
@@ -239,7 +263,7 @@ def model_inversion(config):
             y, keepdims=True), [config['solver_samples'], 1])
 
         # generate samples for exploitation
-        solver_xs = exploration_generator.sample(condition_ys, temp=0.001)
+        solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
         actual_ys = task.score(solver_xs)
 
         # record score percentiles

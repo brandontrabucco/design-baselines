@@ -353,18 +353,18 @@ class WeightedGAN(tf.Module):
         with tf.GradientTape() as tape:
 
             # sample designs from the generator
+            penalty = self.discriminator.penalty(x_real, y, training=False)
             x_fake = self.generator.sample(y, temp=self.temp, training=True)
             d_real, acc_real = self.discriminator.loss(
                 x_real, y, target_real=True, input_real=True, training=True)
             d_pair, acc_pair = self.discriminator.loss(
-                x_fake, v, target_real=False, input_real=False, training=False)
+                x_real, v, target_real=False, input_real=False, training=False)
             d_fake, acc_fake = self.discriminator.loss(
                 x_fake, y, target_real=False, input_real=False, training=False)
-            penalty = self.discriminator.penalty(x_real, y, training=False)
 
             # build the total loss
             total_loss = tf.reduce_mean(w * (
-                d_real + d_pair + d_fake + 10.0 * penalty))
+                d_real + 0.5 * (d_pair + d_fake) + 10.0 * penalty))
 
         var_list = self.discriminator.trainable_variables
         grads = tape.gradient(total_loss, var_list)
@@ -427,14 +427,14 @@ class WeightedGAN(tf.Module):
             if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
         # sample designs from the generator
+        penalty = self.discriminator.penalty(x_real, y, training=False)
         x_fake = self.generator.sample(y, temp=self.temp, training=False)
         d_real, acc_real = self.discriminator.loss(
             x_real, y, target_real=True, input_real=True, training=False)
         d_pair, acc_pair = self.discriminator.loss(
-            x_fake, v, target_real=False, input_real=False, training=False)
+            x_real, v, target_real=False, input_real=False, training=False)
         d_fake, acc_fake = self.discriminator.loss(
             x_fake, y, target_real=False, input_real=False, training=False)
-        penalty = self.discriminator.penalty(x_real, y, training=False)
 
         statistics[f'discriminator/validate/d_real'] = d_real
         statistics[f'discriminator/validate/d_pair'] = d_pair
