@@ -346,22 +346,18 @@ class WeightedGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        if self.is_discrete:
-            x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp)
-        else:
-            x_real = add_continuous_noise(x, self.noise_std)
+        x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
+            if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
         with tf.GradientTape() as tape:
 
             # sample designs from the generator
-            x_fake = self.generator.sample(
-                y, temp=self.temp, training=True)
+            x_fake = self.generator.sample(y, temp=self.temp, training=True)
             d_real, acc_real = self.discriminator.loss(
                 x_real, y, target_real=True, input_real=True, training=True)
             d_fake, acc_fake = self.discriminator.loss(
                 x_fake, y, target_real=False, input_real=False, training=False)
-            penalty = self.discriminator.penalty(
-                x_real, y, training=False)
+            penalty = self.discriminator.penalty(x_real, y, training=False)
 
             # build the total loss
             total_loss = tf.reduce_mean(w * (
@@ -421,20 +417,16 @@ class WeightedGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        if self.is_discrete:
-            x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp)
-        else:
-            x_real = add_continuous_noise(x, self.noise_std)
+        x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
+            if self.is_discrete else add_continuous_noise(x, self.noise_std)
 
         # sample designs from the generator
-        x_fake = self.generator.sample(
-            y, temp=self.temp, training=False)
+        x_fake = self.generator.sample(y, temp=self.temp, training=False)
         d_real, acc_real = self.discriminator.loss(
             x_real, y, target_real=True, input_real=True, training=False)
         d_fake, acc_fake = self.discriminator.loss(
             x_fake, y, target_real=False, input_real=False, training=False)
-        penalty = self.discriminator.penalty(
-            x_real, y, training=False)
+        penalty = self.discriminator.penalty(x_real, y, training=False)
 
         statistics[f'discriminator/validate/d_real'] = d_real
         statistics[f'discriminator/validate/d_fake'] = d_fake

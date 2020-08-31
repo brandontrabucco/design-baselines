@@ -37,7 +37,7 @@ matplotlib==3.3.0
 msgpack==1.0.0
 mujoco-py==1.50.1.68
 multidict==4.7.6
-numpy==1.19.0
+numpy==1.18.5
 oauthlib==3.1.0
 opt-einsum==3.3.0
 pandas==1.0.5
@@ -63,12 +63,12 @@ seaborn==0.10.1
 six==1.15.0
 soupsieve==2.0.1
 tabulate==0.8.7
-tensorboard==2.2.2
+tensorboard==2.3.2
 tensorboard-plugin-wit==1.7.0
 tensorboardX==2.1
-tensorflow==2.2.0
-tensorflow-estimator==2.2.0
-tensorflow-probability==0.10.1
+tensorflow==2.3.0
+tensorflow-estimator==2.3.0
+tensorflow-probability==0.11.0
 termcolor==1.1.0
 urllib3==1.25.9
 Werkzeug==1.0.1
