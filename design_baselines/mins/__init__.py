@@ -5,11 +5,10 @@ from design_baselines.mins.trainers import WeightedGAN
 from design_baselines.mins.nets import ForwardModel
 from design_baselines.mins.nets import Discriminator, DiscriminatorConv
 from design_baselines.mins.nets import DiscreteGenerator, DiscreteGenConv
-from design_baselines.mins.nets import ContinuousGenerator
+from design_baselines.mins.nets import ContinuousGenerator, ContinuousGenConv
 from design_baselines.mins.utils import get_weights
 from design_baselines.mins.utils import get_synthetic_data
 import tensorflow as tf
-import tensorflow_probability as tfp
 import os
 
 
@@ -49,8 +48,7 @@ def model_inversion(config):
         # create a manager for saving algorithms state to the disk
         ensemble_manager = tf.train.CheckpointManager(
             tf.train.Checkpoint(**ensemble.get_saveables()),
-            directory=os.path.join(config['logging_dir'], 'ensemble'),
-            max_to_keep=1)
+            os.path.join(config['logging_dir'], 'ensemble'), 1)
 
         # build a bootstrapped data set
         train_data, val_data = task.build(
@@ -65,7 +63,7 @@ def model_inversion(config):
                         logger,
                         config['ensemble_epochs'])
 
-    if config['is_discrete'] and len(task.input_shape) == 2:
+    if config['is_discrete'] and config['is_conv']:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
         exploration_generator = DiscreteGenConv(
@@ -75,7 +73,7 @@ def model_inversion(config):
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
-    elif config['is_discrete'] and len(task.input_shape) == 1:
+    elif config['is_discrete']:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
         exploration_generator = DiscreteGenerator(
@@ -95,8 +93,12 @@ def model_inversion(config):
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
+    # choose if the discriminator is convolutional or not
+    discrimimator = DiscriminatorConv \
+        if config['is_conv'] else Discriminator
+
     # build the neural network GAN components
-    exploration_discriminator = DiscriminatorConv(
+    exploration_discriminator = discrimimator(
         task.input_shape, hidden=config['hidden_size'])
     exploration_gan = WeightedGAN(
         exploration_generator, exploration_discriminator,
@@ -118,7 +120,7 @@ def model_inversion(config):
         os.path.join(config['logging_dir'], 'exploration_gan'), 1)
 
     # build the neural network GAN components
-    exploitation_discriminator = DiscriminatorConv(
+    exploitation_discriminator = discrimimator(
         task.input_shape, hidden=config['hidden_size'])
     exploitation_gan = WeightedGAN(
         exploitation_generator, exploitation_discriminator,
