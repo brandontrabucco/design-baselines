@@ -40,7 +40,9 @@ class ForwardModel(tf.keras.Sequential):
             tfkl.LeakyReLU(),
             tfkl.Dense(2)])
 
-    def get_params(self, inputs, **kwargs):
+    def get_params(self,
+                   inputs,
+                   **kwargs):
         """Return a dictionary of parameters for a particular distribution
         family such as the mean and variance of a gaussian
 
@@ -61,7 +63,9 @@ class ForwardModel(tf.keras.Sequential):
         logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
         return {"loc": mean, "scale": tf.math.exp(logstd)}
 
-    def get_distribution(self, inputs, **kwargs):
+    def get_distribution(self,
+                         inputs,
+                         **kwargs):
         """Return a distribution over the outputs of this model, for example
         a Multivariate Gaussian Distribution
 
@@ -103,19 +107,30 @@ class Discriminator(tf.keras.Model):
 
         # define a layer of the neural net with two pathways
         self.dense_0 = tfkl.Dense(hidden)
-        self.dense_0.build((np.prod(design_shape) + 1,))
+        self.dense_0.build((None, np.prod(design_shape) + 1))
         self.bn_0 = tfkl.LayerNormalization()
+        self.bn_0.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_1 = tfkl.Dense(hidden)
         self.dense_1.build((hidden + 1,))
         self.bn_1 = tfkl.LayerNormalization()
+        self.bn_1.build((None, hidden))
+
+        # define a layer of the neural net with two pathways
+        self.dense_2 = tfkl.Dense(hidden)
+        self.dense_2.build((hidden + 1,))
+        self.bn_2 = tfkl.LayerNormalization()
+        self.bn_2.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(1)
         self.dense_3.build((hidden + 1,))
 
-    def penalty(self, h, y, **kwargs):
+    def penalty(self,
+                h,
+                y,
+                **kwargs):
         """Calculate a gradient penalty for the discriminator and return
         a loss that will be minimized
 
@@ -144,12 +159,19 @@ class Discriminator(tf.keras.Model):
             x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
             x = self.dense_1(tf.concat([x, y], 1), **kwargs)
             x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
+            x = self.dense_2(tf.concat([x, y], 1), **kwargs)
+            x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
             x = self.dense_3(tf.concat([x, y], 1), **kwargs)
         grads = tape.gradient(x, h)
         norm = tf.linalg.norm(grads, axis=-1, keepdims=True)
         return (1. - norm) ** 2
 
-    def loss(self, x, y, real=True, **kwargs):
+    def loss(self,
+             x,
+             y,
+             target_real=True,
+             input_real=True,
+             **kwargs):
         """Use a neural network to discriminate the log probability that a
         sampled design X has score y
 
@@ -179,8 +201,22 @@ class Discriminator(tf.keras.Model):
         x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
         x = self.dense_1(tf.concat([x, y], 1), **kwargs)
         x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
+        x = self.dense_2(tf.concat([x, y], 1), **kwargs)
+        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
         x = self.dense_3(tf.concat([x, y], 1), **kwargs)
-        return (x - (1.0 if real else 0.0)) ** 2
+
+        # GAN specific loss function
+        if target_real and input_real:
+            return -tf.math.log_sigmoid(x), \
+                    tf.cast(x > 0.0, tf.float32)
+
+        elif target_real and not input_real:
+            return tf.math.log(1.0 - tf.math.sigmoid(x)), \
+                   tf.cast(x > 0.0, tf.float32)
+
+        elif not target_real and not input_real:
+            return -tf.math.log(1.0 - tf.math.sigmoid(x)), \
+                   tf.cast(x < 0.0, tf.float32)
 
 
 class DiscriminatorConv(tf.keras.Model):
@@ -237,7 +273,10 @@ class DiscriminatorConv(tf.keras.Model):
         self.dense_4 = tfkl.Dense(1)
         self.dense_4.compute_output_shape((None, hidden + 1,))
 
-    def penalty(self, h, y, **kwargs):
+    def penalty(self,
+                h,
+                y,
+                **kwargs):
         """Calculate a gradient penalty for the discriminator and return
         a loss that will be minimized
 
@@ -263,7 +302,10 @@ class DiscriminatorConv(tf.keras.Model):
         return (1.0 - tf.linalg.norm(tf.reshape(tape.gradient(
             x, h), [-1, self.input_size]), axis=-1, keepdims=True)) ** 2
 
-    def __call__(self, x, y, **kwargs):
+    def __call__(self,
+                 x,
+                 y,
+                 **kwargs):
         """Use a neural network to discriminate the log probability that a
         sampled design X has score y
 
@@ -296,7 +338,12 @@ class DiscriminatorConv(tf.keras.Model):
         x = tf.nn.leaky_relu(self.bn_3(x, **kwargs), alpha=0.2)
         return self.dense_4(tf.concat([x, y], 1), **kwargs)
 
-    def loss(self, x, y, real=True, **kwargs):
+    def loss(self,
+             x,
+             y,
+             target_real=True,
+             input_real=True,
+             **kwargs):
         """Use a neural network to discriminate the log probability that a
         sampled design X has score y
 
@@ -319,9 +366,20 @@ class DiscriminatorConv(tf.keras.Model):
             real of X being fake depending on the value of 'real'
         """
 
-        # return the discriminator least squares loss function
-        return (self.__call__(
-            x, y, **kwargs) - (1.0 if real else 0.0)) ** 2
+        x = self.__call__(x, y, **kwargs)
+
+        # GAN specific loss function
+        if target_real and input_real:
+            return -tf.math.log_sigmoid(x), \
+                    tf.cast(x > 0.0, tf.float32)
+
+        elif target_real and not input_real:
+            return tf.math.log(1.0 - tf.math.sigmoid(x)), \
+                   tf.cast(x > 0.0, tf.float32)
+
+        elif not target_real and not input_real:
+            return -tf.math.log(1.0 - tf.math.sigmoid(x)), \
+                   tf.cast(x < 0.0, tf.float32)
 
 
 class DiscreteGenerator(tf.keras.Model):
@@ -355,17 +413,27 @@ class DiscreteGenerator(tf.keras.Model):
         self.dense_0 = tfkl.Dense(hidden)
         self.dense_0.build((latent_size + 1,))
         self.bn_0 = tfkl.LayerNormalization()
+        self.bn_0.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_1 = tfkl.Dense(hidden)
         self.dense_1.build((hidden + 1,))
         self.bn_1 = tfkl.LayerNormalization()
+        self.bn_1.build((None, hidden))
+
+        # define a layer of the neural net with two pathways
+        self.dense_2 = tfkl.Dense(hidden)
+        self.dense_2.build((hidden + 1,))
+        self.bn_2 = tfkl.LayerNormalization()
+        self.bn_2.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(np.prod(design_shape))
         self.dense_3.build((hidden + 1,))
 
-    def sample(self, y, **kwargs):
+    def sample(self,
+               y,
+               **kwargs):
         """Generate samples of designs X that have a score y where y is
         the score that the generator conditions on
 
@@ -390,6 +458,8 @@ class DiscreteGenerator(tf.keras.Model):
         x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
         x = self.dense_1(tf.concat([x, y], 1), **kwargs)
         x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
+        x = self.dense_2(tf.concat([x, y], 1), **kwargs)
+        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
         x = self.dense_3(tf.concat([x, y], 1), **kwargs)
         logits = tf.reshape(x, [tf.shape(y)[0], *self.design_shape])
         return tfpd.RelaxedOneHotCategorical(
@@ -456,7 +526,9 @@ class DiscreteGenConv(tf.keras.Model):
         self.conv_4 = tfkl.Conv1DTranspose(design_shape[-1], 5, strides=2)
         self.conv_4.compute_output_shape((None, len2, 32))
 
-    def sample(self, y, **kwargs):
+    def sample(self,
+               y,
+               **kwargs):
         """Generate samples of designs X that have a score y where y is
         the score that the generator conditions on
 
@@ -522,17 +594,27 @@ class ContinuousGenerator(tf.keras.Model):
         self.dense_0 = tfkl.Dense(hidden)
         self.dense_0.build((latent_size + 1,))
         self.bn_0 = tfkl.LayerNormalization()
+        self.bn_0.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_1 = tfkl.Dense(hidden)
         self.dense_1.build((hidden + 1,))
         self.bn_1 = tfkl.LayerNormalization()
+        self.bn_1.build((None, hidden))
+
+        # define a layer of the neural net with two pathways
+        self.dense_2 = tfkl.Dense(hidden)
+        self.dense_2.build((hidden + 1,))
+        self.bn_2 = tfkl.LayerNormalization()
+        self.bn_2.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(np.prod(design_shape))
         self.dense_3.build((hidden + 1,))
 
-    def sample(self, y, **kwargs):
+    def sample(self,
+               y,
+               **kwargs):
         """Generate samples of designs X that have a score y where y is
         the score that the generator conditions on
 
@@ -557,6 +639,8 @@ class ContinuousGenerator(tf.keras.Model):
         x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
         x = self.dense_1(tf.concat([x, y], 1), **kwargs)
         x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
+        x = self.dense_2(tf.concat([x, y], 1), **kwargs)
+        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
         x = self.dense_3(tf.concat([x, y], 1), **kwargs)
         return tf.reshape(x, [tf.shape(y)[0], *self.design_shape])
 
@@ -621,7 +705,9 @@ class ContinuousGenConv(tf.keras.Model):
         self.conv_4 = tfkl.Conv1DTranspose(design_shape[-1], 5, strides=2)
         self.conv_4.compute_output_shape((None, len2, 32))
 
-    def sample(self, y, **kwargs):
+    def sample(self,
+               y,
+               **kwargs):
         """Generate samples of designs X that have a score y where y is
         the score that the generator conditions on
 
@@ -638,7 +724,7 @@ class ContinuousGenConv(tf.keras.Model):
             conditioned on the score y achieved by that design
         """
 
-        temp = kwargs.pop("temp", 1.0)
+        kwargs.pop("temp", 1.0)
         z = tf.random.normal([tf.shape(y)[0], self.latent_size])
         x = tf.cast(z, tf.float32)
         y = tf.cast(y, tf.float32)

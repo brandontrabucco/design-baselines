@@ -83,6 +83,16 @@ def model_inversion(config):
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
+    elif config['is_conv']:
+
+        # build an LS-GAN to sample continuous outputs
+        exploration_generator = ContinuousGenConv(
+            task.input_shape, config['latent_size'],
+            hidden=config['hidden_size'])
+        exploitation_generator = ContinuousGenConv(
+            task.input_shape, config['latent_size'],
+            hidden=config['hidden_size'])
+
     else:
 
         # build an LS-GAN to sample continuous outputs
