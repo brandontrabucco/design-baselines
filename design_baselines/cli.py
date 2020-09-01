@@ -850,7 +850,7 @@ def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
         "discriminator_beta_2": 0.999,
         "initial_epochs": 200,
         "epochs_per_iteration": 20,
-        "iterations": 0,
+        "iterations": 100,
         "exploration_samples": 100,
         "exploration_rate": tune.grid_search([0.002, 0.004, 0.006, 0.01, 0.05]),
         "thompson_samples": 100,
