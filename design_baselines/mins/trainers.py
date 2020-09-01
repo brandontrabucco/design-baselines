@@ -346,9 +346,9 @@ class WeightedGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        v = tf.random.shuffle(y)
         x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
             if self.is_discrete else add_continuous_noise(x, self.noise_std)
+        x_pair = tf.random.shuffle(x_real)
 
         with tf.GradientTape() as tape:
 
@@ -358,7 +358,7 @@ class WeightedGAN(tf.Module):
             d_real, acc_real = self.discriminator.loss(
                 x_real, y, target_real=True, input_real=True, training=True)
             d_pair, acc_pair = self.discriminator.loss(
-                x_real, v, target_real=False, input_real=False, training=False)
+                x_pair, y, target_real=False, input_real=False, training=False)
             d_fake, acc_fake = self.discriminator.loss(
                 x_fake, y, target_real=False, input_real=False, training=False)
 
@@ -422,9 +422,9 @@ class WeightedGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        v = tf.random.shuffle(y)
         x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
             if self.is_discrete else add_continuous_noise(x, self.noise_std)
+        x_pair = tf.random.shuffle(x_real)
 
         # sample designs from the generator
         penalty = self.discriminator.penalty(x_real, y, training=False)
@@ -432,7 +432,7 @@ class WeightedGAN(tf.Module):
         d_real, acc_real = self.discriminator.loss(
             x_real, y, target_real=True, input_real=True, training=False)
         d_pair, acc_pair = self.discriminator.loss(
-            x_real, v, target_real=False, input_real=False, training=False)
+            x_pair, y, target_real=False, input_real=False, training=False)
         d_fake, acc_fake = self.discriminator.loss(
             x_fake, y, target_real=False, input_real=False, training=False)
 
