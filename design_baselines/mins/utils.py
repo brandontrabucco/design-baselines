@@ -49,7 +49,7 @@ def softmax(arr,
     return exp_arr / np.sum(exp_arr)
 
 
-def get_weights(scores):
+def get_weights(scores, base_temp=None):
     """Calculate weights used for training a model inversion
     network with a per-sample reweighted objective
 
@@ -68,7 +68,8 @@ def get_weights(scores):
     hist, bin_edges = np.histogram(scores_np, bins=20)
     hist = hist / np.sum(hist)
 
-    base_temp = adaptive_temp_v2(scores_np)
+    if base_temp is None:
+        base_temp = adaptive_temp_v2(scores_np)
     softmin_prob = softmax(bin_edges[1:], temp=base_temp)
 
     provable_dist = softmin_prob * (hist / (hist + 1e-3))
@@ -83,7 +84,7 @@ def get_weights(scores):
     return weights.astype(np.float32)
 
 
-def get_p_y(scores):
+def get_p_y(scores, base_temp=None):
     """Calculate weights used for training a model inversion
     network with a per-sample reweighted objective
 
@@ -102,7 +103,8 @@ def get_p_y(scores):
     hist, bin_edges = np.histogram(scores_np, bins=20)
     hist = hist / np.sum(hist)
 
-    base_temp = adaptive_temp_v2(scores_np)
+    if base_temp is None:
+        base_temp = adaptive_temp_v2(scores_np)
     softmin_prob = softmax(bin_edges[1:], temp=base_temp)
 
     provable_dist = softmin_prob * (hist / (hist + 1e-3))
@@ -119,7 +121,8 @@ def get_p_y(scores):
 def get_synthetic_data(x,
                        y,
                        exploration_samples=32,
-                       exploration_rate=10.0):
+                       exploration_rate=10.0,
+                       base_temp=None):
     """Generate a synthetic dataset of designs x and scores y using the
     Randomized Labelling algorithm
 
@@ -142,8 +145,11 @@ def get_synthetic_data(x,
         a tensor containing a data set of synthetic scores
     """
 
+    def wrapped_py(_y):
+        return get_p_y(_y, base_temp=base_temp)
+
     # sample ys based on their importance weight
-    p_y, bin_edges = tf.numpy_function(get_p_y, [y], [tf.float32, tf.float32])
+    p_y, bin_edges = tf.numpy_function(wrapped_py, [y], [tf.float32, tf.float32])
     p_y.set_shape([20, 1])
     bin_edges.set_shape([20, 1])
 

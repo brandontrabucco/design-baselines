@@ -25,6 +25,7 @@ def model_inversion(config):
     # create the training task and logger
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    base_temp = config.get('base_temp', None)
 
     if config['fully_offline']:
 
@@ -161,7 +162,7 @@ def model_inversion(config):
 
     # build a weighted data set using newly collected samples
     train_data, val_data = task.build(
-        x=x, y=y, importance_weights=get_weights(y),
+        x=x, y=y, importance_weights=get_weights(y, base_temp=base_temp),
         batch_size=config['gan_batch_size'],
         val_size=config['val_size'])
 
@@ -209,12 +210,13 @@ def model_inversion(config):
         tilde_x, tilde_y = get_synthetic_data(
             x, y,
             exploration_samples=config['exploration_samples'],
-            exploration_rate=config['exploration_rate'])
+            exploration_rate=config['exploration_rate'],
+            base_temp=base_temp)
 
         # build a weighted data set using newly collected samples
         train_data, val_data = task.build(
             x=tilde_x.numpy(), y=tilde_y.numpy(),
-            importance_weights=get_weights(tilde_y.numpy()),
+            importance_weights=get_weights(tilde_y.numpy(), base_temp=base_temp),
             batch_size=config['gan_batch_size'],
             val_size=config['val_size'])
 
@@ -247,7 +249,7 @@ def model_inversion(config):
         # build a weighted data set using newly collected samples
         train_data, val_data = task.build(
             x=x.numpy(), y=y.numpy(),
-            importance_weights=get_weights(y.numpy()),
+            importance_weights=get_weights(y.numpy(), base_temp=base_temp),
             batch_size=config['gan_batch_size'],
             val_size=config['val_size'])
 

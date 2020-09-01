@@ -776,6 +776,7 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "fully_offline": False,
         "is_discrete": True,
         "is_conv": False,
+        "base_temp": tune.grid_search([0.2, 0.1]),
         "keep": 0.9,
         "start_temp": 5.0,
         "final_temp": 1.0,
