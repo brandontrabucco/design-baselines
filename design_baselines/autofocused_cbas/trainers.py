@@ -106,7 +106,7 @@ class Ensemble(tf.Module):
 
                 # build the total loss and weight by the bootstrap
                 total_loss = tf.math.divide_no_nan(
-                    tf.reduce_sum(w * b[:, i] * nll), tf.reduce_sum(b[:, i]))
+                    tf.reduce_sum(b[:, i] * w * nll), tf.reduce_sum(b[:, i]))
 
             grads = tape.gradient(total_loss, fm.trainable_variables)
             fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
@@ -278,8 +278,7 @@ class WeightedVAE(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
-                   X,
-                   y,
+                   x,
                    w):
         """Perform a training step of gradient descent on an ensemble
         using bootstrap weights for each model in the ensemble
@@ -307,12 +306,12 @@ class WeightedVAE(tf.Module):
         with tf.GradientTape() as tape:
 
             # build distributions for the data x and latent variable z
-            dz = self.encoder.get_distribution(X, training=True)
+            dz = self.encoder.get_distribution(x, training=True)
             z = dz.sample()
             dx = self.decoder.get_distribution(z, training=True)
 
             # build the reconstruction loss
-            nll = -dx.log_prob(X)[..., tf.newaxis]
+            nll = -dx.log_prob(x)[..., tf.newaxis]
             while len(nll.shape) > 2:
                 nll = tf.reduce_sum(nll, axis=1)
             prior = tfpd.MultivariateNormalDiag(
@@ -332,8 +331,7 @@ class WeightedVAE(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def validate_step(self,
-                      X,
-                      y):
+                      x):
         """Perform a validation step on an ensemble of models
         without using bootstrapping weights
 
@@ -353,12 +351,12 @@ class WeightedVAE(tf.Module):
         statistics = dict()
 
         # build distributions for the data x and latent variable z
-        dz = self.encoder.get_distribution(X, training=False)
+        dz = self.encoder.get_distribution(x, training=False)
         z = dz.sample()
         dx = self.decoder.get_distribution(z, training=False)
 
         # build the reconstruction loss
-        nll = -dx.log_prob(X)[..., tf.newaxis]
+        nll = -dx.log_prob(x)[..., tf.newaxis]
         while len(nll.shape) > 2:
             nll = tf.reduce_sum(nll, axis=1)
         prior = tfpd.MultivariateNormalDiag(
@@ -389,8 +387,8 @@ class WeightedVAE(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for X, y, w in dataset:
-            for name, tensor in self.train_step(X, y, w).items():
+        for x, y, w in dataset:
+            for name, tensor in self.train_step(x, w).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -413,8 +411,8 @@ class WeightedVAE(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for X, y in dataset:
-            for name, tensor in self.validate_step(X, y).items():
+        for x, y in dataset:
+            for name, tensor in self.validate_step(x).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)

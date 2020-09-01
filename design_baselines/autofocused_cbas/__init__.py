@@ -26,10 +26,11 @@ def autofocused_cbas(config):
 
     # create the training task and logger
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    train_data, val_data = task.build(bootstraps=config['bootstraps'],
-                                      importance_weights=np.ones_like(task.y),
-                                      batch_size=config['ensemble_batch_size'],
-                                      val_size=config['val_size'])
+    train_data, val_data = task.build(
+        bootstraps=config['bootstraps'],
+        importance_weights=np.ones_like(task.y),
+        batch_size=config['oracle_batch_size'],
+        val_size=config['val_size'])
 
     # make several keras neural networks with two hidden layers
     forward_models = [ForwardModel(
@@ -37,24 +38,24 @@ def autofocused_cbas(config):
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'])
-        for b in range(config['bootstraps'])]
+        for _ in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
-    ensemble = Ensemble(forward_models,
-                        forward_model_optim=tf.keras.optimizers.Adam,
-                        forward_model_lr=config['ensemble_lr'])
+    oracle = Ensemble(forward_models,
+                      forward_model_optim=tf.keras.optimizers.Adam,
+                      forward_model_lr=config['oracle_lr'])
 
     # create a manager for saving algorithms state to the disk
-    ensemble_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**ensemble.get_saveables()),
-        os.path.join(config['logging_dir'], 'ensemble'), 1)
+    oracle_manager = tf.train.CheckpointManager(
+        tf.train.Checkpoint(**oracle.get_saveables()),
+        os.path.join(config['logging_dir'], 'oracle'), 1)
 
     # train the model for an additional number of epochs
-    ensemble_manager.restore_or_initialize()
-    ensemble.launch(train_data,
-                    val_data,
-                    logger,
-                    config['ensemble_epochs'])
+    oracle_manager.restore_or_initialize()
+    oracle.launch(train_data,
+                  val_data,
+                  logger,
+                  config['oracle_epochs'])
 
     # determine which arcitecture for the decoder to use
     decoder = DiscreteDecoder \
@@ -79,9 +80,10 @@ def autofocused_cbas(config):
         os.path.join(config['logging_dir'], 'p_vae'), 1)
 
     # build a weighted data set
-    train_data, val_data = task.build(importance_weights=np.ones_like(task.y),
-                                      batch_size=config['vae_batch_size'],
-                                      val_size=config['val_size'])
+    train_data, val_data = task.build(
+        importance_weights=np.ones_like(task.y),
+        batch_size=config['vae_batch_size'],
+        val_size=config['val_size'])
 
     # train the initial vae fit to the original data distribution
     p_manager.restore_or_initialize()
@@ -109,7 +111,7 @@ def autofocused_cbas(config):
         os.path.join(config['logging_dir'], 'q_vae'), 1)
 
     # create the cbas importance weight generator
-    cbas = CBAS(ensemble,
+    cbas = CBAS(oracle,
                 p_vae,
                 q_vae,
                 latent_size=config['latent_size'])
@@ -137,7 +139,8 @@ def autofocused_cbas(config):
             val_size=config['val_size'])
 
         # train a vae fit using weighted maximum likelihood
-        start_epoch = config['online_epochs'] * i + config['offline_epochs']
+        start_epoch = config['online_epochs'] * i + \
+            config['offline_epochs']
         q_vae.launch(train_data,
                      val_data,
                      logger,
@@ -146,30 +149,33 @@ def autofocused_cbas(config):
 
         # autofocus the forward model using importance weights
         v = cbas.autofocus_weights(
-            task.x, batch_size=config['ensemble_batch_size'])
+            task.x, batch_size=config['oracle_batch_size'])
         train_data, val_data = task.build(
             x=task.x,
             y=task.y,
-            bootstraps = config['bootstraps'],
+            bootstraps=config['bootstraps'],
             importance_weights=v.numpy(),
-            batch_size=config['ensemble_batch_size'],
+            batch_size=config['oracle_batch_size'],
             val_size=config['val_size'])
 
         # train a vae fit using weighted maximum likelihood
-        start_epoch = config['ensemble_epochs'] * i + config['autofocus_epochs']
-        ensemble.launch(train_data,
-                        val_data,
-                        logger,
-                        config['autofocus_epochs'],
-                        start_epoch=start_epoch)
+        start_epoch = config['oracle_epochs'] * i + \
+            config['autofocus_epochs']
+        oracle.launch(train_data,
+                      val_data,
+                      logger,
+                      config['autofocus_epochs'],
+                      start_epoch=start_epoch)
 
     # save every model to the disk
-    ensemble_manager.save()
+    oracle_manager.save()
     p_manager.save()
     q_manager.save()
 
     # sample designs from the prior
     q_dx = q_decoder.get_distribution(tf.random.normal([
-        config['solver_samples'], config['latent_size']]), training=False)
+        config['solver_samples'],
+        config['latent_size']]), training=False)
     score = task.score(q_dx.sample())
-    logger.record("score", score, config['iterations'], percentile=True)
+    logger.record("score", score,
+                  config['iterations'], percentile=True)
