@@ -112,6 +112,8 @@ class Ensemble(tf.Module):
             fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
 
             statistics[f'oracle_{i}/train/nll'] = nll
+            statistics[f'oracle_{i}/train/max_logstd'] = fm.max_logstd
+            statistics[f'oracle_{i}/train/min_logstd'] = fm.min_logstd
             statistics[f'oracle_{i}/train/rank_corr'] = rank_correlation
 
         return statistics
@@ -326,6 +328,10 @@ class WeightedVAE(tf.Module):
 
         statistics[f'vae/train/nll'] = nll
         statistics[f'vae/train/kl'] = kl
+        statistics[f'vae/train/encoder/max_logstd'] = self.encoder.max_logstd
+        statistics[f'vae/train/encoder/min_logstd'] = self.encoder.min_logstd
+        statistics[f'vae/train/decoder/max_logstd'] = self.decoder.max_logstd
+        statistics[f'vae/train/decoder/min_logstd'] = self.decoder.min_logstd
 
         return statistics
 

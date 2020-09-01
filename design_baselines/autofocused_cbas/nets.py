@@ -87,7 +87,9 @@ class Encoder(tf.keras.Sequential):
     def __init__(self,
                  input_shape,
                  latent_size,
-                 hidden=50):
+                 hidden=50,
+                 initial_max_std=1.5,
+                 initial_min_std=0.5):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
@@ -100,6 +102,11 @@ class Encoder(tf.keras.Sequential):
         hidden: int
             the global hidden size of the network
         """
+
+        self.max_logstd = tf.Variable(tf.fill([1, 1], np.log(
+            initial_max_std).astype(np.float32)), trainable=True)
+        self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
+            initial_min_std).astype(np.float32)), trainable=True)
 
         super(Encoder, self).__init__([
             tfkl.Flatten(input_shape=input_shape),
@@ -124,6 +131,8 @@ class Encoder(tf.keras.Sequential):
 
         prediction = super(Encoder, self).__call__(inputs, **kwargs)
         mean, logstd = tf.split(prediction, 2, axis=-1)
+        logstd = self.max_logstd - tf.nn.softplus(self.max_logstd - logstd)
+        logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
         return {"loc": mean, "scale_diag": tf.math.softplus(logstd)}
 
     def get_distribution(self, inputs, **kwargs):

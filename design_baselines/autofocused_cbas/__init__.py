@@ -159,8 +159,8 @@ def autofocused_cbas(config):
             val_size=config['val_size'])
 
         # train a vae fit using weighted maximum likelihood
-        start_epoch = config['oracle_epochs'] * i + \
-            config['autofocus_epochs']
+        start_epoch = config['autofocus_epochs'] * i + \
+            config['oracle_epochs']
         oracle.launch(train_data,
                       val_data,
                       logger,
