@@ -47,16 +47,16 @@ class Logger(object):
 
                 # log several statistics of the incoming tensors
                 tf.summary.scalar(key + '/100th',
-                                  tfp.stats.percentile(value, 100),
+                                  tfp.stats.percentile(value, 100.0),
                                   step=step)
                 tf.summary.scalar(key + '/90th',
-                                  tfp.stats.percentile(value, 90),
+                                  tfp.stats.percentile(value, 90.0),
                                   step=step)
                 tf.summary.scalar(key + '/80th',
-                                  tfp.stats.percentile(value, 80),
+                                  tfp.stats.percentile(value, 80.0),
                                   step=step)
                 tf.summary.scalar(key + '/50th',
-                                  tfp.stats.percentile(value, 50),
+                                  tfp.stats.percentile(value, 50.0),
                                   step=step)
 
             else:

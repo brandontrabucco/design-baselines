@@ -121,10 +121,10 @@ class Conservative(tf.Module):
             rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
             # calculate the conservative gap
-            perturb = tf.stop_gradient(self.optimize(x0))
+            perturb = tf.stop_gradient(self.optimize(x0, training=False))
 
             # calculate the prediction error and accuracy of the model
-            perturb_d = self.fm.get_distribution(perturb, training=True)
+            perturb_d = self.fm.get_distribution(perturb, training=False)
 
             # build the lagrangian loss
             conservative_gap = (perturb_d.mean() - d.mean())[:, 0]
@@ -188,7 +188,7 @@ class Conservative(tf.Module):
         rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
         # calculate the conservative gap
-        perturb = tf.stop_gradient(self.optimize(x0))
+        perturb = tf.stop_gradient(self.optimize(x0, training=False))
 
         # calculate the prediction error and accuracy of the model
         perturb_d = self.fm.get_distribution(perturb, training=False)

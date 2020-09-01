@@ -52,7 +52,7 @@ def conservative_ensemble_policy_original(local_dir, cpus, gpus, num_parallel, n
         "val_size": 200,
         "batch_size": 128,
         "epochs": 200,
-        "activations": [['swish', 'swish']],
+        "activations": [['leaky_relu', 'leaky_relu']],
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
