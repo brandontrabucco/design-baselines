@@ -741,65 +741,6 @@ def cbas_superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='mins-hopper')
-@click.option('--cpus', type=int, default=24)
-@click.option('--gpus', type=int, default=1)
-@click.option('--num-parallel', type=int, default=1)
-@click.option('--num-samples', type=int, default=1)
-def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Train a forward model using various regularization methods and
-    solve a model-based optimization problem
-
-    Args:
-
-    local_dir: str
-        the path where model weights and tf events wil be saved
-    cpus: int
-        the number of cpu cores on the host machine to use
-    gpus: int
-        the number of gpu nodes on the host machine to use
-    num_parallel: int
-        the number of processes to run at once
-    num_samples: int
-        the number of samples to take per configuration
-    """
-
-    from design_baselines.mins import model_inversion
-    ray.init(num_cpus=cpus,
-             num_gpus=gpus,
-             temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(model_inversion, config={
-        "logging_dir": "data",
-        "task": "HopperController-v0",
-        "task_kwargs": {},
-        "val_size": 200,
-        "fully_offline": False,
-        "is_discrete": False,
-        "is_conv": False,
-        "noise_std": 0.05,
-        "gan_batch_size": 128,
-        "hidden_size": 2048,
-        "latent_size": 32,
-        "generator_lr": 2e-4,
-        "generator_beta_1": 0.5,
-        "generator_beta_2": 0.999,
-        "discriminator_lr": 2e-4,
-        "discriminator_beta_1": 0.5,
-        "discriminator_beta_2": 0.999,
-        "initial_epochs": 200,
-        "epochs_per_iteration": 20,
-        "iterations": 100,
-        "exploration_samples": 100,
-        "exploration_rate": tune.grid_search([0.002, 0.004, 0.006, 0.01, 0.05]),
-        "thompson_samples": 100,
-        "solver_samples": 100},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
-                             'gpu': gpus / num_parallel - 0.01})
-
-
-@cli.command()
 @click.option('--local-dir', type=str, default='mins-gfp')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
@@ -842,16 +783,75 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 256,
         "latent_size": 20,
         "generator_lr": 2e-4,
-        "generator_beta_1": 0.5,
+        "generator_beta_1": 0.1,
         "generator_beta_2": 0.999,
         "discriminator_lr": 2e-4,
-        "discriminator_beta_1": 0.5,
+        "discriminator_beta_1": 0.1,
         "discriminator_beta_2": 0.999,
-        "initial_epochs": 200,
+        "initial_epochs": 250,
         "epochs_per_iteration": 20,
         "iterations": 100,
         "exploration_samples": 100,
         "exploration_rate": tune.grid_search([5.0, 20.0, 50.0, 75.0, 100.0]),
+        "thompson_samples": 100,
+        "solver_samples": 100},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='mins-hopper')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def mins_policy(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from design_baselines.mins import model_inversion
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(model_inversion, config={
+        "logging_dir": "data",
+        "task": "HopperController-v0",
+        "task_kwargs": {},
+        "val_size": 200,
+        "fully_offline": False,
+        "is_discrete": False,
+        "is_conv": False,
+        "noise_std": 0.01,
+        "gan_batch_size": 128,
+        "hidden_size": 256,
+        "latent_size": 32,
+        "generator_lr": 2e-5,
+        "generator_beta_1": 0.1,
+        "generator_beta_2": 0.999,
+        "discriminator_lr": 2e-5,
+        "discriminator_beta_1": 0.1,
+        "discriminator_beta_2": 0.999,
+        "initial_epochs": 200,
+        "epochs_per_iteration": 20,
+        "iterations": 0,
+        "exploration_samples": 100,
+        "exploration_rate": tune.grid_search([0.002, 0.004, 0.006, 0.01, 0.05]),
         "thompson_samples": 100,
         "solver_samples": 100},
         num_samples=num_samples,

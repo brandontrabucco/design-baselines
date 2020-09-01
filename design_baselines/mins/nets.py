@@ -103,11 +103,11 @@ class Discriminator(tf.keras.Model):
         """
 
         super(Discriminator, self).__init__()
-        self.design_shape = design_shape
+        self.input_size = np.prod(design_shape)
 
         # define a layer of the neural net with two pathways
         self.dense_0 = tfkl.Dense(hidden)
-        self.dense_0.build((None, np.prod(design_shape) + 1))
+        self.dense_0.build((None, self.input_size + 1))
         self.bn_0 = tfkl.LayerNormalization()
         self.bn_0.build((None, hidden))
 
@@ -126,6 +126,40 @@ class Discriminator(tf.keras.Model):
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(1)
         self.dense_3.build((hidden + 1,))
+
+    def __call__(self,
+                 x,
+                 y,
+                 **kwargs):
+        """Use a neural network to discriminate the log probability that a
+        sampled design X has score y
+
+        Args:
+
+        X: tf.Tensor
+            a design the generator is trained to sample from a distribution
+            conditioned on the score y achieved by that design
+        y: tf.Tensor
+            a batch of scalar scores wherein the generator is trained to
+            produce designs that have score y
+
+        Args:
+
+        log_p: tf.Tensor
+            a tensor that represents the log probability of either X being
+            real of X being fake depending on the value of 'real'
+        """
+
+        x = tf.cast(x, tf.float32)
+        y = tf.cast(y, tf.float32)
+        x = tf.reshape(x, [tf.shape(y)[0], self.input_size])
+        x = self.dense_0(tf.concat([x, y], 1), **kwargs)
+        x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
+        x = self.dense_1(tf.concat([x, y], 1), **kwargs)
+        x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
+        x = self.dense_2(tf.concat([x, y], 1), **kwargs)
+        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
+        return self.dense_3(tf.concat([x, y], 1), **kwargs)
 
     def penalty(self,
                 h,
@@ -150,21 +184,11 @@ class Discriminator(tf.keras.Model):
             discriminator for regularizing the discriminator
         """
 
-        h = tf.cast(h, tf.float32)
-        y = tf.cast(y, tf.float32)
-        h = tf.reshape(h, [tf.shape(y)[0], np.prod(self.design_shape)])
         with tf.GradientTape() as tape:
             tape.watch(h)
-            x = self.dense_0(tf.concat([h, y], 1), **kwargs)
-            x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
-            x = self.dense_1(tf.concat([x, y], 1), **kwargs)
-            x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
-            x = self.dense_2(tf.concat([x, y], 1), **kwargs)
-            x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
-            x = self.dense_3(tf.concat([x, y], 1), **kwargs)
-        grads = tape.gradient(x, h)
-        norm = tf.linalg.norm(grads, axis=-1, keepdims=True)
-        return (1. - norm) ** 2
+            x = self.__call__(h, y, **kwargs)
+        g = tf.reshape(tape.gradient(x, h), [-1, self.input_size])
+        return (1.0 - tf.linalg.norm(g, axis=-1, keepdims=True)) ** 2
 
     def loss(self,
              x,
@@ -194,29 +218,20 @@ class Discriminator(tf.keras.Model):
             real of X being fake depending on the value of 'real'
         """
 
-        x = tf.cast(x, tf.float32)
-        y = tf.cast(y, tf.float32)
-        x = tf.reshape(x, [tf.shape(y)[0], np.prod(self.design_shape)])
-        x = self.dense_0(tf.concat([x, y], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
-        x = self.dense_1(tf.concat([x, y], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
-        x = self.dense_2(tf.concat([x, y], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
-        x = self.dense_3(tf.concat([x, y], 1), **kwargs)
+        x = self.__call__(x, y, **kwargs)
 
         # GAN specific loss function
         if target_real and input_real:
-            return -tf.math.log_sigmoid(x), \
-                    tf.cast(x > 0.0, tf.float32)
+            return (x - 1.0) ** 2, \
+                   tf.cast(x > 0.5, tf.float32)
 
         elif target_real and not input_real:
-            return tf.math.log(1.0 - tf.math.sigmoid(x)), \
-                   tf.cast(x > 0.0, tf.float32)
+            return (x - 1.0) ** 2, \
+                   tf.cast(x > 0.5, tf.float32)
 
         elif not target_real and not input_real:
-            return -tf.math.log(1.0 - tf.math.sigmoid(x)), \
-                   tf.cast(x < 0.0, tf.float32)
+            return (x - 0.0) ** 2, \
+                   tf.cast(x < 0.5, tf.float32)
 
 
 class DiscriminatorConv(tf.keras.Model):
@@ -273,35 +288,6 @@ class DiscriminatorConv(tf.keras.Model):
         self.dense_4 = tfkl.Dense(1)
         self.dense_4.compute_output_shape((None, hidden + 1,))
 
-    def penalty(self,
-                h,
-                y,
-                **kwargs):
-        """Calculate a gradient penalty for the discriminator and return
-        a loss that will be minimized
-
-        Args:
-
-        X: tf.Tensor
-            a design the generator is trained to sample from a distribution
-            conditioned on the score y achieved by that design
-        y: tf.Tensor
-            a batch of scalar scores wherein the generator is trained to
-            produce designs that have score y
-
-        Args:
-
-        penalty: tf.Tensor
-            a tensor that represents the penalty for gradients of the
-            discriminator for regularizing the discriminator
-        """
-
-        with tf.GradientTape() as tape:
-            tape.watch(h)
-            x = self.__call__(h, y, **kwargs)
-        return (1.0 - tf.linalg.norm(tf.reshape(tape.gradient(
-            x, h), [-1, self.input_size]), axis=-1, keepdims=True)) ** 2
-
     def __call__(self,
                  x,
                  y,
@@ -338,6 +324,35 @@ class DiscriminatorConv(tf.keras.Model):
         x = tf.nn.leaky_relu(self.bn_3(x, **kwargs), alpha=0.2)
         return self.dense_4(tf.concat([x, y], 1), **kwargs)
 
+    def penalty(self,
+                h,
+                y,
+                **kwargs):
+        """Calculate a gradient penalty for the discriminator and return
+        a loss that will be minimized
+
+        Args:
+
+        X: tf.Tensor
+            a design the generator is trained to sample from a distribution
+            conditioned on the score y achieved by that design
+        y: tf.Tensor
+            a batch of scalar scores wherein the generator is trained to
+            produce designs that have score y
+
+        Args:
+
+        penalty: tf.Tensor
+            a tensor that represents the penalty for gradients of the
+            discriminator for regularizing the discriminator
+        """
+
+        with tf.GradientTape() as tape:
+            tape.watch(h)
+            x = self.__call__(h, y, **kwargs)
+        g = tf.reshape(tape.gradient(x, h), [-1, self.input_size])
+        return (1.0 - tf.linalg.norm(g, axis=-1, keepdims=True)) ** 2
+
     def loss(self,
              x,
              y,
@@ -370,16 +385,16 @@ class DiscriminatorConv(tf.keras.Model):
 
         # GAN specific loss function
         if target_real and input_real:
-            return -tf.math.log_sigmoid(x), \
-                    tf.cast(x > 0.0, tf.float32)
+            return (x - 1.0) ** 2, \
+                   tf.cast(x > 0.5, tf.float32)
 
         elif target_real and not input_real:
-            return tf.math.log(1.0 - tf.math.sigmoid(x)), \
-                   tf.cast(x > 0.0, tf.float32)
+            return (x - 1.0) ** 2, \
+                   tf.cast(x > 0.5, tf.float32)
 
         elif not target_real and not input_real:
-            return -tf.math.log(1.0 - tf.math.sigmoid(x)), \
-                   tf.cast(x < 0.0, tf.float32)
+            return (x - 0.0) ** 2, \
+                   tf.cast(x < 0.5, tf.float32)
 
 
 class DiscreteGenerator(tf.keras.Model):

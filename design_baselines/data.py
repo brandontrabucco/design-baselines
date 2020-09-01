@@ -155,8 +155,7 @@ class StaticGraphTask(Task):
             in the function argument
         """
 
-        return self.wrapped_task.score(
-            x).astype(np.float32).reshape([-1, 1])
+        return self.wrapped_task.score(x).astype(np.float32).reshape([-1, 1])
 
     @tf.function(experimental_relax_shapes=True)
     def score(self, x):
