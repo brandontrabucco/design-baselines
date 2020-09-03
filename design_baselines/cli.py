@@ -286,7 +286,7 @@ def forward_ensemble_molecule(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "solver_samples": 128,
-        "solver_lr": 5.0,
+        "solver_lr": tune.grid_search([10.0, 7.5, 5.0, 2.5, 1.0, 0.5]),
         "solver_steps": 200},
         num_samples=num_samples,
         local_dir=local_dir,
