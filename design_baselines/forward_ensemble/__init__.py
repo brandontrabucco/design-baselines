@@ -43,8 +43,8 @@ def forward_ensemble(config):
         forward_model_lr=config['forward_model_lr'],
         is_discrete=config['is_discrete'],
         noise_std=config.get('noise_std', 0.0),
-        keep=config.get('keep', 1.0),
-        temp=config.get('temp', 0.001))
+        keep=config.get('keep', 0.9),
+        temp=config.get('temp', 1.0))
 
     # create a manager for saving algorithms state to the disk
     manager = tf.train.CheckpointManager(
@@ -59,7 +59,7 @@ def forward_ensemble(config):
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
     x = tf.gather(task.x, indices, axis=0)
     x = tf.math.log(add_gumbel_noise(
-        x, config.get('keep', 1.0), config.get('temp', 0.001))) \
+        x, config.get('keep', 0.9), config.get('temp', 1.0))) \
         if config['is_discrete'] else x
 
     # evaluate the starting point
