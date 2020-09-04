@@ -56,6 +56,7 @@ class Conservative(tf.Module):
         self.keep = keep
         self.temp = temp
 
+    @tf.function(experimental_relax_shapes=True)
     def optimize(self,
                  x,
                  **kwargs):
