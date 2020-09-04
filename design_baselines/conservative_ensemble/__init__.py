@@ -52,6 +52,7 @@ def conservative_ensemble(config):
             alpha_lr=config['alpha_lr'],
             perturbation_lr=config['perturbation_lr'],
             perturbation_steps=config['perturbation_steps'],
+            perturbation_backprop=config['perturbation_backprop'],
             is_discrete=config['is_discrete'],
             noise_std=config.get('noise_std', 0.0),
             keep=config.get('keep', 1.0),

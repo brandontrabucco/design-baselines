@@ -19,6 +19,7 @@ class Conservative(tf.Module):
                  alpha_lr=0.001,
                  perturbation_lr=0.001,
                  perturbation_steps=100,
+                 perturbation_backprop=False,
                  is_discrete=False,
                  noise_std=0.0,
                  keep=0.0,
@@ -49,6 +50,7 @@ class Conservative(tf.Module):
         # create machinery for sampling adversarial examples
         self.perturbation_lr = perturbation_lr
         self.perturbation_steps = perturbation_steps
+        self.perturbation_backprop = perturbation_backprop
         self.is_discrete = is_discrete
         self.noise_std = noise_std
         self.keep = keep
@@ -121,7 +123,9 @@ class Conservative(tf.Module):
             rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
             # calculate the conservative gap
-            perturb = tf.stop_gradient(self.optimize(x0, training=False))
+            perturb = self.optimize(x0, training=False)
+            if not self.perturbation_backprop:
+                perturb = tf.stop_gradient(perturb)
 
             # calculate the prediction error and accuracy of the model
             perturb_d = self.fm.get_distribution(perturb, training=False)
@@ -188,7 +192,7 @@ class Conservative(tf.Module):
         rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
         # calculate the conservative gap
-        perturb = tf.stop_gradient(self.optimize(x0, training=False))
+        perturb = self.optimize(x0, training=False)
 
         # calculate the prediction error and accuracy of the model
         perturb_d = self.fm.get_distribution(perturb, training=False)

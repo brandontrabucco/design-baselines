@@ -20,7 +20,7 @@ def cli():
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def conservative_ensemble_policy_original(local_dir, cpus, gpus, num_parallel, num_samples):
+def perturbation_backprop_policy(local_dir, cpus, gpus, num_parallel, num_samples):
     """Train a forward model using various regularization methods and
     solve a model-based optimization problem
 
@@ -47,23 +47,24 @@ def conservative_ensemble_policy_original(local_dir, cpus, gpus, num_parallel, n
         "task": "HopperController-v0",
         "task_kwargs": {},
         "is_discrete": False,
-        "noise_std": 0.1,
+        "noise_std": 0.0,
         "val_size": 200,
         "batch_size": 128,
-        "epochs": 200,
+        "epochs": 100,
         "activations": [['leaky_relu', 'leaky_relu']],
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.0,
-        "initial_alpha": 10.0,
+        "initial_alpha": 100.0,
         "alpha_lr": 0.0,
-        "perturbation_lr": 0.005,
+        "perturbation_lr": 0.0005,
         "perturbation_steps": 100,
+        "perturbation_backprop": True,
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
-        "solver_steps": 2000},
+        "solver_steps": 500},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -117,6 +118,7 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "alpha_lr": 0.0,
         "perturbation_lr": 0.0005,
         "perturbation_steps": 100,
+        "perturbation_backprop": False,
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 500},
@@ -174,6 +176,7 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "alpha_lr": 0.0,
         "perturbation_lr": tune.grid_search([0.1, 0.5, 1.0, 2.0, 5.0]),
         "perturbation_steps": tune.grid_search([0, 10, 50, 100, 500, 1000]),
+        "perturbation_backprop": False,
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 1000},
@@ -230,6 +233,7 @@ def conservative_ensemble_superconductor(local_dir, cpus, gpus, num_parallel, nu
         "alpha_lr": 0.0,
         "perturbation_lr": tune.grid_search([0.1, 0.5, 1.0, 2.0, 5.0]),
         "perturbation_steps": tune.grid_search([0, 10, 50, 100, 500, 1000]),
+        "perturbation_backprop": False,
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 1000},
