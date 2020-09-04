@@ -328,10 +328,6 @@ class WeightedVAE(tf.Module):
 
         statistics[f'vae/train/nll'] = nll
         statistics[f'vae/train/kl'] = kl
-        statistics[f'vae/train/encoder/max_logstd'] = self.encoder.max_logstd
-        statistics[f'vae/train/encoder/min_logstd'] = self.encoder.min_logstd
-        statistics[f'vae/train/decoder/max_logstd'] = self.decoder.max_logstd
-        statistics[f'vae/train/decoder/min_logstd'] = self.decoder.min_logstd
 
         return statistics
 
