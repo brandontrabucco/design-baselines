@@ -15,7 +15,7 @@ def cli():
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='conservative-ensemble-policy')
+@click.option('--local-dir', type=str, default='perturbation-backprop-policy')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -49,7 +49,7 @@ def perturbation_backprop_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "is_discrete": False,
         "noise_std": 0.0,
         "val_size": 200,
-        "batch_size": 128,
+        "batch_size": 64,
         "epochs": 100,
         "activations": [['leaky_relu', 'leaky_relu']],
         "hidden_size": 2048,
@@ -60,11 +60,11 @@ def perturbation_backprop_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "initial_alpha": 100.0,
         "alpha_lr": 0.0,
         "perturbation_lr": 0.0005,
-        "perturbation_steps": 100,
+        "perturbation_steps": tune.grid_search([25, 50, 100, 200, 400, 600, 800]),
         "perturbation_backprop": True,
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
-        "solver_steps": 500},
+        "solver_steps": 1000},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
