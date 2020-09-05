@@ -1140,7 +1140,7 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "epochs_per_iteration": 20,
         "iterations": 100,
         "exploration_samples": 100,
-        "exploration_rate": tune.grid_search([5.0, 20.0, 50.0, 75.0, 100.0]),
+        "exploration_rate": 50.,
         "thompson_samples": 100,
         "solver_samples": 100},
         num_samples=num_samples,
