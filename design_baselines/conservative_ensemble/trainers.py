@@ -76,20 +76,17 @@ class Conservative(tf.Module):
             the perturbed value of x that maximizes the score function
         """
 
-        def cond_fn(xt, t):
-            return tf.less(t, self.perturbation_steps)
-
-        def body_fn(xt, t):
+        # use the forward model to create adversarial examples
+        def body(xt):
             with tf.GradientTape() as tape:
                 tape.watch(xt)
-                solution = tf.math.softmax(xt) if self.is_discrete else xt
-                y = self.fm.get_distribution(solution, **kwargs).mean()
-            return xt + self.perturbation_lr * tape.gradient(y, xt), t + 1
-
-        # use the forward model to make adversarial examples
-        x0 = tf.math.log(x) if self.is_discrete else x
-        xn = tf.while_loop(cond_fn, body_fn, (x0, tf.constant(0)))[0]
-        return tf.math.softmax(xn) if self.is_discrete else xn
+                score = self.fm.get_distribution(tf.math.softmax(
+                    xt) if self.is_discrete else xt, **kwargs).mean()
+            return xt + self.perturbation_lr * tape.gradient(score, xt)
+        x = tf.math.log(x) if self.is_discrete else x
+        x = tf.while_loop(lambda xt: True, body, (x,), swap_memory=True,
+                          maximum_iterations=self.perturbation_steps)[0]
+        return tf.math.softmax(x) if self.is_discrete else x
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,

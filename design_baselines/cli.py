@@ -49,7 +49,7 @@ def perturbation_backprop_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "is_discrete": False,
         "noise_std": 0.0,
         "val_size": 200,
-        "batch_size": 32,
+        "batch_size": 128,
         "epochs": 100,
         "activations": [['leaky_relu', 'leaky_relu']],
         "hidden_size": 2048,
