@@ -83,6 +83,21 @@ def get_weights(scores, base_temp=None):
     weights = np.clip(weights, a_min=0.0, a_max=5.0)
     return weights.astype(np.float32)
 
+def get_ones_weights(scores, base_temp=None):
+    """Calculate weights used for training a model inversion
+    network with a per-sample reweighted objective
+
+    Args:
+
+    scores: np.ndarray
+        scores which correspond to the value of data points in the dataset
+
+    Returns:
+
+    weights: np.ndarray
+        an array with the same shape as scores that reweights samples
+    """
+    return scores * 0.0 + 1.0
 
 def get_p_y(scores, base_temp=None):
     """Calculate weights used for training a model inversion

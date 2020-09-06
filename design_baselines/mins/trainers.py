@@ -364,7 +364,7 @@ class WeightedGAN(tf.Module):
 
             # build the total loss
             total_loss = tf.reduce_mean(w * (
-                d_real + 0.5 * d_pair + 0.5 * d_fake + 10.0 * penalty))
+                d_real + 0.5 * d_pair + 0.5 * d_fake + 0.0 * penalty))
 
         var_list = self.discriminator.trainable_variables
         grads = tape.gradient(total_loss, var_list)

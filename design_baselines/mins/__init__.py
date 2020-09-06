@@ -6,7 +6,7 @@ from design_baselines.mins.nets import ForwardModel
 from design_baselines.mins.nets import Discriminator, DiscriminatorConv
 from design_baselines.mins.nets import DiscreteGenerator, DiscreteGenConv
 from design_baselines.mins.nets import ContinuousGenerator, ContinuousGenConv
-from design_baselines.mins.utils import get_weights
+from design_baselines.mins.utils import get_weights, get_ones_weights
 from design_baselines.mins.utils import get_synthetic_data
 import tensorflow as tf
 import os
