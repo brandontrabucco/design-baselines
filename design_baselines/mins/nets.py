@@ -110,24 +110,18 @@ class Discriminator(tf.keras.Model):
         # define a layer of the neural net with two pathways
         self.dense_0 = tfkl.Dense(hidden)
         self.dense_0.build((None, self.input_size))
-        self.bn_0 = tfkl.LayerNormalization()
-        self.bn_0.build((None, hidden))
         self.embed_1 = tfkl.Dense(hidden)
         self.embed_1.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_1 = tfkl.Dense(hidden)
         self.dense_1.build((None, hidden))
-        self.bn_1 = tfkl.LayerNormalization()
-        self.bn_1.build((None, hidden))
         self.embed_2 = tfkl.Dense(hidden)
         self.embed_2.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_2 = tfkl.Dense(hidden)
         self.dense_2.build((None, hidden))
-        self.bn_2 = tfkl.LayerNormalization()
-        self.bn_2.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(1)
@@ -156,10 +150,10 @@ class Discriminator(tf.keras.Model):
             real of X being fake depending on the value of 'real'
         """
 
-        # import ipdb; ipdb.set_trace()
         x = tf.cast(x, tf.float32)
         y = tf.cast(y, tf.float32)
         y_embed = self.embed_0(y, **kwargs)
+
         x = tf.reshape(x, [tf.shape(y)[0], self.input_size])
         x = self.dense_0(x, **kwargs)
         x = tf.nn.leaky_relu(x * y_embed, alpha=0.1)
@@ -173,182 +167,7 @@ class Discriminator(tf.keras.Model):
         x = self.dense_2(x, **kwargs)
         y = self.embed_2(y, **kwargs)
         x = tf.nn.leaky_relu(x * y, alpha=0.2)
-
         return self.dense_3(x, **kwargs)
-        
-        '''x = self.dense_0(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
-        x = self.dense_1(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
-        x = self.dense_2(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
-        return self.dense_3(tf.concat([x, y_embed], 1), **kwargs)'''
-
-    def penalty(self,
-                h,
-                y,
-                **kwargs):
-        """Calculate a gradient penalty for the discriminator and return
-        a loss that will be minimized
-
-        Args:
-
-        X: tf.Tensor
-            a design the generator is trained to sample from a distribution
-            conditioned on the score y achieved by that design
-        y: tf.Tensor
-            a batch of scalar scores wherein the generator is trained to
-            produce designs that have score y
-
-        Args:
-
-        penalty: tf.Tensor
-            a tensor that represents the penalty for gradients of the
-            discriminator for regularizing the discriminator
-        """
-
-        with tf.GradientTape() as tape:
-            tape.watch(h)
-            x = self.__call__(h, y, **kwargs)
-        g = tf.reshape(tape.gradient(x, h), [-1, self.input_size])
-        return (1.0 - tf.linalg.norm(g, axis=-1, keepdims=True)) ** 2
-
-    def loss(self,
-             x,
-             y,
-             target_real=True,
-             input_real=True,
-             **kwargs):
-        """Use a neural network to discriminate the log probability that a
-        sampled design X has score y
-
-        Args:
-
-        X: tf.Tensor
-            a design the generator is trained to sample from a distribution
-            conditioned on the score y achieved by that design
-        y: tf.Tensor
-            a batch of scalar scores wherein the generator is trained to
-            produce designs that have score y
-        real: bool
-            a boolean that whether the probability is taken with
-            respect to X being real of fake
-
-        Args:
-
-        log_p: tf.Tensor
-            a tensor that represents the log probability of either X being
-            real of X being fake depending on the value of 'real'
-        """
-
-        x = self.__call__(x, y, **kwargs)
-
-        # GAN specific loss function
-        if target_real and input_real:
-            return (x - 1.0) ** 2, \
-                   tf.cast(x > 0.5, tf.float32)
-
-        elif target_real and not input_real:
-            return (x - 1.0) ** 2, \
-                   tf.cast(x > 0.5, tf.float32)
-
-        elif not target_real and not input_real:
-            return (x - 0.0) ** 2, \
-                   tf.cast(x < 0.5, tf.float32)
-
-
-class DiscriminatorConv(tf.keras.Model):
-    """A Fully Connected Network conditioned on a score"""
-
-    def __init__(self,
-                 design_shape,
-                 hidden=50):
-        """Create a fully connected architecture using keras that can process
-        several parallel streams of weights and biases
-
-        Args:
-
-        design_shape: List[int]
-            a list of tuple of integers that represents the shape of a
-            single design for a particular task
-        hidden: int
-            the number of hidden units in every layer of the
-            discriminator neural network
-        """
-
-        super(DiscriminatorConv, self).__init__()
-        shape = (None, *design_shape)
-        self.embed_0 = tfkl.Dense(hidden, use_bias=False)
-        self.embed_0.build((None, 1))
-
-        # define a layer of the neural net with two pathways
-        self.conv_0 = tfkl.Conv1D(32, 5, strides=2)
-        shape = self.conv_0.compute_output_shape(shape)
-        self.bn_0 = tfkl.LayerNormalization()
-        shape = self.bn_0.compute_output_shape(shape)
-
-        # define a layer of the neural net with two pathways
-        self.conv_1 = tfkl.Conv1D(32, 5, strides=2)
-        shape = self.conv_1.compute_output_shape(shape)
-        self.bn_1 = tfkl.LayerNormalization()
-        shape = self.bn_1.compute_output_shape(shape)
-
-        # define a layer of the neural net with two pathways
-        self.conv_2 = tfkl.Conv1D(32, 5, strides=2)
-        shape = self.conv_2.compute_output_shape(shape)
-        self.bn_2 = tfkl.LayerNormalization()
-        shape = self.bn_2.compute_output_shape(shape)
-
-        # compute the flat shape of the conv-dense connecting node
-        self.flat = np.prod(shape[1:])
-        self.input_size = np.prod(design_shape)
-
-        # define a layer of the neural net with two pathways
-        self.dense_3 = tfkl.Dense(hidden)
-        self.dense_3.compute_output_shape((None, self.flat + hidden))
-        self.bn_3 = tfkl.LayerNormalization()
-        self.dense_3.compute_output_shape((None, hidden,))
-
-        # define a layer of the neural net with two pathways
-        self.dense_4 = tfkl.Dense(1)
-        self.dense_4.compute_output_shape((None, hidden + hidden))
-
-    def __call__(self,
-                 x,
-                 y,
-                 **kwargs):
-        """Use a neural network to discriminate the log probability that a
-        sampled design X has score y
-
-        Args:
-
-        X: tf.Tensor
-            a design the generator is trained to sample from a distribution
-            conditioned on the score y achieved by that design
-        y: tf.Tensor
-            a batch of scalar scores wherein the generator is trained to
-            produce designs that have score y
-
-        Args:
-
-        log_p: tf.Tensor
-            a tensor that represents the log probability of either X being
-            real of X being fake depending on the value of 'real'
-        """
-
-        x = tf.cast(x, tf.float32)
-        y = tf.cast(y, tf.float32)
-        y_embed = self.embed_0(y, **kwargs)
-        x = self.conv_0(x, **kwargs)
-        x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
-        x = self.conv_1(x, **kwargs)
-        x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
-        x = self.conv_2(x, **kwargs)
-        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
-        x = tf.reshape(x, [tf.shape(x)[0], self.flat])
-        x = self.dense_3(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_3(x, **kwargs), alpha=0.2)
-        return self.dense_4(tf.concat([x, y_embed], 1), **kwargs)
 
     def penalty(self,
                 h,
@@ -497,117 +316,20 @@ class DiscreteGenerator(tf.keras.Model):
         z = tf.random.normal([tf.shape(y)[0], self.latent_size])
         x = tf.cast(z, tf.float32)
         y = tf.cast(y, tf.float32)
+
         y_embed = self.embed_0(y, **kwargs)
         x = self.dense_0(tf.concat([x, y_embed], 1), **kwargs)
         x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
         x = self.dense_1(tf.concat([x, y_embed], 1), **kwargs)
+
         x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
         x = self.dense_2(tf.concat([x, y_embed], 1), **kwargs)
         x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
         x = self.dense_3(tf.concat([x, y_embed], 1), **kwargs)
+
         logits = tf.reshape(x, [tf.shape(y)[0], *self.design_shape])
         return tfpd.RelaxedOneHotCategorical(
             temp, logits=tf.math.log_softmax(logits)).sample()
-
-
-class DiscreteGenConv(tf.keras.Model):
-    """A Fully Connected Network conditioned on a score"""
-
-    def __init__(self,
-                 design_shape,
-                 latent_size,
-                 hidden=50):
-        """Create a fully connected architecture using keras that can process
-        several parallel streams of weights and biases
-
-        Args:
-
-        design_shape: List[int]
-            a list of tuple of integers that represents the shape of a
-            single design for a particular task
-        hidden: int
-            the number of hidden units in every layer of the
-            discriminator neural network
-        """
-
-        super(DiscreteGenConv, self).__init__()
-        self.latent_size = latent_size
-        self.embed_0 = tfkl.Dense(hidden, use_bias=False)
-        self.embed_0.build((None, 1))
-
-        def get_len(size, i):
-            return int(np.ceil((get_len(size, i - 1) - 4) / 2)) \
-                   if i > 0 else size
-
-        len0 = get_len(design_shape[0], 3)
-        len1 = get_len(design_shape[0], 2)
-        len2 = get_len(design_shape[0], 1)
-        self.len0 = len0
-
-        # define a layer of the neural net with two pathways
-        self.dense_0 = tfkl.Dense(hidden)
-        self.dense_0.compute_output_shape((None, self.latent_size + hidden))
-        self.bn_0 = tfkl.LayerNormalization()
-        self.dense_0.compute_output_shape((None, hidden))
-
-        # define a layer of the neural net with two pathways
-        self.dense_1 = tfkl.Dense(self.len0 * 32)
-        self.dense_1.compute_output_shape((None, hidden + hidden))
-        self.bn_1 = tfkl.LayerNormalization()
-        self.dense_1.compute_output_shape((None, self.len0 * 32))
-
-        # define a layer of the neural net with two pathways
-        self.conv_2 = tfkl.Conv1DTranspose(32, 5, strides=2)
-        shape = self.conv_2.compute_output_shape((None, self.len0, 32))
-        self.bn_2 = tfkl.LayerNormalization()
-        self.bn_2.compute_output_shape(shape)
-
-        # define a layer of the neural net with two pathways
-        self.conv_3 = tfkl.Conv1DTranspose(32, 5, strides=2)
-        shape = self.conv_3.compute_output_shape((None, len1, 32))
-        self.bn_3 = tfkl.LayerNormalization()
-        self.bn_3.compute_output_shape(shape)
-
-        # define a layer of the neural net with two pathways
-        self.conv_4 = tfkl.Conv1DTranspose(design_shape[-1], 5, strides=2)
-        self.conv_4.compute_output_shape((None, len2, 32))
-
-    def sample(self,
-               y,
-               **kwargs):
-        """Generate samples of designs X that have a score y where y is
-        the score that the generator conditions on
-
-        Args:
-
-        y: tf.Tensor
-            a batch of scalar scores wherein the generator is trained to
-            produce designs that have score y
-
-        Returns:
-
-        x_fake: tf.Tensor
-            a design the generator is trained to sample from a distribution
-            conditioned on the score y achieved by that design
-        """
-
-        temp = kwargs.pop("temp", 1.0)
-        z = tf.random.normal([tf.shape(y)[0], self.latent_size])
-        x = tf.cast(z, tf.float32)
-        y = tf.cast(y, tf.float32)
-        y_embed = self.embed_0(y, **kwargs)
-        x = self.dense_0(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
-        x = self.dense_1(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
-        x = tf.reshape(x, [tf.shape(y)[0], self.len0, 32])
-        x = self.conv_2(x, **kwargs)
-        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
-        x = self.conv_3(x, **kwargs)
-        x = tf.nn.leaky_relu(self.bn_3(x, **kwargs), alpha=0.2)
-        x = self.conv_4(x, **kwargs)
-        return tfpd.RelaxedOneHotCategorical(
-            temp, logits=tf.math.log_softmax(x)).sample()
 
 
 class ContinuousGenerator(tf.keras.Model):
@@ -684,110 +406,14 @@ class ContinuousGenerator(tf.keras.Model):
         z = tf.random.normal([tf.shape(y)[0], self.latent_size])
         x = tf.cast(z, tf.float32)
         y = tf.cast(y, tf.float32)
+
         y_embed = self.embed_0(y, **kwargs)
         x = self.dense_0(tf.concat([x, y_embed], 1), **kwargs)
         x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
         x = self.dense_1(tf.concat([x, y_embed], 1), **kwargs)
         x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
+
         x = self.dense_2(tf.concat([x, y_embed], 1), **kwargs)
         x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
         x = self.dense_3(tf.concat([x, y_embed], 1), **kwargs)
         return tf.reshape(x, [tf.shape(y)[0], *self.design_shape])
-
-
-class ContinuousGenConv(tf.keras.Model):
-    """A Fully Connected Network conditioned on a score"""
-
-    def __init__(self,
-                 design_shape,
-                 latent_size,
-                 hidden=50):
-        """Create a fully connected architecture using keras that can process
-        several parallel streams of weights and biases
-
-        Args:
-
-        design_shape: List[int]
-            a list of tuple of integers that represents the shape of a
-            single design for a particular task
-        hidden: int
-            the number of hidden units in every layer of the
-            discriminator neural network
-        """
-
-        super(ContinuousGenConv, self).__init__()
-        self.latent_size = latent_size
-        self.embed_0 = tfkl.Dense(hidden, use_bias=False)
-        self.embed_0.build((None, 1))
-
-        def get_len(size, i):
-            return int(np.ceil((get_len(size, i - 1) - 4) / 2)) \
-                   if i > 0 else size
-
-        len0 = get_len(design_shape[0], 3)
-        len1 = get_len(design_shape[0], 2)
-        len2 = get_len(design_shape[0], 1)
-        self.len0 = len0
-
-        # define a layer of the neural net with two pathways
-        self.dense_0 = tfkl.Dense(hidden)
-        self.dense_0.compute_output_shape((None, self.latent_size + hidden))
-        self.bn_0 = tfkl.LayerNormalization()
-        self.dense_0.compute_output_shape((None, hidden,))
-
-        # define a layer of the neural net with two pathways
-        self.dense_1 = tfkl.Dense(self.len0 * 32)
-        self.dense_1.compute_output_shape((None, hidden + hidden))
-        self.bn_1 = tfkl.LayerNormalization()
-        self.dense_1.compute_output_shape((None, self.len0 * 32,))
-
-        # define a layer of the neural net with two pathways
-        self.conv_2 = tfkl.Conv1DTranspose(32, 5, strides=2)
-        shape = self.conv_2.compute_output_shape((None, self.len0, 32))
-        self.bn_2 = tfkl.LayerNormalization()
-        self.bn_2.compute_output_shape(shape)
-
-        # define a layer of the neural net with two pathways
-        self.conv_3 = tfkl.Conv1DTranspose(32, 5, strides=2)
-        shape = self.conv_3.compute_output_shape((None, len1, 32))
-        self.bn_3 = tfkl.LayerNormalization()
-        self.bn_3.compute_output_shape(shape)
-
-        # define a layer of the neural net with two pathways
-        self.conv_4 = tfkl.Conv1DTranspose(design_shape[-1], 5, strides=2)
-        self.conv_4.compute_output_shape((None, len2, 32))
-
-    def sample(self,
-               y,
-               **kwargs):
-        """Generate samples of designs X that have a score y where y is
-        the score that the generator conditions on
-
-        Args:
-
-        y: tf.Tensor
-            a batch of scalar scores wherein the generator is trained to
-            produce designs that have score y
-
-        Returns:
-
-        x_fake: tf.Tensor
-            a design the generator is trained to sample from a distribution
-            conditioned on the score y achieved by that design
-        """
-
-        kwargs.pop("temp", 1.0)
-        z = tf.random.normal([tf.shape(y)[0], self.latent_size])
-        x = tf.cast(z, tf.float32)
-        y = tf.cast(y, tf.float32)
-        y_embed = self.embed_0(y, **kwargs)
-        x = self.dense_0(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
-        x = self.dense_1(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
-        x = tf.reshape(x, [tf.shape(y)[0], self.len0, 32])
-        x = self.conv_2(x, **kwargs)
-        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
-        x = self.conv_3(x, **kwargs)
-        x = tf.nn.leaky_relu(self.bn_3(x, **kwargs), alpha=0.2)
-        return self.conv_4(x, **kwargs)

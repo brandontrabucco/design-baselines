@@ -3,9 +3,9 @@ from design_baselines.logger import Logger
 from design_baselines.mins.trainers import Ensemble
 from design_baselines.mins.trainers import WeightedGAN
 from design_baselines.mins.nets import ForwardModel
-from design_baselines.mins.nets import Discriminator, DiscriminatorConv
-from design_baselines.mins.nets import DiscreteGenerator, DiscreteGenConv
-from design_baselines.mins.nets import ContinuousGenerator, ContinuousGenConv
+from design_baselines.mins.nets import Discriminator
+from design_baselines.mins.nets import DiscreteGenerator
+from design_baselines.mins.nets import ContinuousGenerator
 from design_baselines.mins.utils import get_weights, get_ones_weights
 from design_baselines.mins.utils import get_synthetic_data
 import tensorflow as tf
@@ -38,59 +38,39 @@ def model_inversion(config):
             for b in range(config['bootstraps'])]
 
         # create a trainer for a forward model with a conservative objective
-        ensemble = Ensemble(forward_models,
-                            forward_model_optim=tf.keras.optimizers.Adam,
-                            forward_model_lr=config['ensemble_lr'],
-                            is_discrete=config['is_discrete'],
-                            noise_std=config.get('noise_std', 0.0),
-                            keep=config.get('keep', 1.0),
-                            temp=config.get('temp', 0.001))
+        oracle = Ensemble(forward_models,
+                          forward_model_optim=tf.keras.optimizers.Adam,
+                          forward_model_lr=config['oracle_lr'],
+                          is_discrete=config['is_discrete'],
+                          noise_std=config.get('noise_std', 0.0),
+                          keep=config.get('keep', 1.0),
+                          temp=config.get('temp', 0.001))
 
         # create a manager for saving algorithms state to the disk
-        ensemble_manager = tf.train.CheckpointManager(
-            tf.train.Checkpoint(**ensemble.get_saveables()),
-            os.path.join(config['logging_dir'], 'ensemble'), 1)
+        oracle_manager = tf.train.CheckpointManager(
+            tf.train.Checkpoint(**oracle.get_saveables()),
+            os.path.join(config['logging_dir'], 'oracle'), 1)
 
         # build a bootstrapped data set
         train_data, val_data = task.build(
             bootstraps=config['bootstraps'],
-            batch_size=config['ensemble_batch_size'],
+            batch_size=config['oracle_batch_size'],
             val_size=config['val_size'])
 
         # train the model for an additional number of epochs
-        ensemble_manager.restore_or_initialize()
-        ensemble.launch(train_data,
-                        val_data,
-                        logger,
-                        config['ensemble_epochs'])
+        oracle_manager.restore_or_initialize()
+        oracle.launch(train_data,
+                      val_data,
+                      logger,
+                      config['oracle_epochs'])
 
-    if config['is_discrete'] and config['is_conv']:
-
-        # build a Gumbel-Softmax GAN to sample discrete outputs
-        explore_gen = DiscreteGenConv(
-            task.input_shape, config['latent_size'],
-            hidden=config['hidden_size'])
-        exploit_gen = DiscreteGenConv(
-            task.input_shape, config['latent_size'],
-            hidden=config['hidden_size'])
-
-    elif config['is_discrete']:
+    if config['is_discrete']:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
         explore_gen = DiscreteGenerator(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
         exploit_gen = DiscreteGenerator(
-            task.input_shape, config['latent_size'],
-            hidden=config['hidden_size'])
-
-    elif config['is_conv']:
-
-        # build an LS-GAN to sample continuous outputs
-        explore_gen = ContinuousGenConv(
-            task.input_shape, config['latent_size'],
-            hidden=config['hidden_size'])
-        exploit_gen = ContinuousGenConv(
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
@@ -104,12 +84,8 @@ def model_inversion(config):
             task.input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
-    # choose if the discriminator is convolutional or not
-    discrimimator = DiscriminatorConv \
-        if config['is_conv'] else Discriminator
-
     # build the neural network GAN components
-    explore_discriminator = discrimimator(
+    explore_discriminator = Discriminator(
         task.input_shape, hidden=config['hidden_size'])
     explore_gan = WeightedGAN(
         explore_gen, explore_discriminator,
@@ -131,7 +107,7 @@ def model_inversion(config):
         os.path.join(config['logging_dir'], 'exploration_gan'), 1)
 
     # build the neural network GAN components
-    exploit_discriminator = discrimimator(
+    exploit_discriminator = Discriminator(
         task.input_shape, hidden=config['hidden_size'])
     exploit_gan = WeightedGAN(
         exploit_gen, exploit_discriminator,
@@ -233,7 +209,7 @@ def model_inversion(config):
 
         # generate samples for exploration
         solver_xs = explore_gen.sample(condition_ys, temp=0.001)
-        actual_ys = ensemble.get_distribution(solver_xs).mean() \
+        actual_ys = oracle.get_distribution(solver_xs).mean() \
             if config['fully_offline'] else task.score(solver_xs)
 
         # record score percentiles
