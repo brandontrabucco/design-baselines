@@ -339,7 +339,7 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "epochs": 200,
         "forward_model_lr": 0.001,
         "hidden_size": 50,
-        "initial_alpha": 0.002,
+        "initial_alpha": tune.grid_search([0.002, 0.1, 0.25, 0.5, 0.75]),
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "keep": 0.5,
