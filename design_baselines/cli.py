@@ -1164,11 +1164,68 @@ def cbas_ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "ensemble_lr": 0.001,
-        "ensemble_epochs": 200,
+        "ensemble_epochs": 50,
         "latent_size": 32,
-        "vae_lr": 0.001,
+        "vae_lr": 0.0001,
+        "vae_beta": 10.0,
+        "offline_epochs": 100,
+        "online_batches": 10,
+        "online_epochs": 10,
+        "iterations": 200,
+        "percentile": 80.0,
+        "solver_samples": 128},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='cbas-dkitty')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def cbas_dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from design_baselines.cbas import condition_by_adaptive_sampling
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(condition_by_adaptive_sampling, config={
+        "logging_dir": "data",
+        "is_discrete": False,
+        "task": "DKittyMorphology-v0",
+        "task_kwargs": {},
+        "bootstraps": 1,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "vae_batch_size": 100,
+        "hidden_size": 2048,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 500,
+        "latent_size": 32,
+        "vae_lr": 0.0005,
         "vae_beta": 2.0,
-        "offline_epochs": 500,
+        "offline_epochs": 200,
         "online_batches": 10,
         "online_epochs": 10,
         "iterations": 200,
@@ -1456,12 +1513,70 @@ def autofocused_cbas_ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "oracle_lr": 0.001,
-        "oracle_epochs": 200,
+        "oracle_epochs": 50,
         "autofocus_epochs": 10,
         "latent_size": 32,
-        "vae_lr": 0.001,
+        "vae_lr": 0.0001,
+        "vae_beta": 10.0,
+        "offline_epochs": 100,
+        "online_batches": 10,
+        "online_epochs": 10,
+        "iterations": 200,
+        "percentile": 80.0,
+        "solver_samples": 128},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='autofocused-cbas-dkitty')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def autofocused_cbas_dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from design_baselines.autofocused_cbas import autofocused_cbas
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(autofocused_cbas, config={
+        "logging_dir": "data",
+        "is_discrete": False,
+        "task": "DKittyMorphology-v0",
+        "task_kwargs": {},
+        "bootstraps": 1,
+        "val_size": 200,
+        "oracle_batch_size": 100,
+        "vae_batch_size": 100,
+        "hidden_size": 2048,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "oracle_lr": 0.001,
+        "oracle_epochs": 500,
+        "autofocus_epochs": 10,
+        "latent_size": 32,
+        "vae_lr": 0.0005,
         "vae_beta": 2.0,
-        "offline_epochs": 500,
+        "offline_epochs": 200,
         "online_batches": 10,
         "online_epochs": 10,
         "iterations": 200,
