@@ -295,9 +295,9 @@ class WeightedGAN(tf.Module):
                  discriminator_beta_2=0.999,
                  is_discrete=False,
                  noise_std=0.0,
-                 keep=0.0,
-                 start_temp=0.0,
-                 final_temp=0.0):
+                 keep=0.99,
+                 start_temp=5.0,
+                 final_temp=1.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
