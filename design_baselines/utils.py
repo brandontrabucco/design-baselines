@@ -42,7 +42,7 @@ def spearman(a, b):
 
 
 @tf.function(experimental_relax_shapes=True)
-def add_disc_noise(x, keep=0.9, temp=5.0):
+def disc_noise(x, keep=0.9, temp=5.0):
     """Add noise to a input that is either a continuous value or a probability
     distribution over discrete categorical values
 
@@ -98,7 +98,7 @@ def add_gumbel_noise(x, keep=1.0, temp=1.0):
 
 
 @tf.function(experimental_relax_shapes=True)
-def add_cont_noise(x, noise_std=1.0):
+def cont_noise(x, noise_std=1.0):
     """Add noise to a input that is either a continuous value or a probability
     distribution over discrete categorical values
 

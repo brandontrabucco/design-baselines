@@ -1,6 +1,6 @@
 from design_baselines.utils import spearman
-from design_baselines.utils import add_disc_noise
-from design_baselines.utils import add_cont_noise
+from design_baselines.utils import disc_noise
+from design_baselines.utils import cont_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
@@ -21,27 +21,38 @@ class Ensemble(tf.Module):
 
         Args:
 
-        oracles: List[tf.keras.Model]
+        forward_models: List[tf.keras.Model]
             a list of keras model that predict distributions over scores
-        oracle_optim: __class__
+        forward_model_optim: __class__
             the optimizer class to use for optimizing the oracle model
-        oracle__lr: float
+        forward_model_lr: float
             the learning rate for the oracle model optimizer
+        is_discrete: bool
+            a boolean that indicates whether the designs x are discrete
+            samples or continuous samples
+        noise_std: float
+            if designs x are continuous this specifies the standard
+            deviation of gaussian noise added to real samples
+        keep: float
+            if designs x are discrete this specifies the amount of
+            probability mass of the on location
+        temp: float
+            if designs x are discrete this specifies the
+            temperature of the discrete noise
         """
 
         super().__init__()
-        self.forward_models = forward_models
-        self.bootstraps = len(forward_models)
-
-        self.forward_model_optims = [
-            forward_model_optim(learning_rate=forward_model_lr)
-            for i in range(self.bootstraps)]
-
-        # create machinery for adding noise to the inputs
         self.is_discrete = is_discrete
         self.noise_std = noise_std
         self.keep = keep
         self.temp = temp
+
+        # create training optimizers
+        self.bootstraps = len(forward_models)
+        self.forward_models = forward_models
+        self.forward_model_optims = [
+            forward_model_optim(learning_rate=forward_model_lr)
+            for _ in range(self.bootstraps)]
 
     def get_distribution(self,
                          x,
@@ -101,32 +112,32 @@ class Ensemble(tf.Module):
         statistics = dict()
 
         for i in range(self.bootstraps):
-            fm = self.forward_models[i]
-            fm_optim = self.forward_model_optims[i]
+            model = self.forward_models[i]
+            optim = self.forward_model_optims[i]
 
             # corrupt the inputs with noise
-            x0 = add_disc_noise(x, self.keep, self.temp) \
-                if self.is_discrete else add_cont_noise(x, self.noise_std)
+            if self.is_discrete:
+                x0 = disc_noise(x, keep=self.keep, temp=self.temp)
+            else:
+                x0 = cont_noise(x, self.noise_std)
 
             with tf.GradientTape(persistent=True) as tape:
                 # calculate the prediction error and accuracy of the model
-                d = fm.get_distribution(x0, training=True)
+                d = model.get_distribution(x0, training=True)
                 nll = -d.log_prob(y)
+                statistics[f'oracle_{i}/train/nll'] = nll
 
                 # evaluate how correct the rank fo the model predictions are
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+                statistics[f'oracle_{i}/train/rank_corr'] = rank_correlation
 
                 # build the total loss
                 total_loss = tf.math.divide_no_nan(
                     tf.reduce_sum(b[:, i] * nll), tf.reduce_sum(b[:, i]))
 
-            grads = tape.gradient(total_loss, fm.trainable_variables)
-            fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
-
-            statistics[f'oracle_{i}/train/nll'] = nll
-            statistics[f'oracle_{i}/train/max_logstd'] = fm.max_logstd
-            statistics[f'oracle_{i}/train/min_logstd'] = fm.min_logstd
-            statistics[f'oracle_{i}/train/rank_corr'] = rank_correlation
+            var_list = model.trainable_variables
+            optim.apply_gradients(zip(
+                tape.gradient(total_loss, var_list), var_list))
 
         return statistics
 
@@ -153,20 +164,21 @@ class Ensemble(tf.Module):
         statistics = dict()
 
         for i in range(self.bootstraps):
-            fm = self.forward_models[i]
+            model = self.forward_models[i]
 
             # corrupt the inputs with noise
-            x0 = add_disc_noise(x, self.keep, self.temp) \
-                if self.is_discrete else add_cont_noise(x, self.noise_std)
+            if self.is_discrete:
+                x0 = disc_noise(x, keep=self.keep, temp=self.temp)
+            else:
+                x0 = cont_noise(x, self.noise_std)
 
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(x0, training=False)
+            d = model.get_distribution(x0, training=False)
             nll = -d.log_prob(y)
+            statistics[f'oracle_{i}/validate/nll'] = nll
 
             # evaluate how correct the rank fo the model predictions are
             rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
-
-            statistics[f'oracle_{i}/validate/nll'] = nll
             statistics[f'oracle_{i}/validate/rank_corr'] = rank_correlation
 
         return statistics
@@ -270,14 +282,15 @@ class WeightedGAN(tf.Module):
                  generator,
                  discriminator,
                  pool,
-                 pool_frac=0.5,
-                 pool_save=1,
-                 fake_pair_frac=0.5,
-                 penalty_weight=100.0,
-                 generator_lr=0.001,
+                 flip_frac=0.0,
+                 pool_frac=0.0,
+                 pool_save=0,
+                 fake_pair_frac=0.0,
+                 penalty_weight=0.0,
+                 generator_lr=0.0002,
                  generator_beta_1=0.5,
                  generator_beta_2=0.999,
-                 discriminator_lr=0.001,
+                 discriminator_lr=0.0002,
                  discriminator_beta_1=0.5,
                  discriminator_beta_2=0.999,
                  is_discrete=False,
@@ -290,16 +303,63 @@ class WeightedGAN(tf.Module):
 
         Args:
 
-        encoder: tf.keras.Model
-            the encoder neural network that outputs parameters for a gaussian
-        decoder: tf.keras.Model
-            the decoder neural network that outputs parameters for a gaussian
-        vae_optim: __class__
-            the optimizer class to use for optimizing the oracle model
-        vae_lr: float
-            the learning rate for the oracle model optimizer
-        vae_beta: float
-            the variational beta for the oracle model optimizer
+        generator: tf.keras.Model
+            the generator model in a generative adversarial network
+            conditioned on gaussian noise and target y values
+        discriminator: tf.keras.Model
+            the discriminator model in a generative adversarial network
+            conditioned on designs x and target y values
+        pool: ReplayBuffer
+            a replay buffer that is able to store previously generated
+            designs x from the gan up to a certain capacity
+        flip_frac: float
+            the probability of flipping teh labels of real samples
+            when training the discriminator
+        pool_frac: float
+            the fraction of the fake loss taken from samples of
+            designs from the replay pool
+        pool_save: int
+            the number of designs samples from the current generator to
+            store in the replay buffer at every step
+        fake_pair_frac: float
+            the fraction of the fake loss taken from samples of
+            fake pairs of real samples
+        penalty_weight: float
+            the weight of the gradient penalty on the discriminator
+            in the discriminator loss function
+        generator_lr: float
+            the learning rate in the ADAM optimizer for the
+            generator model
+        generator_beta_1: float
+            the beta_1 in the ADAM optimizer for the
+            generator model
+        generator_beta_2: float
+            the beta_2 in the ADAM optimizer for the
+            generator model
+        discriminator_lr: float
+            the learning rate in the ADAM optimizer for the
+            discriminator model
+        discriminator_beta_1: float
+            the beta_1 in the ADAM optimizer for the
+            discriminator model
+        discriminator_beta_2: float
+            the beta_2 in the ADAM optimizer for the
+            discriminator model
+        is_discrete: bool
+            a boolean that indicates whether the designs x are discrete
+            samples or continuous samples
+        noise_std: float
+            if designs x are continuous this specifies the standard
+            deviation of gaussian noise added to real samples
+        keep: float
+            if designs x are discrete this specifies the amount of
+            probability mass of the on location
+        start_temp: float
+            if designs x are discrete this specifies the initial
+            temperature of the discrete noise
+        final_temp: float
+            if designs x are discrete this specifies the final
+            temperature of the discrete noise
         """
 
         super().__init__()
@@ -308,6 +368,7 @@ class WeightedGAN(tf.Module):
         self.keep = keep
         self.penalty_weight = penalty_weight
         self.fake_pair_frac = fake_pair_frac
+        self.flip_frac = flip_frac
 
         self.start_temp = start_temp
         self.final_temp = final_temp
@@ -336,14 +397,14 @@ class WeightedGAN(tf.Module):
                    x_real,
                    y_real,
                    w):
-        """Perform a training step of gradient descent on an ensemble
-        using bootstrap weights for each model in the ensemble
+        """Perform a training step for a generator and a discriminator
+        using a least squares objective function
 
         Args:
 
-        x: tf.Tensor
+        x_real: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
-        y: tf.Tensor
+        y_real: tf.Tensor
             a batch of training labels shaped like [batch_size, 1]
         w: tf.Tensor
             importance sampling weights shaped like [batch_size, 1]
@@ -355,7 +416,7 @@ class WeightedGAN(tf.Module):
         """
 
         statistics = dict()
-        batch_size = tf.shape(y_real)[0]
+        batch_dim = tf.shape(y_real)[0]
 
         with tf.GradientTape() as tape:
 
@@ -363,8 +424,7 @@ class WeightedGAN(tf.Module):
             x_fake = self.generator.sample(y_real,
                                            temp=self.temp, training=True)
             d_fake, acc_fake = self.discriminator.loss(
-                x_fake, y_real,
-                target_real=False, input_real=False, training=False)
+                x_fake, y_real, tf.zeros([batch_dim, 1]), training=False)
 
             # normalize the fake evaluation metrics
             d_fake = d_fake * (1.0 - self.fake_pair_frac - self.pool_frac)
@@ -375,20 +435,18 @@ class WeightedGAN(tf.Module):
                 # evaluate the discriminator on fake pairs of real inputs
                 x_pair = tf.random.shuffle(x_real)
                 d_pair, acc_pair = self.discriminator.loss(
-                    x_pair, y_real,
-                    target_real=False, input_real=False, training=False)
+                    x_pair, y_real, tf.zeros([batch_dim, 1]), training=False)
 
                 # average the metrics between fake samples
                 d_fake = d_pair * self.fake_pair_frac + d_fake
                 acc_fake = acc_pair * self.fake_pair_frac + acc_fake
 
-            if self.pool.size > batch_size and self.pool_frac > 0:
+            if self.pool.size > batch_dim and self.pool_frac > 0:
 
                 # evaluate discriminator on samples from a replay buffer
-                x_pool, y_pool = self.pool.sample(batch_size)
+                x_pool, y_pool = self.pool.sample(batch_dim)
                 d_pool, acc_pool = self.discriminator.loss(
-                    x_pool, y_pool,
-                    target_real=False, input_real=False, training=False)
+                    x_pool, y_pool, tf.zeros([batch_dim, 1]), training=False)
 
                 # average the metrics between fake samples
                 d_fake = d_pool * self.pool_frac + d_fake
@@ -406,19 +464,21 @@ class WeightedGAN(tf.Module):
 
             # evaluate the discriminator on real inputs
             if self.is_discrete:
-                x_real = add_disc_noise(x_real, keep=self.keep, temp=self.temp)
+                x_real = disc_noise(x_real, keep=self.keep, temp=self.temp)
             else:
-                x_real = add_cont_noise(x_real, self.noise_std)
-            d_real, acc_real = self.discriminator.loss(
-                x_real, y_real,
-                target_real=True, input_real=True, training=True)
+                x_real = cont_noise(x_real, self.noise_std)
+            labels = tf.cast(self.flip_frac <
+                             tf.random.uniform([batch_dim, 1]), tf.float32)
+            d_real, acc_real = self.discriminator.loss(x_real,
+                                                       y_real,
+                                                       labels, training=True)
 
             statistics[f'generator/train/x_real'] = x_real
             statistics[f'discriminator/train/d_real'] = d_real
             statistics[f'discriminator/train/acc_real'] = acc_real
 
             # evaluate a gradient penalty on interpolations
-            e = tf.random.uniform([batch_size] + [1] * (len(x_fake.shape) - 1))
+            e = tf.random.uniform([batch_dim] + [1] * (len(x_fake.shape) - 1))
             x_interp = x_real * e + (1 - e) * x_fake
             penalty = self.discriminator.penalty(x_interp,
                                                  y_real, training=False)
@@ -439,8 +499,7 @@ class WeightedGAN(tf.Module):
             x_fake = self.generator.sample(y_real,
                                            temp=self.temp, training=True)
             d_fake, acc_fake = self.discriminator.loss(
-                x_fake, y_real,
-                target_real=False, input_real=False, training=False)
+                x_fake, y_real, tf.ones([batch_dim, 1]), training=False)
 
             # build the total loss
             total_loss = tf.reduce_mean(w * d_fake)
@@ -455,14 +514,14 @@ class WeightedGAN(tf.Module):
     def validate_step(self,
                       x_real,
                       y_real):
-        """Perform a validation step on an ensemble of models
-        without using bootstrapping weights
+        """Perform a validation step for a generator and a discriminator
+        using a least squares objective function
 
         Args:
 
-        x: tf.Tensor
+        x_real: tf.Tensor
             a batch of validation inputs shaped like [batch_size, channels]
-        y: tf.Tensor
+        y_real: tf.Tensor
             a batch of validation labels shaped like [batch_size, 1]
 
         Returns:
@@ -472,14 +531,13 @@ class WeightedGAN(tf.Module):
         """
 
         statistics = dict()
-        batch_size = tf.shape(y_real)[0]
+        batch_dim = tf.shape(y_real)[0]
 
         # evaluate the discriminator on generated samples
         x_fake = self.generator.sample(y_real,
                                        temp=self.temp, training=False)
         d_fake, acc_fake = self.discriminator.loss(
-            x_fake, y_real,
-            target_real=False, input_real=False, training=False)
+            x_fake, y_real, tf.zeros([batch_dim, 1]), training=False)
 
         # normalize the fake evaluation metrics
         d_fake = d_fake * (1.0 - self.fake_pair_frac - self.pool_frac)
@@ -490,20 +548,18 @@ class WeightedGAN(tf.Module):
             # evaluate the discriminator on fake pairs of real inputs
             x_pair = tf.random.shuffle(x_real)
             d_pair, acc_pair = self.discriminator.loss(
-                x_pair, y_real,
-                target_real=False, input_real=False, training=False)
+                x_pair, y_real, tf.zeros([batch_dim, 1]), training=False)
 
             # average the metrics between fake samples
             d_fake = d_pair * self.fake_pair_frac + d_fake
             acc_fake = acc_pair * self.fake_pair_frac + acc_fake
 
-        if self.pool.size > batch_size and self.pool_frac > 0:
+        if self.pool.size > batch_dim and self.pool_frac > 0:
 
             # evaluate discriminator on samples from a replay buffer
-            x_pool, y_pool = self.pool.sample(batch_size)
+            x_pool, y_pool = self.pool.sample(batch_dim)
             d_pool, acc_pool = self.discriminator.loss(
-                x_pool, y_pool,
-                target_real=False, input_real=False, training=False)
+                x_pool, y_pool, tf.zeros([batch_dim, 1]), training=False)
 
             # average the metrics between fake samples
             d_fake = d_pool * self.pool_frac + d_fake
@@ -515,19 +571,18 @@ class WeightedGAN(tf.Module):
 
         # evaluate the discriminator on real inputs
         if self.is_discrete:
-            x_real = add_disc_noise(x_real, keep=self.keep, temp=self.temp)
+            x_real = disc_noise(x_real, keep=self.keep, temp=self.temp)
         else:
-            x_real = add_cont_noise(x_real, self.noise_std)
+            x_real = cont_noise(x_real, self.noise_std)
         d_real, acc_real = self.discriminator.loss(
-            x_real, y_real,
-            target_real=True, input_real=True, training=False)
+            x_real, y_real, tf.ones([batch_dim, 1]), training=False)
 
         statistics[f'generator/validate/x_real'] = x_real
         statistics[f'discriminator/validate/d_real'] = d_real
         statistics[f'discriminator/validate/acc_real'] = acc_real
 
         # evaluate a gradient penalty on interpolations
-        e = tf.random.uniform([batch_size] + [1] * (len(x_fake.shape) - 1))
+        e = tf.random.uniform([batch_dim] + [1] * (len(x_fake.shape) - 1))
         x_interp = x_real * e + (1 - e) * x_fake
         penalty = self.discriminator.penalty(x_interp,
                                              y_real, training=False)
@@ -606,13 +661,13 @@ class WeightedGAN(tf.Module):
             the number of epochs through the data sets to take
         """
 
-        for e in range(start_epoch, start_epoch + epochs):
-            self.temp.assign(self.start_temp * (1.0 - e / epochs) +
-                             self.final_temp * e / epochs)
+        for e in range(epochs):
+            self.temp.assign(self.final_temp * e / (epochs - 1) +
+                             self.start_temp * (1.0 - e / (epochs - 1)))
             for name, loss in self.train(train_data).items():
-                logger.record(header + name, loss, e)
+                logger.record(header + name, loss, start_epoch + e)
             for name, loss in self.validate(validate_data).items():
-                logger.record(header + name, loss, e)
+                logger.record(header + name, loss, start_epoch + e)
 
     def get_saveables(self):
         """Collects and returns stateful objects that are serializeable

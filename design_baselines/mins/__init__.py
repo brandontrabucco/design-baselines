@@ -94,6 +94,7 @@ def model_inversion(config):
         task.input_shape, hidden=config['hidden_size'])
     explore_gan = WeightedGAN(
         explore_gen, explore_discriminator, explore_pool,
+        flip_frac=config['flip_frac'],
         pool_frac=config['pool_frac'],
         pool_save=config['pool_save'],
         fake_pair_frac=config['fake_pair_frac'],
@@ -120,6 +121,7 @@ def model_inversion(config):
         task.input_shape, hidden=config['hidden_size'])
     exploit_gan = WeightedGAN(
         exploit_gen, exploit_discriminator, exploit_pool,
+        flip_frac=config['flip_frac'],
         pool_frac=config['pool_frac'],
         pool_save=config['pool_save'],
         fake_pair_frac=config['fake_pair_frac'],
