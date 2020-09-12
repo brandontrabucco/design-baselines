@@ -22,9 +22,13 @@ class ReplayBuffer(tf.Module):
         self.shape = shape
 
         # a tensor for indexing into scatter_nd_update
-        self.idx = tf.concat([
-            tf.reshape(tf.range(s), [1] * n + [s] + [1] * (len(shape) - n))
-            for n, s in enumerate(shape)], axis=len(shape))
+        idx = []
+        for n, s in enumerate(shape):
+            i = tf.range(s)
+            i = tf.reshape(i, [1] * n + [s] + [1] * (len(shape) - n))
+            idx.append(tf.tile(i, list(
+                shape[:n]) + [1] + list(shape[n + 1:]) + [1]))
+        self.idx = tf.concat(idx, axis=len(shape))
 
         # save size statistics for the buffer
         self.head = tf.Variable(tf.constant(0))

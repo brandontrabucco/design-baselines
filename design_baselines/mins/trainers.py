@@ -418,11 +418,17 @@ class WeightedGAN(tf.Module):
         statistics = dict()
         batch_dim = tf.shape(y_real)[0]
 
+        # corrupt the inputs with noise
+        if self.is_discrete:
+            x_real = disc_noise(x_real, keep=self.keep, temp=self.temp)
+        else:
+            x_real = cont_noise(x_real, self.noise_std)
+
         with tf.GradientTape() as tape:
 
             # evaluate the discriminator on generated samples
             x_fake = self.generator.sample(y_real,
-                                           temp=self.temp, training=True)
+                                           temp=self.temp, training=False)
             d_fake, acc_fake = self.discriminator.loss(
                 x_fake, y_real, tf.zeros([batch_dim, 1]), training=False)
 
@@ -463,10 +469,6 @@ class WeightedGAN(tf.Module):
                                       y_real[:self.pool_save])
 
             # evaluate the discriminator on real inputs
-            if self.is_discrete:
-                x_real = disc_noise(x_real, keep=self.keep, temp=self.temp)
-            else:
-                x_real = cont_noise(x_real, self.noise_std)
             labels = tf.cast(self.flip_frac <
                              tf.random.uniform([batch_dim, 1]), tf.float32)
             d_real, acc_real = self.discriminator.loss(x_real,
@@ -533,6 +535,12 @@ class WeightedGAN(tf.Module):
         statistics = dict()
         batch_dim = tf.shape(y_real)[0]
 
+        # corrupt the inputs with noise
+        if self.is_discrete:
+            x_real = disc_noise(x_real, keep=self.keep, temp=self.temp)
+        else:
+            x_real = cont_noise(x_real, self.noise_std)
+
         # evaluate the discriminator on generated samples
         x_fake = self.generator.sample(y_real,
                                        temp=self.temp, training=False)
@@ -570,10 +578,6 @@ class WeightedGAN(tf.Module):
         statistics[f'discriminator/validate/acc_fake'] = acc_fake
 
         # evaluate the discriminator on real inputs
-        if self.is_discrete:
-            x_real = disc_noise(x_real, keep=self.keep, temp=self.temp)
-        else:
-            x_real = cont_noise(x_real, self.noise_std)
         d_real, acc_real = self.discriminator.loss(
             x_real, y_real, tf.ones([batch_dim, 1]), training=False)
 

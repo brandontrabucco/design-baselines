@@ -36,7 +36,7 @@ def model_inversion(config):
             hidden=config['hidden_size'],
             initial_max_std=config['initial_max_std'],
             initial_min_std=config['initial_min_std'])
-            for b in range(config['bootstraps'])]
+            for _ in range(config['bootstraps'])]
 
         # create a trainer for a forward model with a conservative objective
         oracle = Ensemble(forward_models,
@@ -195,7 +195,7 @@ def model_inversion(config):
                   actual_ys, 0, percentile=True)
 
     # train the gan using an importance sampled data set
-    for iteration in range(1, 1 + config['iterations']):
+    for iteration in range(config['iterations']):
 
         # generate synthetic x paired with high performing scores
         tilde_x, tilde_y = get_synthetic_data(
@@ -229,9 +229,9 @@ def model_inversion(config):
 
         # record score percentiles
         logger.record("exploration/condition_ys",
-                      condition_ys, iteration, percentile=True)
+                      condition_ys, iteration + 1, percentile=True)
         logger.record("exploration/actual_ys",
-                      actual_ys, iteration, percentile=True)
+                      actual_ys, iteration + 1, percentile=True)
 
         # concatenate newly paired samples with the existing data set
         x = tf.concat([x, solver_xs], 0)
@@ -261,6 +261,6 @@ def model_inversion(config):
 
         # record score percentiles
         logger.record("exploitation/condition_ys",
-                      condition_ys, iteration, percentile=True)
+                      condition_ys, iteration + 1, percentile=True)
         logger.record("exploitation/actual_ys",
-                      actual_ys, iteration, percentile=True)
+                      actual_ys, iteration + 1, percentile=True)
