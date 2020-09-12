@@ -1,6 +1,6 @@
 from design_baselines.utils import spearman
-from design_baselines.utils import add_discrete_noise
-from design_baselines.utils import add_continuous_noise
+from design_baselines.utils import add_disc_noise
+from design_baselines.utils import add_cont_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
@@ -105,11 +105,10 @@ class Ensemble(tf.Module):
             fm_optim = self.forward_model_optims[i]
 
             # corrupt the inputs with noise
-            x0 = add_discrete_noise(x, self.keep, self.temp) \
-                if self.is_discrete else add_continuous_noise(x, self.noise_std)
+            x0 = add_disc_noise(x, self.keep, self.temp) \
+                if self.is_discrete else add_cont_noise(x, self.noise_std)
 
             with tf.GradientTape(persistent=True) as tape:
-
                 # calculate the prediction error and accuracy of the model
                 d = fm.get_distribution(x0, training=True)
                 nll = -d.log_prob(y)
@@ -157,8 +156,8 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
 
             # corrupt the inputs with noise
-            x0 = add_discrete_noise(x, self.keep, self.temp) \
-                if self.is_discrete else add_continuous_noise(x, self.noise_std)
+            x0 = add_disc_noise(x, self.keep, self.temp) \
+                if self.is_discrete else add_cont_noise(x, self.noise_std)
 
             # calculate the prediction error and accuracy of the model
             d = fm.get_distribution(x0, training=False)
@@ -270,6 +269,11 @@ class WeightedGAN(tf.Module):
     def __init__(self,
                  generator,
                  discriminator,
+                 pool,
+                 pool_frac=0.5,
+                 pool_save=1,
+                 fake_pair_frac=0.5,
+                 penalty_weight=100.0,
                  generator_lr=0.001,
                  generator_beta_1=0.5,
                  generator_beta_2=0.999,
@@ -302,9 +306,16 @@ class WeightedGAN(tf.Module):
         self.is_discrete = is_discrete
         self.noise_std = noise_std
         self.keep = keep
+        self.penalty_weight = penalty_weight
+        self.fake_pair_frac = fake_pair_frac
+
         self.start_temp = start_temp
         self.final_temp = final_temp
         self.temp = tf.Variable(0.0, dtype=tf.float32)
+
+        self.pool = pool
+        self.pool_frac = pool_frac
+        self.pool_save = pool_save
 
         # create optimizers for the generator
         self.generator = generator
@@ -322,8 +333,8 @@ class WeightedGAN(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
-                   x,
-                   y,
+                   x_real,
+                   y_real,
                    w):
         """Perform a training step of gradient descent on an ensemble
         using bootstrap weights for each model in the ensemble
@@ -344,65 +355,106 @@ class WeightedGAN(tf.Module):
         """
 
         statistics = dict()
-
-        # corrupt the inputs with noise
-        x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
-            if self.is_discrete else add_continuous_noise(x, self.noise_std)
-        x_pair = tf.random.shuffle(x_real)
+        batch_size = tf.shape(y_real)[0]
 
         with tf.GradientTape() as tape:
 
-            # sample designs from the generator
-            penalty = self.discriminator.penalty(x_real, y, training=False)
-            x_fake = self.generator.sample(y, temp=self.temp, training=True)
-            d_real, acc_real = self.discriminator.loss(
-                x_real, y, target_real=True, input_real=True, training=True)
-            d_pair, acc_pair = self.discriminator.loss(
-                x_pair, y, target_real=False, input_real=False, training=False)
+            # evaluate the discriminator on generated samples
+            x_fake = self.generator.sample(y_real,
+                                           temp=self.temp, training=True)
             d_fake, acc_fake = self.discriminator.loss(
-                x_fake, y, target_real=False, input_real=False, training=False)
+                x_fake, y_real,
+                target_real=False, input_real=False, training=False)
+
+            if self.fake_pair_frac > 0:
+
+                # evaluate the discriminator on fake pairs of real inputs
+                x_pair = tf.random.shuffle(x_real)
+                d_pair, acc_pair = self.discriminator.loss(
+                    x_pair, y_real,
+                    target_real=False, input_real=False, training=False)
+
+                # average the metrics between fake samples
+                d_fake = d_pair * self.fake_pair_frac + \
+                         d_fake * (1.0 - self.fake_pair_frac)
+                acc_fake = acc_pair * self.fake_pair_frac + \
+                           acc_fake * (1.0 - self.fake_pair_frac)
+
+            if self.pool.size > batch_size and self.pool_frac > 0:
+
+                # evaluate discriminator on samples from a replay buffer
+                x_pool, y_pool = self.pool.sample(batch_size)
+                d_pool, acc_pool = self.discriminator.loss(
+                    x_pool, y_pool,
+                    target_real=False, input_real=False, training=False)
+
+                # average the metrics between fake samples
+                d_fake = d_pool * self.pool_frac + \
+                         d_fake * (1.0 - self.pool_frac)
+                acc_fake = acc_pool * self.pool_frac + \
+                           acc_fake * (1.0 - self.pool_frac)
+
+            statistics[f'generator/train/x_fake'] = x_fake
+            statistics[f'discriminator/train/d_fake'] = d_fake
+            statistics[f'discriminator/train/acc_fake'] = acc_fake
+
+            if self.pool_save > 0:
+
+                # possibly add more generated samples to the replay pool
+                self.pool.insert_many(x_fake[:self.pool_save],
+                                      y_real[:self.pool_save])
+
+            # evaluate the discriminator on real inputs
+            if self.is_discrete:
+                x_real = add_disc_noise(x_real, keep=self.keep, temp=self.temp)
+            else:
+                x_real = add_cont_noise(x_real, self.noise_std)
+            d_real, acc_real = self.discriminator.loss(
+                x_real, y_real,
+                target_real=True, input_real=True, training=True)
+
+            statistics[f'generator/train/x_real'] = x_real
+            statistics[f'discriminator/train/d_real'] = d_real
+            statistics[f'discriminator/train/acc_real'] = acc_real
+
+            # evaluate a gradient penalty on interpolations
+            e = tf.random.uniform([batch_size] + [1] * (len(x_fake.shape) - 1))
+            x_interp = x_real * e + (1 - e) * x_fake
+            penalty = self.discriminator.penalty(x_interp,
+                                                 y_real, training=False)
+
+            statistics[f'discriminator/train/penalty'] = penalty
 
             # build the total loss
             total_loss = tf.reduce_mean(w * (
-                d_real + 0.5 * d_pair + 0.5 * d_fake + 0.0 * penalty))
+                d_real + d_fake + self.penalty_weight * penalty))
 
         var_list = self.discriminator.trainable_variables
-        grads = tape.gradient(total_loss, var_list)
-        self.discriminator_optim.apply_gradients(zip(grads, var_list))
-
-        statistics[f'discriminator/train/d_real'] = d_real
-        statistics[f'discriminator/train/d_pair'] = d_pair
-        statistics[f'discriminator/train/d_fake'] = d_fake
-        statistics[f'discriminator/train/penalty'] = penalty
-        statistics[f'discriminator/train/acc_real'] = acc_real
-        statistics[f'discriminator/train/acc_pair'] = acc_pair
-        statistics[f'discriminator/train/acc_fake'] = acc_fake
-        statistics[f'generator/train/x_fake'] = x_fake
-        statistics[f'generator/train/x_real'] = x_real
+        self.discriminator_optim.apply_gradients(zip(
+            tape.gradient(total_loss, var_list), var_list))
 
         with tf.GradientTape() as tape:
 
-            # sample designs from the generator
-            x_fake = self.generator.sample(
-                y, temp=self.temp, training=False)
+            # evaluate the discriminator on generated samples
+            x_fake = self.generator.sample(y_real,
+                                           temp=self.temp, training=True)
             d_fake, acc_fake = self.discriminator.loss(
-                x_fake, y, target_real=True, input_real=False, training=False)
+                x_fake, y_real,
+                target_real=False, input_real=False, training=False)
 
             # build the total loss
             total_loss = tf.reduce_mean(w * d_fake)
 
         var_list = self.generator.trainable_variables
-        grads = tape.gradient(total_loss, var_list)
-        self.generator_optim.apply_gradients(zip(grads, var_list))
-
-        statistics[f'generator/train/x_fake2'] = x_fake
+        self.generator_optim.apply_gradients(zip(
+            tape.gradient(total_loss, var_list), var_list))
 
         return statistics
 
     @tf.function(experimental_relax_shapes=True)
     def validate_step(self,
-                      x,
-                      y):
+                      x_real,
+                      y_real):
         """Perform a validation step on an ensemble of models
         without using bootstrapping weights
 
@@ -420,31 +472,67 @@ class WeightedGAN(tf.Module):
         """
 
         statistics = dict()
+        batch_size = tf.shape(y_real)[0]
 
-        # corrupt the inputs with noise
-        x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
-            if self.is_discrete else add_continuous_noise(x, self.noise_std)
-        x_pair = tf.random.shuffle(x_real)
-
-        # sample designs from the generator
-        penalty = self.discriminator.penalty(x_real, y, training=False)
-        x_fake = self.generator.sample(y, temp=self.temp, training=False)
-        d_real, acc_real = self.discriminator.loss(
-            x_real, y, target_real=True, input_real=True, training=False)
-        d_pair, acc_pair = self.discriminator.loss(
-            x_pair, y, target_real=False, input_real=False, training=False)
+        # evaluate the discriminator on generated samples
+        x_fake = self.generator.sample(y_real,
+                                       temp=self.temp, training=False)
         d_fake, acc_fake = self.discriminator.loss(
-            x_fake, y, target_real=False, input_real=False, training=False)
+            x_fake, y_real,
+            target_real=False, input_real=False, training=False)
 
-        statistics[f'discriminator/validate/d_real'] = d_real
-        statistics[f'discriminator/validate/d_pair'] = d_pair
-        statistics[f'discriminator/validate/d_fake'] = d_fake
-        statistics[f'discriminator/validate/penalty'] = penalty
-        statistics[f'discriminator/validate/acc_real'] = acc_real
-        statistics[f'discriminator/validate/acc_pair'] = acc_pair
-        statistics[f'discriminator/validate/acc_fake'] = acc_fake
+        if self.fake_pair_frac > 0:
+
+            # evaluate the discriminator on fake pairs of real inputs
+            x_pair = tf.random.shuffle(x_real)
+            d_pair, acc_pair = self.discriminator.loss(
+                x_pair, y_real,
+                target_real=False, input_real=False, training=False)
+
+            # average the metrics between fake samples
+            d_fake = d_pair * self.fake_pair_frac + \
+                     d_fake * (1.0 - self.fake_pair_frac)
+            acc_fake = acc_pair * self.fake_pair_frac + \
+                       acc_fake * (1.0 - self.fake_pair_frac)
+
+        if self.pool.size > batch_size and self.pool_frac > 0:
+
+            # evaluate discriminator on samples from a replay buffer
+            x_pool, y_pool = self.pool.sample(batch_size)
+            d_pool, acc_pool = self.discriminator.loss(
+                x_pool, y_pool,
+                target_real=False, input_real=False, training=False)
+
+            # average the metrics between fake samples
+            d_fake = d_pool * self.pool_frac + \
+                     d_fake * (1.0 - self.pool_frac)
+            acc_fake = acc_pool * self.pool_frac + \
+                       acc_fake * (1.0 - self.pool_frac)
+
         statistics[f'generator/validate/x_fake'] = x_fake
+        statistics[f'discriminator/validate/d_fake'] = d_fake
+        statistics[f'discriminator/validate/acc_fake'] = acc_fake
+
+        # evaluate the discriminator on real inputs
+        if self.is_discrete:
+            x_real = add_disc_noise(x_real, keep=self.keep, temp=self.temp)
+        else:
+            x_real = add_cont_noise(x_real, self.noise_std)
+        d_real, acc_real = self.discriminator.loss(
+            x_real, y_real,
+            target_real=True, input_real=True, training=False)
+
         statistics[f'generator/validate/x_real'] = x_real
+        statistics[f'discriminator/validate/d_real'] = d_real
+        statistics[f'discriminator/validate/acc_real'] = acc_real
+
+        # evaluate a gradient penalty on interpolations
+        e = tf.random.uniform([batch_size] + [1] * (len(x_fake.shape) - 1))
+        x_interp = x_real * e + (1 - e) * x_fake
+        penalty = self.discriminator.penalty(x_interp,
+                                             y_real, training=False)
+
+        statistics[f'discriminator/validate/penalty'] = penalty
 
         return statistics
 
@@ -542,4 +630,5 @@ class WeightedGAN(tf.Module):
         saveables['generator_optim'] = self.generator_optim
         saveables['discriminator_optim'] = self.discriminator_optim
         saveables['temp'] = self.temp
+        saveables['pool'] = self.pool
         return saveables

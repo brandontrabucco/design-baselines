@@ -1,6 +1,6 @@
 from design_baselines.utils import spearman
-from design_baselines.utils import add_discrete_noise
-from design_baselines.utils import add_continuous_noise
+from design_baselines.utils import add_disc_noise
+from design_baselines.utils import add_cont_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
@@ -85,8 +85,8 @@ class LSGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
-            if self.is_discrete else add_continuous_noise(x, self.noise_std)
+        x_real = add_disc_noise(x, keep=self.keep, temp=self.temp) \
+            if self.is_discrete else add_cont_noise(x, self.noise_std)
 
         with tf.GradientTape() as tape:
 
@@ -154,8 +154,8 @@ class LSGAN(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        x_real = add_discrete_noise(x, keep=self.keep, temp=self.temp) \
-            if self.is_discrete else add_continuous_noise(x, self.noise_std)
+        x_real = add_disc_noise(x, keep=self.keep, temp=self.temp) \
+            if self.is_discrete else add_cont_noise(x, self.noise_std)
 
         # sample designs from the generator
         x_fake = self.generator.sample(x.shape[0], temp=self.temp, training=False)

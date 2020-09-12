@@ -109,23 +109,19 @@ class Discriminator(tf.keras.Model):
 
         # define a layer of the neural net with two pathways
         self.dense_0 = tfkl.Dense(hidden)
-        self.dense_0.build((None, self.input_size))
-        self.embed_1 = tfkl.Dense(hidden)
-        self.embed_1.build((None, hidden))
+        self.dense_0.build((None, self.input_size + hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_1 = tfkl.Dense(hidden)
-        self.dense_1.build((None, hidden))
-        self.embed_2 = tfkl.Dense(hidden)
-        self.embed_2.build((None, hidden))
+        self.dense_1.build((None, hidden + hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_2 = tfkl.Dense(hidden)
-        self.dense_2.build((None, hidden))
+        self.dense_2.build((None, hidden + hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(1)
-        self.dense_3.build((None, hidden))
+        self.dense_3.build((None, hidden + hidden))
 
     def __call__(self,
                  x,
@@ -152,22 +148,16 @@ class Discriminator(tf.keras.Model):
 
         x = tf.cast(x, tf.float32)
         y = tf.cast(y, tf.float32)
+        x = tf.reshape(x, [tf.shape(x)[0], self.input_size])
         y_embed = self.embed_0(y, **kwargs)
+        x = self.dense_0(tf.concat([x, y_embed], 1), **kwargs)
+        x = tf.nn.leaky_relu(x, alpha=0.1)
+        x = self.dense_1(tf.concat([x, y_embed], 1), **kwargs)
 
-        x = tf.reshape(x, [tf.shape(y)[0], self.input_size])
-        x = self.dense_0(x, **kwargs)
-        x = tf.nn.leaky_relu(x * y_embed, alpha=0.1)
-        y = tf.nn.leaky_relu(y_embed, alpha=0.1)
-
-        x = self.dense_1(x, **kwargs)
-        y = self.embed_1(y, **kwargs)
-        x = tf.nn.leaky_relu(x * y, alpha=0.1)
-        y = tf.nn.leaky_relu(y, alpha=0.1)
-
-        x = self.dense_2(x, **kwargs)
-        y = self.embed_2(y, **kwargs)
-        x = tf.nn.leaky_relu(x * y, alpha=0.2)
-        return self.dense_3(x, **kwargs)
+        x = tf.nn.leaky_relu(x, alpha=0.1)
+        x = self.dense_2(tf.concat([x, y_embed], 1), **kwargs)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
+        return self.dense_3(tf.concat([x, y_embed], 1), **kwargs)
 
     def penalty(self,
                 h,
@@ -274,20 +264,14 @@ class DiscreteGenerator(tf.keras.Model):
         # define a layer of the neural net with two pathways
         self.dense_0 = tfkl.Dense(hidden)
         self.dense_0.build((None, latent_size + hidden))
-        self.bn_0 = tfkl.LayerNormalization()
-        self.bn_0.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_1 = tfkl.Dense(hidden)
         self.dense_1.build((None, hidden + hidden))
-        self.bn_1 = tfkl.LayerNormalization()
-        self.bn_1.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_2 = tfkl.Dense(hidden)
         self.dense_2.build((None, hidden + hidden))
-        self.bn_2 = tfkl.LayerNormalization()
-        self.bn_2.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(np.prod(design_shape))
@@ -319,12 +303,12 @@ class DiscreteGenerator(tf.keras.Model):
 
         y_embed = self.embed_0(y, **kwargs)
         x = self.dense_0(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
         x = self.dense_1(tf.concat([x, y_embed], 1), **kwargs)
 
-        x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
         x = self.dense_2(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
         x = self.dense_3(tf.concat([x, y_embed], 1), **kwargs)
 
         logits = tf.reshape(x, [tf.shape(y)[0], *self.design_shape])
@@ -364,20 +348,14 @@ class ContinuousGenerator(tf.keras.Model):
         # define a layer of the neural net with two pathways
         self.dense_0 = tfkl.Dense(hidden)
         self.dense_0.build((None, latent_size + hidden))
-        self.bn_0 = tfkl.LayerNormalization()
-        self.bn_0.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_1 = tfkl.Dense(hidden)
         self.dense_1.build((None, hidden + hidden))
-        self.bn_1 = tfkl.LayerNormalization()
-        self.bn_1.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_2 = tfkl.Dense(hidden)
         self.dense_2.build((None, hidden + hidden))
-        self.bn_2 = tfkl.LayerNormalization()
-        self.bn_2.build((None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(np.prod(design_shape))
@@ -409,11 +387,11 @@ class ContinuousGenerator(tf.keras.Model):
 
         y_embed = self.embed_0(y, **kwargs)
         x = self.dense_0(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_0(x, **kwargs), alpha=0.2)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
         x = self.dense_1(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_1(x, **kwargs), alpha=0.2)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
 
         x = self.dense_2(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.bn_2(x, **kwargs), alpha=0.2)
+        x = tf.nn.leaky_relu(x, alpha=0.2)
         x = self.dense_3(tf.concat([x, y_embed], 1), **kwargs)
         return tf.reshape(x, [tf.shape(y)[0], *self.design_shape])

@@ -339,7 +339,7 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "epochs": 200,
         "forward_model_lr": 0.001,
         "hidden_size": 50,
-        "initial_alpha": tune.grid_search([0.002, 0.1, 0.25, 0.5, 0.75]),
+        "initial_alpha": 0.002,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "keep": 0.5,
@@ -348,7 +348,7 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "perturbation_steps": 50,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_samples": 128,
-        "solver_steps": 200,
+        "solver_steps": 500,
         "target_conservative_gap": 0.0,
         "temp": 100.0,
         "val_size": 200},
@@ -1653,6 +1653,67 @@ def mins_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
+@click.option('--local-dir', type=str, default='mins-molecule')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def mins_molecule(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from design_baselines.mins import model_inversion
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(model_inversion, config={
+        "logging_dir": "data",
+        "task": "MoleculeActivity-v0",
+        "task_kwargs": {'seed': tune.randint(1000)},
+        "val_size": 200,
+        "fully_offline": False,
+        "is_discrete": True,
+        "base_temp": 0.1,
+        "keep": 0.99,
+        "start_temp": 5.0,
+        "final_temp": 5.0,
+        "gan_batch_size": 128,
+        "hidden_size": 256,
+        "latent_size": 20,
+        "generator_lr": 2e-4,
+        "generator_beta_1": 0.1,
+        "generator_beta_2": 0.999,
+        "discriminator_lr": 2e-4,
+        "discriminator_beta_1": 0.1,
+        "discriminator_beta_2": 0.999,
+        "initial_epochs": 50,
+        "epochs_per_iteration": 40,
+        "iterations": 100,
+        "exploration_samples": 100,
+        "exploration_rate": 20.,
+        "thompson_samples": 100,
+        "solver_samples": 100},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
 @click.option('--local-dir', type=str, default='mins-hopper')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
@@ -1755,6 +1816,129 @@ def mins_superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
         "generator_beta_2": 0.999,
         "discriminator_lr": 2e-4,
         "discriminator_beta_1": 0.5,
+        "discriminator_beta_2": 0.999,
+        "initial_epochs": 200,
+        "epochs_per_iteration": 20,
+        "iterations": 100,
+        "exploration_samples": 100,
+        "exploration_rate": 0.1,
+        "thompson_samples": 100,
+        "solver_samples": 100},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='mins-ant')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def mins_ant(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from design_baselines.mins import model_inversion
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(model_inversion, config={
+        "logging_dir": "data",
+        "task": "AntMorphology-v0",
+        "task_kwargs": {},
+        "val_size": 200,
+        "fully_offline": False,
+        "is_discrete": False,
+        "base_temp": 0.1,
+        "noise_std": 0.0,
+        "gan_batch_size": 128,
+        "hidden_size": 2048,
+        "latent_size": 32,
+        "pool_size": 8192,
+        "pool_frac": 0.5,
+        "pool_save": 4,
+        "fake_pair_frac": 0.33333333333,
+        "penalty_weight": 100.0,
+        "generator_lr": 2e-4,
+        "generator_beta_1": 0.5,
+        "generator_beta_2": 0.999,
+        "discriminator_lr": 2e-4,
+        "discriminator_beta_1": 0.5,
+        "discriminator_beta_2": 0.999,
+        "initial_epochs": 1000,
+        "epochs_per_iteration": 20,
+        "iterations": 100,
+        "exploration_samples": 100,
+        "exploration_rate": 0.1,
+        "thompson_samples": 100,
+        "solver_samples": 100},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='mins-dkitty')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def mins_dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from design_baselines.mins import model_inversion
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(model_inversion, config={
+        "logging_dir": "data",
+        "task": "DKittyMorphology-v0",
+        "task_kwargs": {},
+        "val_size": 200,
+        "fully_offline": False,
+        "is_discrete": False,
+        "base_temp": 0.1,
+        "noise_std": 0.0,
+        "gan_batch_size": 128,
+        "hidden_size": 2048,
+        "latent_size": 32,
+        "generator_lr": 2e-5,
+        "generator_beta_1": 0.5,
+        "generator_beta_2": 0.999,
+        "discriminator_lr": 2e-5,
+        "discriminator_beta_1": 0.2,
         "discriminator_beta_2": 0.999,
         "initial_epochs": 200,
         "epochs_per_iteration": 20,

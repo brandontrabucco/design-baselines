@@ -1,6 +1,6 @@
 from design_baselines.utils import spearman
 from design_baselines.utils import add_gumbel_noise
-from design_baselines.utils import add_continuous_noise
+from design_baselines.utils import add_cont_noise
 from collections import defaultdict
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -113,7 +113,7 @@ class Conservative(tf.Module):
 
         # corrupt the inputs with noise
         x0 = add_gumbel_noise(x, self.keep, self.temp) \
-            if self.is_discrete else add_continuous_noise(x, self.noise_std)
+            if self.is_discrete else add_cont_noise(x, self.noise_std)
 
         statistics = dict()
         with tf.GradientTape(persistent=True) as tape:
@@ -183,7 +183,7 @@ class Conservative(tf.Module):
 
         # corrupt the inputs with noise
         x0 = add_gumbel_noise(x, self.keep, self.temp) \
-            if self.is_discrete else add_continuous_noise(x, self.noise_std)
+            if self.is_discrete else add_cont_noise(x, self.noise_std)
 
         statistics = dict()
 

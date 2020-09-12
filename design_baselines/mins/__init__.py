@@ -1,5 +1,6 @@
 from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
+from design_baselines.mins.replay_buffer import ReplayBuffer
 from design_baselines.mins.trainers import Ensemble
 from design_baselines.mins.trainers import WeightedGAN
 from design_baselines.mins.nets import ForwardModel
@@ -64,6 +65,10 @@ def model_inversion(config):
                       logger,
                       config['oracle_epochs'])
 
+    # create replay buffers for both GANS
+    explore_pool = ReplayBuffer(config['pool_size'], task.input_shape)
+    exploit_pool = ReplayBuffer(config['pool_size'], task.input_shape)
+
     if config['is_discrete']:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
@@ -88,7 +93,11 @@ def model_inversion(config):
     explore_discriminator = Discriminator(
         task.input_shape, hidden=config['hidden_size'])
     explore_gan = WeightedGAN(
-        explore_gen, explore_discriminator,
+        explore_gen, explore_discriminator, explore_pool,
+        pool_frac=config['pool_frac'],
+        pool_save=config['pool_save'],
+        fake_pair_frac=config['fake_pair_frac'],
+        penalty_weight=config['penalty_weight'],
         generator_lr=config['generator_lr'],
         generator_beta_1=config['generator_beta_1'],
         generator_beta_2=config['generator_beta_2'],
@@ -110,7 +119,11 @@ def model_inversion(config):
     exploit_discriminator = Discriminator(
         task.input_shape, hidden=config['hidden_size'])
     exploit_gan = WeightedGAN(
-        exploit_gen, exploit_discriminator,
+        exploit_gen, exploit_discriminator, exploit_pool,
+        pool_frac=config['pool_frac'],
+        pool_save=config['pool_save'],
+        fake_pair_frac=config['fake_pair_frac'],
+        penalty_weight=config['penalty_weight'],
         generator_lr=config['generator_lr'],
         generator_beta_1=config['generator_beta_1'],
         generator_beta_2=config['generator_beta_2'],
