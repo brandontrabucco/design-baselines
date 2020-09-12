@@ -432,9 +432,12 @@ class WeightedGAN(tf.Module):
             d_fake, acc_fake = self.discriminator.loss(
                 x_fake, y_real, tf.zeros([batch_dim, 1]), training=False)
 
+            statistics[f'generator/train/x_fake'] = x_fake
+            statistics[f'discriminator/train/d_fake'] = d_fake
+            statistics[f'discriminator/train/acc_fake'] = acc_fake
+
             # normalize the fake evaluation metrics
             d_fake = d_fake * (1.0 - self.fake_pair_frac - self.pool_frac)
-            acc_fake = acc_fake * (1.0 - self.fake_pair_frac - self.pool_frac)
 
             if self.fake_pair_frac > 0:
 
@@ -443,9 +446,12 @@ class WeightedGAN(tf.Module):
                 d_pair, acc_pair = self.discriminator.loss(
                     x_pair, y_real, tf.zeros([batch_dim, 1]), training=False)
 
+                statistics[f'generator/train/x_pair'] = x_pair
+                statistics[f'discriminator/train/d_pair'] = d_pair
+                statistics[f'discriminator/train/acc_pair'] = acc_pair
+
                 # average the metrics between fake samples
                 d_fake = d_pair * self.fake_pair_frac + d_fake
-                acc_fake = acc_pair * self.fake_pair_frac + acc_fake
 
             if self.pool.size > batch_dim and self.pool_frac > 0:
 
@@ -454,13 +460,12 @@ class WeightedGAN(tf.Module):
                 d_pool, acc_pool = self.discriminator.loss(
                     x_pool, y_pool, tf.zeros([batch_dim, 1]), training=False)
 
+                statistics[f'generator/train/x_pool'] = x_pool
+                statistics[f'discriminator/train/d_pool'] = d_pool
+                statistics[f'discriminator/train/acc_pool'] = acc_pool
+
                 # average the metrics between fake samples
                 d_fake = d_pool * self.pool_frac + d_fake
-                acc_fake = acc_pool * self.pool_frac + acc_fake
-
-            statistics[f'generator/train/x_fake'] = x_fake
-            statistics[f'discriminator/train/d_fake'] = d_fake
-            statistics[f'discriminator/train/acc_fake'] = acc_fake
 
             if self.pool_save > 0:
 
@@ -481,7 +486,7 @@ class WeightedGAN(tf.Module):
 
             # evaluate a gradient penalty on interpolations
             e = tf.random.uniform([batch_dim] + [1] * (len(x_fake.shape) - 1))
-            x_interp = x_real * e + (1 - e) * x_fake
+            x_interp = x_real * e + x_fake * (1 - e)
             penalty = self.discriminator.penalty(x_interp,
                                                  y_real, training=False)
 
@@ -547,9 +552,9 @@ class WeightedGAN(tf.Module):
         d_fake, acc_fake = self.discriminator.loss(
             x_fake, y_real, tf.zeros([batch_dim, 1]), training=False)
 
-        # normalize the fake evaluation metrics
-        d_fake = d_fake * (1.0 - self.fake_pair_frac - self.pool_frac)
-        acc_fake = acc_fake * (1.0 - self.fake_pair_frac - self.pool_frac)
+        statistics[f'generator/validate/x_fake'] = x_fake
+        statistics[f'discriminator/validate/d_fake'] = d_fake
+        statistics[f'discriminator/validate/acc_fake'] = acc_fake
 
         if self.fake_pair_frac > 0:
 
@@ -558,9 +563,9 @@ class WeightedGAN(tf.Module):
             d_pair, acc_pair = self.discriminator.loss(
                 x_pair, y_real, tf.zeros([batch_dim, 1]), training=False)
 
-            # average the metrics between fake samples
-            d_fake = d_pair * self.fake_pair_frac + d_fake
-            acc_fake = acc_pair * self.fake_pair_frac + acc_fake
+            statistics[f'generator/validate/x_pair'] = x_pair
+            statistics[f'discriminator/validate/d_pair'] = d_pair
+            statistics[f'discriminator/validate/acc_pair'] = acc_pair
 
         if self.pool.size > batch_dim and self.pool_frac > 0:
 
@@ -569,13 +574,9 @@ class WeightedGAN(tf.Module):
             d_pool, acc_pool = self.discriminator.loss(
                 x_pool, y_pool, tf.zeros([batch_dim, 1]), training=False)
 
-            # average the metrics between fake samples
-            d_fake = d_pool * self.pool_frac + d_fake
-            acc_fake = acc_pool * self.pool_frac + acc_fake
-
-        statistics[f'generator/validate/x_fake'] = x_fake
-        statistics[f'discriminator/validate/d_fake'] = d_fake
-        statistics[f'discriminator/validate/acc_fake'] = acc_fake
+            statistics[f'generator/validate/x_pool'] = x_pool
+            statistics[f'discriminator/validate/d_pool'] = d_pool
+            statistics[f'discriminator/validate/acc_pool'] = acc_pool
 
         # evaluate the discriminator on real inputs
         d_real, acc_real = self.discriminator.loss(
@@ -587,7 +588,7 @@ class WeightedGAN(tf.Module):
 
         # evaluate a gradient penalty on interpolations
         e = tf.random.uniform([batch_dim] + [1] * (len(x_fake.shape) - 1))
-        x_interp = x_real * e + (1 - e) * x_fake
+        x_interp = x_real * e + x_fake * (1 - e)
         penalty = self.discriminator.penalty(x_interp,
                                              y_real, training=False)
 
