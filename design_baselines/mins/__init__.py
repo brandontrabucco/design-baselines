@@ -91,9 +91,12 @@ def model_inversion(config):
 
     # build the neural network GAN components
     explore_discriminator = Discriminator(
-        task.input_shape, hidden=config['hidden_size'])
+        task.input_shape,
+        hidden=config['hidden_size'],
+        method=config['method'])
     explore_gan = WeightedGAN(
         explore_gen, explore_discriminator, explore_pool,
+        critic_frequency=config['critic_frequency'],
         flip_frac=config['flip_frac'],
         pool_frac=config['pool_frac'],
         pool_save=config['pool_save'],
@@ -118,9 +121,12 @@ def model_inversion(config):
 
     # build the neural network GAN components
     exploit_discriminator = Discriminator(
-        task.input_shape, hidden=config['hidden_size'])
+        task.input_shape,
+        hidden=config['hidden_size'],
+        method=config['method'])
     exploit_gan = WeightedGAN(
         exploit_gen, exploit_discriminator, exploit_pool,
+        critic_frequency=config['critic_frequency'],
         flip_frac=config['flip_frac'],
         pool_frac=config['pool_frac'],
         pool_save=config['pool_save'],

@@ -88,7 +88,8 @@ class Discriminator(tf.keras.Model):
 
     def __init__(self,
                  design_shape,
-                 hidden=50):
+                 hidden=50,
+                 method='wasserstein'):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
@@ -100,9 +101,16 @@ class Discriminator(tf.keras.Model):
         hidden: int
             the number of hidden units in every layer of the
             discriminator neural network
+        method: str
+            the type of loss function used by the discriminator to
+            regress to real and fake samples
         """
 
         super(Discriminator, self).__init__()
+        assert method in ['wasserstein',
+                          'least_squares',
+                          'binary_cross_entropy']
+        self.method = method
         self.input_size = np.prod(design_shape)
         self.embed_0 = tfkl.Dense(hidden)
         self.embed_0.build((None, 1))
@@ -158,9 +166,9 @@ class Discriminator(tf.keras.Model):
         y_embed = self.embed_0(y, **kwargs)
 
         x = self.dense_0(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.ln_0(x), alpha=0.1)
+        x = tf.nn.leaky_relu(self.ln_0(x), alpha=0.2)
         x = self.dense_1(tf.concat([x, y_embed], 1), **kwargs)
-        x = tf.nn.leaky_relu(self.ln_1(x), alpha=0.1)
+        x = tf.nn.leaky_relu(self.ln_1(x), alpha=0.2)
 
         x = self.dense_2(tf.concat([x, y_embed], 1), **kwargs)
         x = tf.nn.leaky_relu(self.ln_2(x), alpha=0.2)
@@ -226,10 +234,26 @@ class Discriminator(tf.keras.Model):
             by the discriminator given the targets labels
         """
 
-        x = self.__call__(x, y, **kwargs)
-        accuracy = tf.cast(x > 0.5, tf.float32)
-        return 0.5 * (x - labels) ** 2, tf.where(
-            labels > 0.5, accuracy, 1.0 - accuracy)
+        # Implements the Wasserstein GAN loss function
+        if self.method == 'wasserstein':
+            x = self.__call__(x, y, **kwargs)
+            p = tf.where(labels > 0.5, -x, x)
+            return x, p, tf.where(labels > 0.5, tf.cast(
+                x > 0.0, tf.float32), tf.cast(x < 0.0, tf.float32))
+
+        # Implements the Least-Squares GAN loss function
+        elif self.method == 'least_squares':
+            x = self.__call__(x, y, **kwargs)
+            p = 0.5 * tf.math.squared_difference(x, labels)
+            return x, p, tf.where(labels > 0.5, tf.cast(
+                x > 0.5, tf.float32), tf.cast(x < 0.5, tf.float32))
+
+        # Implements the Binary-Cross-Entropy GAN loss function
+        elif self.method == 'binary_cross_entropy':
+            x = tf.math.sigmoid(self.__call__(x, y, **kwargs))
+            p = tf.keras.losses.binary_crossentropy(labels, x)[..., tf.newaxis]
+            return x, p, tf.where(labels > 0.5, tf.cast(
+                x > 0.5, tf.float32), tf.cast(x < 0.5, tf.float32))
 
 
 class DiscreteGenerator(tf.keras.Model):
