@@ -151,6 +151,12 @@ def model_inversion(config):
     x = task.x
     y = task.y
 
+    # compute normalization statistics for the score
+    mu = y.mean(axis=0, keepdims=True)
+    y = y - mu
+    st = y.std(axis=0, keepdims=True)
+    y = y / st
+
     # build a weighted data set using newly collected samples
     train_data, val_data = task.build(
         x=x, y=y, importance_weights=get_weights(y, base_temp=base_temp),
@@ -161,14 +167,6 @@ def model_inversion(config):
     explore_gan.launch(
         train_data, val_data, logger, config['initial_epochs'],
         header="exploration/")
-    exploit_gan.launch(
-        train_data, val_data, logger, config['initial_epochs'],
-        header="exploitation/")
-
-    # prevent the temperature from being annealed further
-    if config['is_discrete']:
-        explore_gan.start_temp = explore_gan.final_temp
-        exploit_gan.start_temp = exploit_gan.final_temp
 
     # sample designs from the GAN and evaluate them
     condition_ys = tf.tile(tf.reduce_max(
@@ -176,23 +174,33 @@ def model_inversion(config):
 
     # generate samples for exploitation
     solver_xs = explore_gen.sample(condition_ys, temp=0.001)
-    actual_ys = task.score(solver_xs)
+    actual_ys = (task.score(solver_xs) - mu) / st
 
     # record score percentiles
     logger.record("exploration/condition_ys",
-                  condition_ys, 0, percentile=True)
+                  condition_ys * st + mu, 0, percentile=True)
     logger.record("exploration/actual_ys",
-                  actual_ys, 0, percentile=True)
+                  actual_ys * st + mu, 0, percentile=True)
+
+    # train the gan for several epochs
+    exploit_gan.launch(
+        train_data, val_data, logger, config['initial_epochs'],
+        header="exploitation/")
 
     # generate samples for exploitation
     solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
-    actual_ys = task.score(solver_xs)
+    actual_ys = (task.score(solver_xs) - mu) / st
 
     # record score percentiles
     logger.record("exploitation/condition_ys",
-                  condition_ys, 0, percentile=True)
+                  condition_ys * st + mu, 0, percentile=True)
     logger.record("exploitation/actual_ys",
-                  actual_ys, 0, percentile=True)
+                  actual_ys * st + mu, 0, percentile=True)
+
+    # prevent the temperature from being annealed further
+    if config['is_discrete']:
+        explore_gan.start_temp = explore_gan.final_temp
+        exploit_gan.start_temp = exploit_gan.final_temp
 
     # train the gan using an importance sampled data set
     for iteration in range(config['iterations']):
@@ -226,12 +234,13 @@ def model_inversion(config):
         solver_xs = explore_gen.sample(condition_ys, temp=0.001)
         actual_ys = oracle.get_distribution(solver_xs).mean() \
             if config['fully_offline'] else task.score(solver_xs)
+        actual_ys = (actual_ys - mu) / st
 
         # record score percentiles
         logger.record("exploration/condition_ys",
-                      condition_ys, iteration + 1, percentile=True)
+                      condition_ys * st + mu, iteration + 1, percentile=True)
         logger.record("exploration/actual_ys",
-                      actual_ys, iteration + 1, percentile=True)
+                      actual_ys * st + mu, iteration + 1, percentile=True)
 
         # concatenate newly paired samples with the existing data set
         x = tf.concat([x, solver_xs], 0)
@@ -257,10 +266,10 @@ def model_inversion(config):
 
         # generate samples for exploitation
         solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
-        actual_ys = task.score(solver_xs)
+        actual_ys = (task.score(solver_xs) - mu) / st
 
         # record score percentiles
         logger.record("exploitation/condition_ys",
-                      condition_ys, iteration + 1, percentile=True)
+                      condition_ys * st + mu, iteration + 1, percentile=True)
         logger.record("exploitation/actual_ys",
-                      actual_ys, iteration + 1, percentile=True)
+                      actual_ys * st + mu, iteration + 1, percentile=True)

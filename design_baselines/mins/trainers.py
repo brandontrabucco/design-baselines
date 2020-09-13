@@ -433,6 +433,7 @@ class WeightedGAN(tf.Module):
                 x_fake, y_real, tf.zeros([batch_dim, 1]), training=False)
 
             statistics[f'generator/train/x_fake'] = x_fake
+            statistics[f'generator/train/y_real'] = y_real
             statistics[f'discriminator/train/d_fake'] = d_fake
             statistics[f'discriminator/train/acc_fake'] = acc_fake
 
@@ -482,7 +483,7 @@ class WeightedGAN(tf.Module):
                                       y_real[:self.pool_save])
 
             # evaluate the discriminator on real inputs
-            labels = tf.cast(self.flip_frac <
+            labels = tf.cast(self.flip_frac <=
                              tf.random.uniform([batch_dim, 1]), tf.float32)
             d_real, acc_real = self.discriminator.loss(x_real,
                                                        y_real,
@@ -561,6 +562,7 @@ class WeightedGAN(tf.Module):
             x_fake, y_real, tf.zeros([batch_dim, 1]), training=False)
 
         statistics[f'generator/validate/x_fake'] = x_fake
+        statistics[f'generator/validate/y_real'] = y_real
         statistics[f'discriminator/validate/d_fake'] = d_fake
         statistics[f'discriminator/validate/acc_fake'] = acc_fake
 

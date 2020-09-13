@@ -104,7 +104,7 @@ class Discriminator(tf.keras.Model):
 
         super(Discriminator, self).__init__()
         self.input_size = np.prod(design_shape)
-        self.embed_0 = tfkl.Dense(hidden, use_bias=False)
+        self.embed_0 = tfkl.Dense(hidden)
         self.embed_0.build((None, 1))
 
         # define a layer of the neural net with two pathways
@@ -228,7 +228,7 @@ class Discriminator(tf.keras.Model):
 
         x = self.__call__(x, y, **kwargs)
         accuracy = tf.cast(x > 0.5, tf.float32)
-        return (x - labels) ** 2, tf.where(
+        return 0.5 * (x - labels) ** 2, tf.where(
             labels > 0.5, accuracy, 1.0 - accuracy)
 
 
@@ -258,7 +258,7 @@ class DiscreteGenerator(tf.keras.Model):
         super(DiscreteGenerator, self).__init__()
         self.design_shape = design_shape
         self.latent_size = latent_size
-        self.embed_0 = tfkl.Dense(hidden, use_bias=False)
+        self.embed_0 = tfkl.Dense(hidden)
         self.embed_0.build((None, 1))
 
         # define a layer of the neural net with two pathways
@@ -348,7 +348,7 @@ class ContinuousGenerator(tf.keras.Model):
         super(ContinuousGenerator, self).__init__()
         self.design_shape = design_shape
         self.latent_size = latent_size
-        self.embed_0 = tfkl.Dense(hidden, use_bias=False)
+        self.embed_0 = tfkl.Dense(hidden)
         self.embed_0.build((None, 1))
 
         # define a layer of the neural net with two pathways
