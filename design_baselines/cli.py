@@ -1895,7 +1895,7 @@ def mins_ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "gan_batch_size": 512,
         "hidden_size": 256,
         "latent_size": 32,
-        "critic_frequency": 5,
+        "critic_frequency": 10,
         "flip_frac": 0.,
         "pool_size": 0,
         "pool_frac": 0.,
