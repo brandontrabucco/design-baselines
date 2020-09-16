@@ -449,7 +449,7 @@ def forward_ensemble_dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(forward_ensemble, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"split_percentile": tune.grid_search([20, 40, 60])},
         "is_discrete": False,
         "bootstraps": 1,
         "noise_std": 0.,
@@ -500,7 +500,7 @@ def forward_ensemble_ant(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(forward_ensemble, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"split_percentile": tune.grid_search([20, 40, 60])},
         "is_discrete": False,
         "bootstraps": 1,
         "noise_std": 0.,
