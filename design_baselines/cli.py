@@ -45,7 +45,7 @@ def conservative_ensemble_dkitty(local_dir, cpus, gpus, num_parallel, num_sample
     tune.run(conservative_ensemble, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"split_percentile": tune.grid_search([20, 40, 60])},
         "is_discrete": False,
         "noise_std": 0.0,
         "val_size": 200,
@@ -102,7 +102,7 @@ def conservative_ensemble_ant(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(conservative_ensemble, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"split_percentile": tune.grid_search([20, 40, 60])},
         "is_discrete": False,
         "noise_std": 0.0,
         "val_size": 200,
