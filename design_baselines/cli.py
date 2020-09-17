@@ -359,6 +359,64 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
+@click.option('--local-dir', type=str, default='perturbation-backprop-gfp')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def perturbation_backprop_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Train a forward model using various regularization methods and
+    solve a model-based optimization problem
+
+    Args:
+
+    local_dir: str
+        the path where model weights and tf events wil be saved
+    cpus: int
+        the number of cpu cores on the host machine to use
+    gpus: int
+        the number of gpu nodes on the host machine to use
+    num_parallel: int
+        the number of processes to run at once
+    num_samples: int
+        the number of samples to take per configuration
+    """
+
+    from design_baselines.conservative_ensemble import conservative_ensemble
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(conservative_ensemble, config={
+        "logging_dir": "data",
+        "task": "GFP-v0",
+        "task_kwargs": {"seed": tune.randint(1000)},
+        "is_discrete": True,
+        "activations": [["leaky_relu", "leaky_relu"]],
+        "alpha_lr": 0.0,
+        "batch_size": 128,
+        "epochs": 200,
+        "forward_model_lr": 0.001,
+        "hidden_size": 50,
+        "initial_alpha": 0.002,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "keep": 0.5,
+        "perturbation_backprop": True,
+        "perturbation_lr": 18.0,
+        "perturbation_steps": tune.grid_search([0, 12, 25, 37, 50]),
+        "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
+        "solver_samples": 128,
+        "solver_steps": 500,
+        "target_conservative_gap": 0.0,
+        "temp": 100.0,
+        "val_size": 200},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
 @click.option('--local-dir', type=str, default='conservative-ensemble-superconductor')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
