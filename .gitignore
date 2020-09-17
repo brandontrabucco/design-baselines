@@ -1,7 +1,8 @@
 *.tfevents**
 *.egg-info**
 *idea**
-*data**
+data/**
+**data
 *src**
 *.out**
 *.pkl**
