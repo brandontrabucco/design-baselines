@@ -459,10 +459,10 @@ def conservative_ensemble_superconductor(local_dir, cpus, gpus, num_parallel, nu
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.0,
-        "initial_alpha": 0.05,
+        "initial_alpha": 0.1,
         "alpha_lr": 0.0,
-        "perturbation_lr": 0.01,
-        "perturbation_steps": 50,
+        "perturbation_lr": tune.grid_search([0.005, 0.0037, 0.0025, 0.0012, 0.0005]),
+        "perturbation_steps": 100,
         "perturbation_backprop": False,
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
@@ -2213,7 +2213,7 @@ def plot(dir, tag, xlabel, ylabel, separate_runs):
     # locate the params of variation in this experiment
     params_of_variation = []
     for key, val in all_params.items():
-        if len(val) > 1 and not isinstance(val[0], dict):
+        if len(val) > 1:
             params_of_variation.append(key)
 
     # get the task and algorithm name
