@@ -1,7 +1,7 @@
 from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
-from design_baselines.utils import add_gumbel_noise
+from design_baselines.utils import gumb_noise
 from design_baselines.forward_ensemble.trainers import Ensemble
 from design_baselines.forward_ensemble.nets import ForwardModel
 import tensorflow.keras.layers as tfkl
@@ -58,7 +58,7 @@ def forward_ensemble(config):
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
     x = tf.gather(task.x, indices, axis=0)
-    x = tf.math.log(add_gumbel_noise(
+    x = tf.math.log(gumb_noise(
         x, config.get('keep', 0.9), config.get('temp', 1.0))) \
         if config['is_discrete'] else x
 

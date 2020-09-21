@@ -1,13 +1,12 @@
 from design_baselines.utils import spearman
-from design_baselines.utils import add_gumbel_noise
+from design_baselines.utils import gumb_noise
 from design_baselines.utils import cont_noise
-from collections import defaultdict
 import tensorflow as tf
 import tensorflow_probability as tfp
 import numpy as np
 
 
-class Conservative(tf.Module):
+class OnlineSolver(tf.Module):
 
     def __init__(self,
                  forward_model,
@@ -17,9 +16,12 @@ class Conservative(tf.Module):
                  initial_alpha=0.0001,
                  alpha_optim=tf.keras.optimizers.Adam,
                  alpha_lr=0.001,
-                 perturbation_lr=0.001,
-                 perturbation_steps=100,
-                 perturbation_backprop=False,
+                 lookahead_lr=0.001,
+                 lookahead_steps=100,
+                 lookahead_backprop=False,
+                 lookahead_swap=0.1,
+                 solver_period=50,
+                 solver_warmup=500,
                  is_discrete=False,
                  noise_std=0.0,
                  keep=0.0,
@@ -48,18 +50,26 @@ class Conservative(tf.Module):
         self.alpha_optim = alpha_optim(learning_rate=alpha_lr)
 
         # create machinery for sampling adversarial examples
-        self.perturbation_lr = perturbation_lr
-        self.perturbation_steps = perturbation_steps
-        self.perturbation_backprop = perturbation_backprop
         self.is_discrete = is_discrete
         self.noise_std = noise_std
         self.keep = keep
         self.temp = temp
 
+        # parameters for the lookahead optimizer
+        self.lookahead_lr = lookahead_lr
+        self.lookahead_steps = lookahead_steps
+        self.lookahead_backprop = lookahead_backprop
+        self.lookahead_swap = lookahead_swap
+
+        # create machinery for storing the best solution
+        self.solver_period = solver_period
+        self.solver_warmup = solver_warmup
+        self.soln = None
+
     @tf.function(experimental_relax_shapes=True)
-    def optimize(self,
-                 x,
-                 **kwargs):
+    def lookahead(self,
+                  x,
+                  **kwargs):
         """Using gradient descent find adversarial versions of x that maximize
         the score predicted by the forward model
 
@@ -67,8 +77,6 @@ class Conservative(tf.Module):
 
         x: tf.Tensor
             the original value of the tensor being optimized
-        i: int
-            the index of the forward model used when back propagating
 
         Returns:
 
@@ -80,16 +88,17 @@ class Conservative(tf.Module):
         def body(xt):
             with tf.GradientTape() as tape:
                 tape.watch(xt)
-                score = self.fm.get_distribution(tf.math.softmax(
-                    xt) if self.is_discrete else xt, **kwargs).mean()
-            return xt + self.perturbation_lr * tape.gradient(score, xt)
+                z = tf.math.softmax(xt) if self.is_discrete else xt
+                pred = self.fm.get_distribution(z, **kwargs).mean()
+            return xt + self.lookahead_lr * tape.gradient(pred, xt)
         x = tf.math.log(x) if self.is_discrete else x
         x = tf.while_loop(lambda xt: True, body, (x,), swap_memory=True,
-                          maximum_iterations=self.perturbation_steps)[0]
+                          maximum_iterations=self.lookahead_steps)[0]
         return tf.math.softmax(x) if self.is_discrete else x
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
+                   i,
                    x,
                    y,
                    b):
@@ -111,23 +120,34 @@ class Conservative(tf.Module):
             a dictionary that contains logging information
         """
 
-        # corrupt the inputs with noise
-        x0 = add_gumbel_noise(x, self.keep, self.temp) \
-            if self.is_discrete else cont_noise(x, self.noise_std)
-
         statistics = dict()
+        batch_dim = tf.shape(y)[0]
+
+        # corrupt the inputs with noise
+        if self.is_discrete:
+            x = gumb_noise(x, keep=self.keep, temp=self.temp)
+        else:
+            x = cont_noise(x, self.noise_std)
+
         with tf.GradientTape(persistent=True) as tape:
 
             # calculate the prediction error and accuracy of the model
-            d = self.fm.get_distribution(x0, training=True)
+            d = self.fm.get_distribution(x, training=True)
             nll = -d.log_prob(y)
+            statistics[f'train/nll'] = nll
 
             # evaluate how correct the rank fo the model predictions are
             rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+            statistics[f'train/rank_corr'] = rank_correlation
+
+            # select the starting points for lookahead
+            xi = tf.where(
+                tf.random.uniform([batch_dim, 1]) > self.lookahead_swap,
+                self.soln[:batch_dim], x)
 
             # calculate the conservative gap
-            perturb = self.optimize(x0, training=False)
-            if not self.perturbation_backprop:
+            perturb = self.lookahead(xi, training=False)
+            if not self.lookahead_backprop:
                 perturb = tf.stop_gradient(perturb)
 
             # calculate the prediction error and accuracy of the model
@@ -135,29 +155,39 @@ class Conservative(tf.Module):
 
             # build the lagrangian loss
             conservative_gap = (perturb_d.mean() - d.mean())[:, 0]
+            statistics[f'train/gap'] = conservative_gap
+
             gap = (self.alpha * self.target_conservative_gap -
                    self.alpha * conservative_gap)
+            statistics[f'train/alpha_loss'] = gap
+            statistics[f'train/alpha'] = self.alpha
 
             # model loss that combines maximum likelihood with a constraint
             model_loss = nll + self.alpha * conservative_gap
 
             # build the total and lagrangian losses
             denom = tf.reduce_sum(b)
-            total_loss = tf.math.divide_no_nan(
-                tf.reduce_sum(b * model_loss), denom)
-            alpha_loss = tf.math.divide_no_nan(
-                tf.reduce_sum(b * gap), denom)
+            total_loss = tf.math.divide_no_nan(tf.reduce_sum(b * model_loss), denom)
+            alpha_loss = tf.math.divide_no_nan(tf.reduce_sum(b * gap), denom)
 
         grads = tape.gradient(total_loss, self.fm.trainable_variables)
         self.fm_optim.apply_gradients(zip(grads, self.fm.trainable_variables))
         grads = tape.gradient(alpha_loss, self.log_alpha)
         self.alpha_optim.apply_gradients([[grads, self.log_alpha]])
 
-        statistics[f'train/nll'] = nll
-        statistics[f'train/alpha'] = self.alpha
-        statistics[f'train/alpha_loss'] = gap
-        statistics[f'train/rank_corr'] = rank_correlation
-        statistics[f'train/gap'] = conservative_gap
+        # optimizer only under certain conditions
+        if tf.logical_and(
+                tf.greater_equal(i, self.solver_warmup),
+                tf.equal(tf.math.floormod(i, self.solver_period), 0)):
+
+            # update the current solution using gradient ascent
+            with tf.GradientTape() as tape:
+                z = tf.nn.softmax(self.soln) if self.is_discrete else self.soln
+                score = self.fm.get_distribution(z, training=False).mean()
+
+            # push gradients to the solution
+            grads = tape.gradient(score, self.soln)
+            self.soln.assign(self.soln + self.lookahead_lr * grads)
 
         return statistics
 
@@ -181,109 +211,40 @@ class Conservative(tf.Module):
             a dictionary that contains logging information
         """
 
-        # corrupt the inputs with noise
-        x0 = add_gumbel_noise(x, self.keep, self.temp) \
-            if self.is_discrete else cont_noise(x, self.noise_std)
-
         statistics = dict()
+        batch_dim = tf.shape(y)[0]
+
+        # corrupt the inputs with noise
+        if self.is_discrete:
+            x = gumb_noise(x, keep=self.keep, temp=self.temp)
+        else:
+            x = cont_noise(x, self.noise_std)
 
         # calculate the prediction error and accuracy of the model
-        d = self.fm.get_distribution(x0, training=False)
+        d = self.fm.get_distribution(x, training=False)
         nll = -d.log_prob(y)
+        statistics[f'validate/nll'] = nll
 
         # evaluate how correct the rank fo the model predictions are
         rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+        statistics[f'validate/rank_corr'] = rank_correlation
+
+        # select the starting points for lookahead
+        xi = tf.where(
+            tf.random.uniform([batch_dim, 1]) > self.lookahead_swap,
+            self.soln[:batch_dim], x)
 
         # calculate the conservative gap
-        perturb = self.optimize(x0, training=False)
+        perturb = self.lookahead(xi, training=False)
 
         # calculate the prediction error and accuracy of the model
         perturb_d = self.fm.get_distribution(perturb, training=False)
 
         # build the lagrangian loss
         conservative_gap = (perturb_d.mean() - d.mean())[:, 0]
-
-        statistics[f'validate/nll'] = nll
-        statistics[f'validate/rank_corr'] = rank_correlation
         statistics[f'validate/gap'] = conservative_gap
 
         return statistics
-
-    def train(self,
-              dataset):
-        """Perform training using gradient descent on an ensemble
-        using bootstrap weights for each model in the ensemble
-
-        Args:
-
-        dataset: tf.data.Dataset
-            the training dataset already batched and prefetched
-
-        Returns:
-
-        loss_dict: dict
-            a dictionary mapping names to loss values for logging
-        """
-
-        statistics = defaultdict(list)
-        for X, y, b in dataset:
-            for name, tensor in self.train_step(X, y, b).items():
-                statistics[name].append(tensor)
-        for name in statistics.keys():
-            statistics[name] = tf.concat(statistics[name], axis=0)
-        return statistics
-
-    def validate(self,
-                 dataset):
-        """Perform validation on an ensemble of models without
-        using bootstrapping weights
-
-        Args:
-
-        dataset: tf.data.Dataset
-            the validation dataset already batched and prefetched
-
-        Returns:
-
-        loss_dict: dict
-            a dictionary mapping names to loss values for logging
-        """
-
-        statistics = defaultdict(list)
-        for X, y in dataset:
-            for name, tensor in self.validate_step(X, y).items():
-                statistics[name].append(tensor)
-        for name in statistics.keys():
-            statistics[name] = tf.concat(statistics[name], axis=0)
-        return statistics
-
-    def launch(self,
-               train_data,
-               validate_data,
-               logger,
-               epochs,
-               start_epoch=0,
-               header=""):
-        """Launch training and validation for the model for the specified
-        number of epochs, and log statistics
-
-        Args:
-
-        train_data: tf.data.Dataset
-            the training dataset already batched and prefetched
-        validate_data: tf.data.Dataset
-            the validation dataset already batched and prefetched
-        logger: Logger
-            an instance of the logger used for writing to tensor board
-        epochs: int
-            the number of epochs through the data sets to take
-        """
-
-        for e in range(start_epoch, start_epoch + epochs):
-            for name, loss in self.train(train_data).items():
-                logger.record(header + name, loss, e)
-            for name, loss in self.validate(validate_data).items():
-                logger.record(header + name, loss, e)
 
     def get_saveables(self):
         """Collects and returns stateful objects that are serializeable

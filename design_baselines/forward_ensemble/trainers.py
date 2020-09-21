@@ -1,5 +1,5 @@
 from design_baselines.utils import spearman
-from design_baselines.utils import add_gumbel_noise
+from design_baselines.utils import gumb_noise
 from design_baselines.utils import cont_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
@@ -104,7 +104,7 @@ class Ensemble(tf.Module):
             optim = self.forward_model_optims[i]
 
             # corrupt the inputs with noise
-            x0 = add_gumbel_noise(x, self.keep, self.temp) \
+            x0 = gumb_noise(x, self.keep, self.temp) \
                 if self.is_discrete else cont_noise(x, self.noise_std)
 
             with tf.GradientTape() as tape:
@@ -154,7 +154,7 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
 
             # corrupt the inputs with noise
-            x0 = add_gumbel_noise(x, self.keep, self.temp) \
+            x0 = gumb_noise(x, self.keep, self.temp) \
                 if self.is_discrete else cont_noise(x, self.noise_std)
 
             # calculate the prediction error and accuracy of the model

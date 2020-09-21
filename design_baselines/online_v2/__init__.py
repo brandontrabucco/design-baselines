@@ -1,16 +1,14 @@
 from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
-from design_baselines.utils import add_gumbel_noise
-from design_baselines.conservative_ensemble.trainers import Conservative
-from design_baselines.conservative_ensemble.nets import ForwardModel
-import tensorflow_probability as tfp
+from design_baselines.utils import gumb_noise
+from design_baselines.online_v2.trainers import OnlineSolver
+from design_baselines.online_v2.nets import ForwardModel
+from collections import defaultdict
 import tensorflow as tf
-import numpy as np
-import os
 
 
-def conservative_ensemble(config):
+def online_ensemble(config):
     """Train a forward model and perform model based optimization
     using a conservative objective function
 
@@ -24,128 +22,83 @@ def conservative_ensemble(config):
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
 
-    # make several keras neural networks with different architectures
-    forward_models = [ForwardModel(
-        task.input_shape,
-        activations=activations,
-        hidden=config['hidden_size'],
-        initial_max_std=config['initial_max_std'],
-        initial_min_std=config['initial_min_std'])
-        for activations in config['activations']]
-
-    trs = []
-    for i, fm in enumerate(forward_models):
-
-        # create a bootstrapped data set
-        train_data, validate_data = task.build(batch_size=config['batch_size'],
-                                               val_size=config['val_size'],
-                                               bootstraps=1)
-
-        # create a trainer for a forward model with a conservative objective
-        trainer = Conservative(
-            fm,
-            forward_model_optim=tf.keras.optimizers.Adam,
-            forward_model_lr=config['forward_model_lr'],
-            target_conservative_gap=config['target_conservative_gap'],
-            initial_alpha=config['initial_alpha'],
-            alpha_optim=tf.keras.optimizers.Adam,
-            alpha_lr=config['alpha_lr'],
-            perturbation_lr=config['perturbation_lr'],
-            perturbation_steps=config['perturbation_steps'],
-            perturbation_backprop=config['perturbation_backprop'],
-            is_discrete=config['is_discrete'],
-            noise_std=config.get('noise_std', 0.0),
-            keep=config.get('keep', 1.0),
-            temp=config.get('temp', 0.001))
-
-        # train the model for an additional number of epochs
-        trs.append(trainer)
-        trainer.launch(train_data, validate_data, logger,
-                       config['epochs'], header=f'oracle_{i}/')
-
     # select the top k initial designs from the dataset
-    indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
+    indices = tf.math.top_k(task.y[:, 0], k=config['batch_size'])[1]
     x = tf.gather(task.x, indices, axis=0)
-    x = tf.math.log(add_gumbel_noise(
+    x = tf.math.log(gumb_noise(
         x, config.get('keep', 0.001), config.get('temp', 0.001))) \
         if config['is_discrete'] else x
 
-    # evaluate the starting point
-    solution = tf.math.softmax(x) if config['is_discrete'] else x
-    score = task.score(solution)
-    preds = [fm.get_distribution(
-        solution).mean() for fm in forward_models]
+    # make several keras neural networks with different architectures
+    forward_model = ForwardModel(
+        task.input_shape,
+        activations=config['activations'],
+        hidden=config['hidden_size'],
+        initial_max_std=config['initial_max_std'],
+        initial_min_std=config['initial_min_std'])
 
-    # evaluate the conservative gap for every model
-    perturb_preds = [tr.fm.get_distribution(
-        tr.optimize(solution)).mean() for tr in trs]
-    perturb_gap = [
-        b - a for a, b in zip(preds, perturb_preds)]
+    # create a trainer for a forward model with a conservative objective
+    trainer = OnlineSolver(
+        forward_model,
+        forward_model_optim=tf.keras.optimizers.Adam,
+        forward_model_lr=config['forward_model_lr'],
+        target_conservative_gap=config['target_conservative_gap'],
+        initial_alpha=config['initial_alpha'],
+        alpha_optim=tf.keras.optimizers.Adam,
+        alpha_lr=config['alpha_lr'],
+        lookahead_lr=config['lookahead_lr'],
+        lookahead_steps=config['lookahead_steps'],
+        lookahead_backprop=config['lookahead_backprop'],
+        lookahead_swap=config['lookahead_swap'],
+        solver_period=config['solver_period'],
+        solver_warmup=config['solver_warmup'],
+        is_discrete=config['is_discrete'],
+        noise_std=config.get('noise_std', 0.0),
+        keep=config.get('keep', 1.0),
+        temp=config.get('temp', 0.001))
 
-    # record the prediction and score to the logger
-    logger.record("score", score, 0, percentile=True)
-    for n, prediction_i in enumerate(preds):
-        logger.record(f"oracle_{n}/gap", perturb_gap[n], 0)
-        logger.record(f"oracle_{n}/prediction", prediction_i, 0)
-        logger.record(f"rank_corr/{n}_to_real",
-                      spearman(prediction_i[:, 0], score[:, 0]), 0)
-        if n > 0:
-            logger.record(f"rank_corr/0_to_{n}",
-                          spearman(preds[0][:, 0], prediction_i[:, 0]), 0)
+    trainer.soln = tf.Variable(x)
 
-    # and keep track of the best design sampled so far
-    best_solution = None
-    best_score = None
+    # create a bootstrapped data set
+    train_data, validate_data = task.build(
+        batch_size=config['batch_size'],
+        val_size=config['val_size'],
+        bootstraps=1)
 
-    # perform gradient ascent on the score through the forward model
-    for i in range(1, config['solver_steps'] + 1):
-        # back propagate through the forward model
-        grads = []
-        for fm in forward_models:
-            with tf.GradientTape() as tape:
-                tape.watch(x)
-                solution = tf.math.softmax(x) if config['is_discrete'] else x
-                score = fm.get_distribution(solution).mean()
-            grads.append(tape.gradient(score, x))
+    # optimize the solution online
+    iteration = -1
+    for epoch in range(config['epochs']):
 
-        # use the conservative optimizer to update the solution
-        x = x + config['solver_lr'] * grads[np.random.randint(len(grads))]
-        solution = tf.math.softmax(x) if config['is_discrete'] else x
+        for x, y, b in train_data:
+            iteration += 1
+            i = tf.convert_to_tensor(iteration)
 
-        # evaluate the design using the oracle and the forward model
-        score = task.score(solution)
-        preds = [fm.get_distribution(
-            solution).mean() for fm in forward_models]
+            for name, tensor in trainer.train_step(i, x, y, b).items():
+                logger.record(f"oracle_{0}/" + name, tensor, iteration)
 
-        # evaluate the conservative gap for every model
-        perturb_preds = [tr.fm.get_distribution(
-            tr.optimize(solution)).mean() for tr in trs]
-        perturb_gap = [
-            b - a for a, b in zip(preds, perturb_preds)]
+            if tf.logical_and(
+                    tf.greater_equal(i, config['solver_warmup']),
+                    tf.equal(tf.math.floormod(i, config['solver_period']), 0)):
 
-        # record the prediction and score to the logger
-        logger.record("score", score, i, percentile=True)
-        for n, prediction_i in enumerate(preds):
-            logger.record(f"oracle_{n}/gap", perturb_gap[n], i)
-            logger.record(f"oracle_{n}/prediction", prediction_i, i)
-            logger.record(f"oracle_{n}/grad_norm", tf.linalg.norm(
-                tf.reshape(grads[n], [-1, task.input_size]), axis=-1), i)
-            logger.record(f"rank_corr/{n}_to_real",
-                          spearman(prediction_i[:, 0], score[:, 0]), i)
-            if n > 0:
-                logger.record(f"rank_corr/0_to_{n}",
-                              spearman(preds[0][:, 0], prediction_i[:, 0]), i)
-                logger.record(f"grad_corr/0_to_{n}", tfp.stats.correlation(
-                    grads[0], grads[n], sample_axis=0, event_axis=None), i)
+                # evaluate the current solution
+                solution = tf.math.softmax(trainer.soln) \
+                    if config['is_discrete'] else trainer.soln
 
-        # update the best design every iteration
-        idx = np.argmax(score)
-        if best_solution is None or score[idx] > best_score:
-            best_score = score[idx]
-            best_solution = solution[idx]
+                # evaluate the design using the oracle and the forward model
+                score = task.score(solution)
+                preds = forward_model.get_distribution(solution).mean()
 
-    # save the best design to the disk
-    np.save(os.path.join(
-        config['logging_dir'], 'score.npy'), best_score)
-    np.save(os.path.join(
-        config['logging_dir'], 'solution.npy'), best_solution)
+                # evaluate the current solution
+                logger.record("score", score, iteration, percentile=True)
+                logger.record(f"oracle_{0}/prediction", preds, iteration)
+                logger.record(f"rank_corr/{0}_to_real",
+                              spearman(preds[:, 0], score[:, 0]), iteration)
+
+        statistics = defaultdict(list)
+        for x, y in validate_data:
+            for name, tensor in trainer.validate_step(x, y).items():
+                statistics[name].append(tensor)
+        for name in statistics.keys():
+            logger.record(f"oracle_{0}/" + name,
+                          tf.concat(statistics[name], axis=0),
+                          iteration)
