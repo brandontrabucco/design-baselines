@@ -1,8 +1,8 @@
 from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
-from design_baselines.utils import disc_noise
-from design_baselines.conservative_ensemble.trainers import ConservativeEnsemble
+from design_baselines.utils import add_gumbel_noise
+from design_baselines.conservative_ensemble.trainers import Conservative
 from design_baselines.conservative_ensemble.nets import ForwardModel
 import tensorflow_probability as tfp
 import tensorflow as tf
@@ -33,17 +33,17 @@ def conservative_ensemble(config):
         initial_min_std=config['initial_min_std'])
         for activations in config['activations']]
 
+    trs = []
     for i, fm in enumerate(forward_models):
 
         # create a bootstrapped data set
-        train_data, validate_data = task.build(
-            bootstraps=len(config['activations']),
-            batch_size=config['batch_size'],
-            val_size=config['val_size'])
+        train_data, validate_data = task.build(batch_size=config['batch_size'],
+                                               val_size=config['val_size'],
+                                               bootstraps=1)
 
         # create a trainer for a forward model with a conservative objective
-        trainer = ConservativeEnsemble(
-            [fm],
+        trainer = Conservative(
+            fm,
             forward_model_optim=tf.keras.optimizers.Adam,
             forward_model_lr=config['forward_model_lr'],
             target_conservative_gap=config['target_conservative_gap'],
@@ -52,22 +52,22 @@ def conservative_ensemble(config):
             alpha_lr=config['alpha_lr'],
             perturbation_lr=config['perturbation_lr'],
             perturbation_steps=config['perturbation_steps'],
+            perturbation_backprop=config['perturbation_backprop'],
             is_discrete=config['is_discrete'],
             noise_std=config.get('noise_std', 0.0),
             keep=config.get('keep', 1.0),
             temp=config.get('temp', 0.001))
 
         # train the model for an additional number of epochs
-        trainer.launch(train_data,
-                       validate_data,
-                       logger,
-                       config['epochs'],
-                       header=f'oracle_{i}/')
+        trs.append(trainer)
+        trainer.launch(train_data, validate_data, logger,
+                       config['epochs'], header=f'oracle_{i}/')
 
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
     x = tf.gather(task.x, indices, axis=0)
-    x = tf.math.log(disc_noise(x, 0.5, config.get('temp', 0.001))) \
+    x = tf.math.log(add_gumbel_noise(
+        x, config.get('keep', 0.001), config.get('temp', 0.001))) \
         if config['is_discrete'] else x
 
     # evaluate the starting point
@@ -76,9 +76,16 @@ def conservative_ensemble(config):
     preds = [fm.get_distribution(
         solution).mean() for fm in forward_models]
 
+    # evaluate the conservative gap for every model
+    perturb_preds = [tr.fm.get_distribution(
+        tr.optimize(solution)).mean() for tr in trs]
+    perturb_gap = [
+        b - a for a, b in zip(preds, perturb_preds)]
+
     # record the prediction and score to the logger
-    logger.record("score", score, 0)
+    logger.record("score", score, 0, percentile=True)
     for n, prediction_i in enumerate(preds):
+        logger.record(f"oracle_{n}/gap", perturb_gap[n], 0)
         logger.record(f"oracle_{n}/prediction", prediction_i, 0)
         logger.record(f"rank_corr/{n}_to_real",
                       spearman(prediction_i[:, 0], score[:, 0]), 0)
@@ -102,11 +109,7 @@ def conservative_ensemble(config):
             grads.append(tape.gradient(score, x))
 
         # use the conservative optimizer to update the solution
-        g = grads[np.random.randint(len(grads))]
-        norm = tf.linalg.norm(tf.reshape(g, [tf.shape(x)[0], -1]), axis=-1)
-        while len(norm.shape) < len(x.shape):
-            norm = norm[..., tf.newaxis]
-        x = x + config['solver_lr'] * g / (norm + 1e-7)
+        x = x + config['solver_lr'] * grads[np.random.randint(len(grads))]
         solution = tf.math.softmax(x) if config['is_discrete'] else x
 
         # evaluate the design using the oracle and the forward model
@@ -114,9 +117,16 @@ def conservative_ensemble(config):
         preds = [fm.get_distribution(
             solution).mean() for fm in forward_models]
 
+        # evaluate the conservative gap for every model
+        perturb_preds = [tr.fm.get_distribution(
+            tr.optimize(solution)).mean() for tr in trs]
+        perturb_gap = [
+            b - a for a, b in zip(preds, perturb_preds)]
+
         # record the prediction and score to the logger
-        logger.record("score", score, i)
+        logger.record("score", score, i, percentile=True)
         for n, prediction_i in enumerate(preds):
+            logger.record(f"oracle_{n}/gap", perturb_gap[n], i)
             logger.record(f"oracle_{n}/prediction", prediction_i, i)
             logger.record(f"oracle_{n}/grad_norm", tf.linalg.norm(
                 tf.reshape(grads[n], [-1, task.input_size]), axis=-1), i)
