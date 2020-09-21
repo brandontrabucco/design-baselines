@@ -50,21 +50,21 @@ def online_hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "noise_std": 0.,
         "val_size": 200,
         "batch_size": 128,
-        "epochs": 500,
+        "epochs": 1000,
         "activations": ['leaky_relu', 'leaky_relu'],
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.,
-        "initial_alpha": 10.0,
+        "initial_alpha": 50.0,
         "alpha_lr": 0.,
         "solver_period": 100,
         "solver_warmup": 500,
         "lookahead_lr": .0002,
         "lookahead_steps": 10,
         "lookahead_backprop": False,
-        "lookahead_swap": 0.9},
+        "lookahead_swap": 0.5},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -2430,3 +2430,42 @@ def plot(dir, tag, xlabel, ylabel, separate_runs):
         g.set(title=f'Evaluating {pretty(algo_name)} On {task_name}')
         plt.savefig(f'{algo_name}_{task_name}_{key}_{tag.replace("/", "_")}.png',
                     bbox_inches='tight')
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--tag', type=str)
+@click.option('--iteration', type=int)
+def evaluate(dir, tag, iteration):
+
+    import glob
+    import os
+    import re
+    import numpy as np
+    import tensorflow as tf
+    import tqdm
+
+    # get the experiment ids
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
+    matches = [pattern.search(d) for d in dirs]
+    ids = [int(m.group(2)) for m in matches]
+
+    # sort the files by the experiment ids
+    zipped_lists = zip(ids, dirs)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    ids, dirs = [list(tuple) for tuple in tuples]
+
+    # read data from tensor board
+    scores = []
+    for i, d in enumerate(tqdm.tqdm(dirs)):
+        for f in glob.glob(os.path.join(d, '*/events.out*')):
+            for e in tf.compat.v1.train.summary_iterator(f):
+                for v in e.summary.value:
+                    if v.tag == tag and e.step == iteration:
+                        scores.append(tf.make_ndarray(v.tensor).tolist())
+
+    mean = np.mean(scores)
+    std = np.std(scores - mean)
+    print(f"mean: {mean} std: {std}")
