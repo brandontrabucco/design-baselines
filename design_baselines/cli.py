@@ -45,7 +45,7 @@ def conservative_ensemble_dkitty(local_dir, cpus, gpus, num_parallel, num_sample
     tune.run(conservative_ensemble, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
-        "task_kwargs": {"split_percentile": 40, 'num_parallel': 12},
+        "task_kwargs": {"split_percentile": 40, 'num_parallel': 4},
         "is_discrete": False,
         "noise_std": 0.0,
         "val_size": 200,
@@ -64,7 +64,7 @@ def conservative_ensemble_dkitty(local_dir, cpus, gpus, num_parallel, num_sample
         "perturbation_backprop": False,
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
-        "solver_steps": 500},
+        "solver_steps": 200},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
