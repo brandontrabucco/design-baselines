@@ -25,6 +25,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     """
 
     # Final Version
+    # lr 0.005 is best but 0.002 is transferrable
 
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
@@ -47,9 +48,9 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.0,
-        "initial_alpha": 0.005,
+        "initial_alpha": 0.01,
         "alpha_lr": 0.0,
-        "perturbation_lr": 0.002,
+        "perturbation_lr": 0.01,
         "perturbation_steps": 50,
         "perturbation_backprop": False,
         "solver_samples": 128,
@@ -94,9 +95,9 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.0,
-        "initial_alpha": 0.005,
+        "initial_alpha": 0.01,
         "alpha_lr": 0.0,
-        "perturbation_lr": 1.0,
+        "perturbation_lr": 0.01,
         "perturbation_steps": 50,
         "perturbation_backprop": False,
         "solver_samples": 128,

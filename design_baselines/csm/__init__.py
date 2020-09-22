@@ -40,18 +40,19 @@ def csm(config):
     if config.get('normalize_ys', False):
 
         # compute normalization statistics for the score
-        mu = np.mean(y, axis=0, keepdims=True)
-        mu = mu.astype(np.float32)
-        y = y - mu
-        st = np.std(y, axis=0, keepdims=True)
-        st = st.astype(np.float32)
-        y = y / st
+        mu_y = np.mean(y, axis=0, keepdims=True)
+        mu_y = mu_y.astype(np.float32)
+        y = y - mu_y
+        st_y = np.std(y, axis=0, keepdims=True)
+        st_y = np.where(np.equal(st_y, 0), 1, st_y)
+        st_y = st_y.astype(np.float32)
+        y = y / st_y
 
     else:
 
         # compute normalization statistics for the score
-        mu = np.zeros_like(y[:1])
-        st = np.ones_like(y[:1])
+        mu_y = np.zeros_like(y[:1])
+        st_y = np.ones_like(y[:1])
 
     if config.get('normalize_xs', False) and not config['is_discrete']:
 
@@ -60,10 +61,13 @@ def csm(config):
         mu_x = mu_x.astype(np.float32)
         x = x - mu_x
         st_x = np.std(x, axis=0, keepdims=True)
-        st_x = st_x * np.sqrt(np.prod(x.shape[1:]))
         st_x = np.where(np.equal(st_x, 0), 1, st_x)
         st_x = st_x.astype(np.float32)
         x = x / st_x
+
+        # scale teh learning rate based on the number of channels in x
+        config['solver_lr'] *= np.sqrt(np.prod(x.shape[1:]))
+        config['perturbation_lr'] *= np.sqrt(np.prod(x.shape[1:]))
 
     else:
 
@@ -112,11 +116,11 @@ def csm(config):
     solution = tf.math.softmax(x) if config['is_discrete'] else x
     score = task.score(solution * st_x + mu_x)
     preds = [fm.get_distribution(
-        solution).mean() * st + mu for fm in forward_models]
+        solution).mean() * st_y + mu_y for fm in forward_models]
 
     # evaluate the conservative gap for every model
     perturb_preds = [tr.fm.get_distribution(
-        tr.optimize(solution)).mean() * st + mu for tr in trs]
+        tr.optimize(solution)).mean() * st_y + mu_y for tr in trs]
     perturb_gap = [
         b - a for a, b in zip(preds, perturb_preds)]
 
@@ -153,11 +157,11 @@ def csm(config):
         # evaluate the design using the oracle and the forward model
         score = task.score(solution * st_x + mu_x)
         preds = [fm.get_distribution(
-            solution).mean() * st + mu for fm in forward_models]
+            solution).mean() * st_y + mu_y for fm in forward_models]
 
         # evaluate the conservative gap for every model
         perturb_preds = [tr.fm.get_distribution(
-            tr.optimize(solution)).mean() * st + mu for tr in trs]
+            tr.optimize(solution)).mean() * st_y + mu_y for tr in trs]
         perturb_gap = [
             b - a for a, b in zip(preds, perturb_preds)]
 
