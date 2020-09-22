@@ -2395,7 +2395,8 @@ def plot(dir, tag, xlabel, ylabel, separate_runs):
     # locate the params of variation in this experiment
     params_of_variation = []
     for key, val in all_params.items():
-        if len(val) > 1:
+        if len(val) > 1 and (not isinstance(val[0], dict)
+                             or 'seed' not in val[0]):
             params_of_variation.append(key)
 
     # get the task and algorithm name
