@@ -33,13 +33,45 @@ def conservative_ensemble(config):
         initial_min_std=config['initial_min_std'])
         for activations in config['activations']]
 
+    # save the initial dataset statistics for safe keeping
+    x = task.x
+    y = task.y
+
+    if config.get('normalize_ys', False):
+
+        # compute normalization statistics for the score
+        mu = y.mean(axis=0, keepdims=True)
+        y = y - mu
+        st = y.std(axis=0, keepdims=True)
+        y = y / st
+
+    else:
+
+        # compute normalization statistics for the score
+        mu = np.zeros_like(y[:1])
+        st = np.ones_like(y[:1])
+
+    if config.get('normalize_xs', False) and not config['is_discrete']:
+
+        # compute normalization statistics for the score
+        mu_x = x.mean(axis=0, keepdims=True)
+        x = x - mu_x
+        st_x = x.std(axis=0, keepdims=True)
+        x = x / st_x
+
+    else:
+
+        # compute normalization statistics for the score
+        mu_x = np.zeros_like(x[:1])
+        st_x = np.ones_like(x[:1])
+
     trs = []
     for i, fm in enumerate(forward_models):
 
         # create a bootstrapped data set
-        train_data, validate_data = task.build(batch_size=config['batch_size'],
-                                               val_size=config['val_size'],
-                                               bootstraps=1)
+        train_data, validate_data = task.build(
+            x=x, y=y, batch_size=config['batch_size'],
+            val_size=config['val_size'], bootstraps=1)
 
         # create a trainer for a forward model with a conservative objective
         trainer = Conservative(
@@ -64,21 +96,21 @@ def conservative_ensemble(config):
                        config['epochs'], header=f'oracle_{i}/')
 
     # select the top k initial designs from the dataset
-    indices = tf.math.top_k(task.y[:, 0], k=config['solver_samples'])[1]
-    x = tf.gather(task.x, indices, axis=0)
+    indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
+    x = tf.gather(x, indices, axis=0)
     x = tf.math.log(gumb_noise(
         x, config.get('keep', 0.001), config.get('temp', 0.001))) \
         if config['is_discrete'] else x
 
     # evaluate the starting point
     solution = tf.math.softmax(x) if config['is_discrete'] else x
-    score = task.score(solution)
+    score = task.score(solution * st_x + mu_x)
     preds = [fm.get_distribution(
-        solution).mean() for fm in forward_models]
+        solution).mean() * st + mu for fm in forward_models]
 
     # evaluate the conservative gap for every model
     perturb_preds = [tr.fm.get_distribution(
-        tr.optimize(solution)).mean() for tr in trs]
+        tr.optimize(solution)).mean() * st + mu for tr in trs]
     perturb_gap = [
         b - a for a, b in zip(preds, perturb_preds)]
 
@@ -113,13 +145,13 @@ def conservative_ensemble(config):
         solution = tf.math.softmax(x) if config['is_discrete'] else x
 
         # evaluate the design using the oracle and the forward model
-        score = task.score(solution)
+        score = task.score(solution * st_x + mu_x)
         preds = [fm.get_distribution(
-            solution).mean() for fm in forward_models]
+            solution).mean() * st + mu for fm in forward_models]
 
         # evaluate the conservative gap for every model
         perturb_preds = [tr.fm.get_distribution(
-            tr.optimize(solution)).mean() for tr in trs]
+            tr.optimize(solution)).mean() * st + mu for tr in trs]
         perturb_gap = [
             b - a for a, b in zip(preds, perturb_preds)]
 
