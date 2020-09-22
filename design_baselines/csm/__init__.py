@@ -2,15 +2,15 @@ from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
 from design_baselines.utils import gumb_noise
-from design_baselines.conservative_ensemble.trainers import Conservative
-from design_baselines.conservative_ensemble.nets import ForwardModel
+from design_baselines.csm.trainers import Conservative
+from design_baselines.csm.nets import ForwardModel
 import tensorflow_probability as tfp
 import tensorflow as tf
 import numpy as np
 import os
 
 
-def conservative_ensemble(config):
+def csm(config):
     """Train a forward model and perform model based optimization
     using a conservative objective function
 
@@ -40,9 +40,11 @@ def conservative_ensemble(config):
     if config.get('normalize_ys', False):
 
         # compute normalization statistics for the score
-        mu = y.mean(axis=0, keepdims=True)
+        mu = np.mean(y, axis=0, keepdims=True)
+        mu = mu.astype(np.float32)
         y = y - mu
-        st = y.std(axis=0, keepdims=True)
+        st = np.std(y, axis=0, keepdims=True)
+        st = st.astype(np.float32)
         y = y / st
 
     else:
@@ -53,10 +55,14 @@ def conservative_ensemble(config):
 
     if config.get('normalize_xs', False) and not config['is_discrete']:
 
-        # compute normalization statistics for the score
-        mu_x = x.mean(axis=0, keepdims=True)
+        # compute normalization statistics for the data vectors
+        mu_x = np.mean(x, axis=0, keepdims=True)
+        mu_x = mu_x.astype(np.float32)
         x = x - mu_x
-        st_x = x.std(axis=0, keepdims=True)
+        st_x = np.std(x, axis=0, keepdims=True)
+        st_x = st_x * np.sqrt(np.prod(x.shape[1:]))
+        st_x = np.where(np.equal(st_x, 0), 1, st_x)
+        st_x = st_x.astype(np.float32)
         x = x / st_x
 
     else:

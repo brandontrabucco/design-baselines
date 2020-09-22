@@ -11,4 +11,5 @@ setup(
     include_package_data=True,
     packages=find_packages(),
     entry_points={
-        'console_scripts': ('design-baselines=design_baselines.cli:cli',)})
+        'console_scripts': ('design-baselines=design_baselines.cli:cli',
+                            'csm=design_baselines.csm.experiments:cli')})

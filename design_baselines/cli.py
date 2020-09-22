@@ -98,11 +98,11 @@ def conservative_ensemble_dkitty(local_dir, cpus, gpus, num_parallel, num_sample
         the number of samples to take per configuration
     """
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
         "task_kwargs": {"split_percentile": 40, 'num_parallel': 4},
@@ -125,9 +125,9 @@ def conservative_ensemble_dkitty(local_dir, cpus, gpus, num_parallel, num_sample
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 200},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -155,11 +155,11 @@ def perturbation_backprop_dkitty(local_dir, cpus, gpus, num_parallel, num_sample
         the number of samples to take per configuration
     """
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
         "task_kwargs": {"split_percentile": 40, 'num_parallel': 4},
@@ -182,9 +182,9 @@ def perturbation_backprop_dkitty(local_dir, cpus, gpus, num_parallel, num_sample
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 500},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -212,11 +212,11 @@ def conservative_ensemble_ant(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
         "task_kwargs": {"split_percentile": 20, 'num_parallel': 4},
@@ -239,9 +239,9 @@ def conservative_ensemble_ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 200},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -269,11 +269,11 @@ def perturbation_backprop_ant(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
         "task_kwargs": {"split_percentile": 20, 'num_parallel': 4},
@@ -296,9 +296,9 @@ def perturbation_backprop_ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 200},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -326,11 +326,11 @@ def perturbation_backprop_policy(local_dir, cpus, gpus, num_parallel, num_sample
         the number of samples to take per configuration
     """
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
         "task_kwargs": {},
@@ -353,9 +353,9 @@ def perturbation_backprop_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 1000},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -385,11 +385,11 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
 
     # Final Version
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
         "task_kwargs": {},
@@ -414,9 +414,9 @@ def conservative_ensemble_policy(local_dir, cpus, gpus, num_parallel, num_sample
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 200},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -444,11 +444,11 @@ def conservative_ensemble_molecule(local_dir, cpus, gpus, num_parallel, num_samp
         the number of samples to take per configuration
     """
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "MoleculeActivity600885-v0",
         "task_kwargs": {},
@@ -472,9 +472,9 @@ def conservative_ensemble_molecule(local_dir, cpus, gpus, num_parallel, num_samp
         "solver_samples": 128,
         "solver_lr": 5.0,
         "solver_steps": 200},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -502,11 +502,11 @@ def perturbation_backprop_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "GFP-v0",
         "task_kwargs": {"seed": tune.randint(1000)},
@@ -530,9 +530,9 @@ def perturbation_backprop_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "target_conservative_gap": 0.0,
         "temp": 100.0,
         "val_size": 200},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -560,11 +560,11 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "GFP-v0",
         "task_kwargs": {"seed": tune.randint(1000)},
@@ -588,9 +588,9 @@ def conservative_ensemble_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "target_conservative_gap": 0.0,
         "temp": 100.0,
         "val_size": 200},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -618,11 +618,11 @@ def perturbation_backprop_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         the number of samples to take per configuration
     """
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "GFP-v0",
         "task_kwargs": {"seed": tune.randint(1000)},
@@ -646,9 +646,9 @@ def perturbation_backprop_gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "target_conservative_gap": 0.0,
         "temp": 100.0,
         "val_size": 200},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -678,11 +678,11 @@ def conservative_ensemble_superconductor(local_dir, cpus, gpus, num_parallel, nu
 
     # Final Version
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
         "task_kwargs": {},
@@ -707,9 +707,9 @@ def conservative_ensemble_superconductor(local_dir, cpus, gpus, num_parallel, nu
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 200},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
@@ -737,11 +737,11 @@ def perturbation_backprop_superconductor(local_dir, cpus, gpus, num_parallel, nu
         the number of samples to take per configuration
     """
 
-    from design_baselines.conservative_ensemble import conservative_ensemble
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(conservative_ensemble, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
         "task_kwargs": {},
@@ -764,9 +764,9 @@ def perturbation_backprop_superconductor(local_dir, cpus, gpus, num_parallel, nu
         "solver_samples": 128,
         "solver_lr": tune.sample_from(lambda c: c['config']['perturbation_lr']),
         "solver_steps": 500},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
