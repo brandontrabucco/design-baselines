@@ -2438,12 +2438,17 @@ def plot(dir, tag, xlabel, ylabel, separate_runs):
 @click.option('--iteration', type=int)
 def evaluate(dir, tag, iteration):
 
+    from collections import defaultdict
+    import pickle as pkl
     import glob
     import os
     import re
     import numpy as np
     import tensorflow as tf
     import tqdm
+
+    def pretty(s):
+        return s.replace('_', ' ').title()
 
     # get the experiment ids
     pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
@@ -2457,15 +2462,45 @@ def evaluate(dir, tag, iteration):
     tuples = zip(*sorted_pairs)
     ids, dirs = [list(tuple) for tuple in tuples]
 
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
+
+    # concatenate all params along axis 1
+    all_params = defaultdict(list)
+    for p in params:
+        for key, val in p.items():
+            if val not in all_params[key]:
+                all_params[key].append(val)
+
+    # locate the params of variation in this experiment
+    params_of_variation = []
+    for key, val in all_params.items():
+        if len(val) > 1 and (not isinstance(val[0], dict)
+                             or 'seed' not in val[0]):
+            params_of_variation.append(key)
+
+    # get the task and algorithm name
+    if len(params_of_variation) == 0:
+        params_of_variation.append('task')
+
     # read data from tensor board
-    scores = []
-    for i, d in enumerate(tqdm.tqdm(dirs)):
+    param_to_scores = defaultdict(list)
+    for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
         for f in glob.glob(os.path.join(d, '*/events.out*')):
             for e in tf.compat.v1.train.summary_iterator(f):
                 for v in e.summary.value:
                     if v.tag == tag and e.step == iteration:
-                        scores.append(tf.make_ndarray(v.tensor).tolist())
+                        for key in params_of_variation:
+                            key = f'{pretty(key)} = {p[key]}'
+                            param_to_scores[key].append(tf.make_ndarray(v.tensor).tolist())
 
-    mean = np.mean(scores)
-    std = np.std(scores - mean)
-    print(f"mean: {mean} std: {std}")
+    # return the mean score and standard deviation
+    for key in param_to_scores:
+        if len(param_to_scores[key]) > 0:
+            scores = np.array(param_to_scores[key])
+            mean = np.mean(scores)
+            std = np.std(scores - mean)
+            print(f"key: {key}\n\tmean: {mean}\n\tstd: {std}")
