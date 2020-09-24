@@ -47,7 +47,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
         "ensemble_lr": 0.001,
         "ensemble_epochs": 100,
         "latent_size": 32,
-        "vae_lr": 0.0001,
+        "vae_lr": 0.0005,
         "vae_beta": 2.0,
         "offline_epochs": 200,
         "online_batches": 10,
