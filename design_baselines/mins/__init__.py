@@ -158,7 +158,7 @@ def mins(config):
     x = task.x
     y = task.y
 
-    if config.get('normalize_ys', False):
+    if config['normalize_ys']:
 
         # compute normalization statistics for the score
         mu_y = np.mean(y, axis=0, keepdims=True)
@@ -175,7 +175,7 @@ def mins(config):
         mu_y = np.zeros_like(y[:1])
         st_y = np.ones_like(y[:1])
 
-    if config.get('normalize_xs', False) and not config['is_discrete']:
+    if config['normalize_xs'] and not config['is_discrete']:
 
         # compute normalization statistics for the data vectors
         mu_x = np.mean(x, axis=0, keepdims=True)
