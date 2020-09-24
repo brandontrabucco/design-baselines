@@ -41,7 +41,7 @@ class Ensemble(tf.Module):
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
 
         Returns:
@@ -67,7 +67,7 @@ class Ensemble(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
-                   X,
+                   x,
                    y,
                    b):
         """Perform a training step of gradient descent on an ensemble
@@ -75,7 +75,7 @@ class Ensemble(tf.Module):
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of training labels shaped like [batch_size, 1]
@@ -97,7 +97,7 @@ class Ensemble(tf.Module):
             with tf.GradientTape(persistent=True) as tape:
 
                 # calculate the prediction error and accuracy of the model
-                d = fm.get_distribution(X, training=True)
+                d = fm.get_distribution(x, training=True)
                 nll = -d.log_prob(y)[:, 0]
 
                 # evaluate how correct the rank fo the model predictions are
@@ -117,14 +117,14 @@ class Ensemble(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def validate_step(self,
-                      X,
+                      x,
                       y):
         """Perform a validation step on an ensemble of models
         without using bootstrapping weights
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of validation inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of validation labels shaped like [batch_size, 1]
@@ -141,7 +141,7 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
 
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(X, training=False)
+            d = fm.get_distribution(x, training=False)
             nll = -d.log_prob(y)[:, 0]
 
             # evaluate how correct the rank fo the model predictions are
@@ -169,8 +169,8 @@ class Ensemble(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for X, y, b in dataset:
-            for name, tensor in self.train_step(X, y, b).items():
+        for x, y, b in dataset:
+            for name, tensor in self.train_step(x, y, b).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -193,8 +193,8 @@ class Ensemble(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for X, y in dataset:
-            for name, tensor in self.validate_step(X, y).items():
+        for x, y in dataset:
+            for name, tensor in self.validate_step(x, y).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -277,7 +277,7 @@ class WeightedVAE(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
-                   X,
+                   x,
                    y,
                    w):
         """Perform a training step of gradient descent on an ensemble
@@ -285,7 +285,7 @@ class WeightedVAE(tf.Module):
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of training labels shaped like [batch_size, 1]
@@ -306,12 +306,12 @@ class WeightedVAE(tf.Module):
         with tf.GradientTape() as tape:
 
             # build distributions for the data x and latent variable z
-            dz = self.encoder.get_distribution(X, training=True)
+            dz = self.encoder.get_distribution(x, training=True)
             z = dz.sample()
             dx = self.decoder.get_distribution(z, training=True)
 
             # build the reconstruction loss
-            nll = -dx.log_prob(X)[..., tf.newaxis]
+            nll = -dx.log_prob(x)[..., tf.newaxis]
             while len(nll.shape) > 2:
                 nll = tf.reduce_sum(nll, axis=1)
             prior = tfpd.MultivariateNormalDiag(
@@ -331,14 +331,14 @@ class WeightedVAE(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def validate_step(self,
-                      X,
+                      x,
                       y):
         """Perform a validation step on an ensemble of models
         without using bootstrapping weights
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of validation inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of validation labels shaped like [batch_size, 1]
@@ -352,12 +352,12 @@ class WeightedVAE(tf.Module):
         statistics = dict()
 
         # build distributions for the data x and latent variable z
-        dz = self.encoder.get_distribution(X, training=False)
+        dz = self.encoder.get_distribution(x, training=False)
         z = dz.sample()
         dx = self.decoder.get_distribution(z, training=False)
 
         # build the reconstruction loss
-        nll = -dx.log_prob(X)[..., tf.newaxis]
+        nll = -dx.log_prob(x)[..., tf.newaxis]
         while len(nll.shape) > 2:
             nll = tf.reduce_sum(nll, axis=1)
         prior = tfpd.MultivariateNormalDiag(
@@ -388,8 +388,8 @@ class WeightedVAE(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for X, y, w in dataset:
-            for name, tensor in self.train_step(X, y, w).items():
+        for x, y, w in dataset:
+            for name, tensor in self.train_step(x, y, w).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -412,8 +412,8 @@ class WeightedVAE(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for X, y in dataset:
-            for name, tensor in self.validate_step(X, y).items():
+        for x, y in dataset:
+            for name, tensor in self.validate_step(x, y).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)

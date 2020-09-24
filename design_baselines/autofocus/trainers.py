@@ -41,7 +41,7 @@ class Ensemble(tf.Module):
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
 
         Returns:
@@ -105,15 +105,13 @@ class Ensemble(tf.Module):
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
                 # build the total loss and weight by the bootstrap
-                total_loss = tf.math.divide_no_nan(
-                    tf.reduce_sum(b[:, i] * w * nll), tf.reduce_sum(b[:, i]))
+                total_loss = tf.math.divide_no_nan(tf.reduce_sum(
+                    w[:, 0] * b[:, i] * nll), tf.reduce_sum(b[:, i]))
 
             grads = tape.gradient(total_loss, fm.trainable_variables)
             fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
 
             statistics[f'oracle_{i}/train/nll'] = nll
-            statistics[f'oracle_{i}/train/max_logstd'] = fm.max_logstd
-            statistics[f'oracle_{i}/train/min_logstd'] = fm.min_logstd
             statistics[f'oracle_{i}/train/rank_corr'] = rank_correlation
 
         return statistics
@@ -281,13 +279,14 @@ class WeightedVAE(tf.Module):
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
                    x,
+                   y,
                    w):
         """Perform a training step of gradient descent on an ensemble
         using bootstrap weights for each model in the ensemble
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of training inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of training labels shaped like [batch_size, 1]
@@ -333,13 +332,14 @@ class WeightedVAE(tf.Module):
 
     @tf.function(experimental_relax_shapes=True)
     def validate_step(self,
-                      x):
+                      x,
+                      y):
         """Perform a validation step on an ensemble of models
         without using bootstrapping weights
 
         Args:
 
-        X: tf.Tensor
+        x: tf.Tensor
             a batch of validation inputs shaped like [batch_size, channels]
         y: tf.Tensor
             a batch of validation labels shaped like [batch_size, 1]
@@ -390,7 +390,7 @@ class WeightedVAE(tf.Module):
 
         statistics = defaultdict(list)
         for x, y, w in dataset:
-            for name, tensor in self.train_step(x, w).items():
+            for name, tensor in self.train_step(x, y, w).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -414,7 +414,7 @@ class WeightedVAE(tf.Module):
 
         statistics = defaultdict(list)
         for x, y in dataset:
-            for name, tensor in self.validate_step(x).items():
+            for name, tensor in self.validate_step(x, y).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -603,4 +603,5 @@ class CBAS(tf.Module):
         d = tf.data.Dataset.from_tensor_slices(x)
         d = d.batch(batch_size)
         d = d.prefetch(tf.data.experimental.AUTOTUNE)
-        return tf.concat([self.get_autofocus_ratio(x) for x in d], axis=0)
+        return tf.concat([
+            self.get_autofocus_ratio(x) for x in d], axis=0)

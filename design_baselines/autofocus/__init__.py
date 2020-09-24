@@ -63,9 +63,9 @@ def autofocus(config):
 
     # create the training task and logger
     train_data, val_data = task.build(
-        bx=x, y=y, bootstraps=config['bootstraps'],
-        importance_weights=np.ones_like(task.y),
-        batch_size=config['oracle_batch_size'],
+        x=x, y=y, bootstraps=config['bootstraps'],
+        importance_weights=np.ones_like(y),
+        batch_size=config['ensemble_batch_size'],
         val_size=config['val_size'])
 
     # make several keras neural networks with two hidden layers
@@ -74,25 +74,25 @@ def autofocus(config):
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'])
-        for _ in range(config['bootstraps'])]
+        for b in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
-    oracle = Ensemble(forward_models,
-                      forward_model_optim=tf.keras.optimizers.Adam,
-                      forward_model_lr=config['oracle_lr'])
+    ensemble = Ensemble(
+        forward_models,
+        forward_model_optim=tf.keras.optimizers.Adam,
+        forward_model_lr=config['ensemble_lr'])
 
     # create a manager for saving algorithms state to the disk
-    oracle_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**oracle.get_saveables()),
-        os.path.join(config['logging_dir'], 'oracle'), 1)
+    ensemble_manager = tf.train.CheckpointManager(
+        tf.train.Checkpoint(**ensemble.get_saveables()),
+        os.path.join(config['logging_dir'], 'ensemble'), 1)
 
     # train the model for an additional number of epochs
-    oracle_manager.restore_or_initialize()
-    oracle.launch(train_data,
-                  val_data,
-                  logger,
-                  config['oracle_epochs'])
-
+    ensemble_manager.restore_or_initialize()
+    ensemble.launch(train_data,
+                    val_data,
+                    logger,
+                    config['ensemble_epochs'])
     # determine which arcitecture for the decoder to use
     decoder = DiscreteDecoder \
         if config['is_discrete'] else ContinuousDecoder
@@ -117,7 +117,7 @@ def autofocus(config):
 
     # build a weighted data set
     train_data, val_data = task.build(
-        bx=x, y=y, importance_weights=np.ones_like(task.y),
+        x=x, y=y, importance_weights=np.ones_like(task.y),
         batch_size=config['vae_batch_size'],
         val_size=config['val_size'])
 
@@ -144,10 +144,11 @@ def autofocus(config):
     # create a manager for saving algorithms state to the disk
     q_manager = tf.train.CheckpointManager(
         tf.train.Checkpoint(**q_vae.get_saveables()),
-        os.path.join(config['logging_dir'], 'q_vae'), 1)
+        directory=os.path.join(config['logging_dir'], 'q_vae'),
+        max_to_keep=1)
 
     # create the cbas importance weight generator
-    cbas = CBAS(oracle,
+    cbas = CBAS(ensemble,
                 p_vae,
                 q_vae,
                 latent_size=config['latent_size'])
@@ -158,25 +159,29 @@ def autofocus(config):
     for i in range(config['iterations']):
 
         # generate an importance weighted dataset
-        x, y, w = cbas.generate_data(config['online_batches'],
-                                     config['vae_batch_size'],
-                                     config['percentile'])
+        x_t, y_t, w = cbas.generate_data(
+            config['online_batches'],
+            config['vae_batch_size'],
+            config['percentile'])
 
         # evaluate the sampled designs
-        score = task.score(x[:config['solver_samples']] * st_x + mu_x)
-        logger.record("score", score, i, percentile=True)
+        score = task.score(x_t[:config['solver_samples']] * st_x + mu_x)
+        logger.record("score",
+                      score,
+                      i,
+                      percentile=True)
 
         # build a weighted data set
         train_data, val_data = task.build(
-            x=x.numpy(),
-            y=y.numpy(),
+            x=x_t.numpy(),
+            y=y_t.numpy(),
             importance_weights=w.numpy(),
             batch_size=config['vae_batch_size'],
             val_size=config['val_size'])
 
         # train a vae fit using weighted maximum likelihood
         start_epoch = config['online_epochs'] * i + \
-            config['offline_epochs']
+                      config['offline_epochs']
         q_vae.launch(train_data,
                      val_data,
                      logger,
@@ -185,18 +190,16 @@ def autofocus(config):
 
         # autofocus the forward model using importance weights
         v = cbas.autofocus_weights(
-            task.x, batch_size=config['oracle_batch_size'])
+            x, batch_size=config['ensemble_batch_size'])
         train_data, val_data = task.build(
-            x=task.x,
-            y=task.y,
-            bootstraps=config['bootstraps'],
+            x=x, y=y, bootstraps=config['bootstraps'],
             importance_weights=v.numpy(),
-            batch_size=config['oracle_batch_size'],
+            batch_size=config['ensemble_batch_size'],
             val_size=config['val_size'])
 
         # train a vae fit using weighted maximum likelihood
         start_epoch = config['autofocus_epochs'] * i + \
-            config['oracle_epochs']
+            config['ensemble_epochs']
         oracle.launch(train_data,
                       val_data,
                       logger,
@@ -204,14 +207,15 @@ def autofocus(config):
                       start_epoch=start_epoch)
 
     # save every model to the disk
-    oracle_manager.save()
+    ensemble_manager.save()
     p_manager.save()
     q_manager.save()
 
     # sample designs from the prior
-    q_dx = q_decoder.get_distribution(tf.random.normal([
-        config['solver_samples'],
-        config['latent_size']]), training=False)
+    z = tf.random.normal([config['solver_samples'], config['latent_size']])
+    q_dx = q_decoder.get_distribution(z, training=False)
     score = task.score(q_dx.sample() * st_x + mu_x)
-    logger.record("score", score,
-                  config['iterations'], percentile=True)
+    logger.record("score",
+                  score,
+                  config['iterations'],
+                  percentile=True)
