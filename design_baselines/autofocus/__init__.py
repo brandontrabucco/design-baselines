@@ -13,8 +13,8 @@ import os
 
 
 def autofocus(config):
-    """Optimize a design problem score using the algorithm CBAS
-    otherwise known as Conditioning by Adaptive Sampling
+    """Train an autofocusing-oracle to solve a Model-Based Optimization
+    problem with a hyper-parameter dict 'config'
 
     Args:
 

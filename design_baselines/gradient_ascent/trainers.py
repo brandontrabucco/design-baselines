@@ -2,14 +2,13 @@ from design_baselines.utils import spearman
 from design_baselines.utils import gumb_noise
 from design_baselines.utils import cont_noise
 from collections import defaultdict
-from tensorflow_probability import distributions as tfpd
 import tensorflow as tf
 
 
-class Ensemble(tf.Module):
+class MaximumLikelihood(tf.Module):
 
     def __init__(self,
-                 forward_models,
+                 forward_model,
                  forward_model_optim=tf.keras.optimizers.Adam,
                  forward_model_lr=0.001,
                  is_discrete=False,
@@ -30,49 +29,15 @@ class Ensemble(tf.Module):
         """
 
         super().__init__()
-        self.forward_models = forward_models
+        self.fm = forward_model
+        self.optim = forward_model_optim(
+            learning_rate=forward_model_lr)
+
+        # create machinery for sampling adversarial examples
         self.is_discrete = is_discrete
         self.noise_std = noise_std
         self.keep = keep
         self.temp = temp
-
-        # create machinery for training a forward model
-        self.bootstraps = len(forward_models)
-        self.forward_model_optims = [
-            forward_model_optim(learning_rate=forward_model_lr)
-            for i in range(self.bootstraps)]
-
-    def get_distribution(self,
-                         x,
-                         **kwargs):
-        """Build the mixture distribution implied by the set of oracles
-        that are trained in this module
-
-        Args:
-
-        X: tf.Tensor
-            a batch of training inputs shaped like [batch_size, channels]
-
-        Returns:
-
-        distribution: tfpd.Distribution
-            the mixture of gaussian distributions implied by the oracles
-        """
-
-        # get the distribution parameters for all models
-        params = defaultdict(list)
-        for fm in self.forward_models:
-            for key, val in fm.get_parameters(x, **kwargs).items():
-                params[key].append(val)
-
-        # stack the parameters in a new component axis
-        for key, val in params.items():
-            params[key] = tf.stack(val, axis=1)
-
-        # build the mixture distribution using the family of component one
-        weights = tf.fill([self.bootstraps], 1 / self.bootstraps)
-        return tfpd.MixtureSameFamily(tfpd.Categorical(
-            probs=weights), self.forward_models[0].distribution(**params))
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
@@ -97,34 +62,33 @@ class Ensemble(tf.Module):
             a dictionary that contains logging information
         """
 
+        # corrupt the inputs with noise
+        x0 = gumb_noise(x, self.keep, self.temp) \
+            if self.is_discrete else cont_noise(x, self.noise_std)
+
         statistics = dict()
+        with tf.GradientTape(persistent=True) as tape:
 
-        for i in range(self.bootstraps):
-            fm = self.forward_models[i]
-            optim = self.forward_model_optims[i]
+            # calculate the prediction error and accuracy of the model
+            d = self.fm.get_distribution(x0, training=True)
+            nll = -d.log_prob(y)
 
-            # corrupt the inputs with noise
-            x0 = gumb_noise(x, self.keep, self.temp) \
-                if self.is_discrete else cont_noise(x, self.noise_std)
+            # evaluate how correct the rank fo the model predictions are
+            rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
-            with tf.GradientTape() as tape:
+            # model loss that combines maximum likelihood
+            model_loss = nll
 
-                # calculate the prediction error and accuracy of the model
-                d = fm.get_distribution(x0, training=True)
-                nll = -d.log_prob(y)
+            # build the total and lagrangian losses
+            denom = tf.reduce_sum(b)
+            total_loss = tf.math.divide_no_nan(
+                tf.reduce_sum(b * model_loss), denom)
 
-                # evaluate how correct the rank fo the model predictions are
-                rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+        grads = tape.gradient(total_loss, self.fm.trainable_variables)
+        self.optim.apply_gradients(zip(grads, self.fm.trainable_variables))
 
-                # build the total and lagrangian losses
-                total_loss = tf.math.divide_no_nan(
-                    tf.reduce_sum(b[:, i] * nll), tf.reduce_sum(b[:, i]))
-
-            grads = tape.gradient(total_loss, fm.trainable_variables)
-            optim.apply_gradients(zip(grads, fm.trainable_variables))
-
-            statistics[f'oracle_{i}/train/nll'] = nll
-            statistics[f'oracle_{i}/train/rank_corr'] = rank_correlation
+        statistics[f'train/nll'] = nll
+        statistics[f'train/rank_corr'] = rank_correlation
 
         return statistics
 
@@ -148,24 +112,21 @@ class Ensemble(tf.Module):
             a dictionary that contains logging information
         """
 
+        # corrupt the inputs with noise
+        x0 = gumb_noise(x, self.keep, self.temp) \
+            if self.is_discrete else cont_noise(x, self.noise_std)
+
         statistics = dict()
 
-        for i in range(self.bootstraps):
-            fm = self.forward_models[i]
+        # calculate the prediction error and accuracy of the model
+        d = self.fm.get_distribution(x0, training=False)
+        nll = -d.log_prob(y)
 
-            # corrupt the inputs with noise
-            x0 = gumb_noise(x, self.keep, self.temp) \
-                if self.is_discrete else cont_noise(x, self.noise_std)
+        # evaluate how correct the rank fo the model predictions are
+        rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
-            # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(x0, training=False)
-            nll = -d.log_prob(y)
-
-            # evaluate how correct the rank fo the model predictions are
-            rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
-
-            statistics[f'oracle_{i}/validate/nll'] = nll
-            statistics[f'oracle_{i}/validate/rank_corr'] = rank_correlation
+        statistics[f'validate/nll'] = nll
+        statistics[f'validate/rank_corr'] = rank_correlation
 
         return statistics
 
@@ -186,8 +147,8 @@ class Ensemble(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for X, y, b in dataset:
-            for name, tensor in self.train_step(X, y, b).items():
+        for x, y, b in dataset:
+            for name, tensor in self.train_step(x, y, b).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -210,8 +171,8 @@ class Ensemble(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for X, y in dataset:
-            for name, tensor in self.validate_step(X, y).items():
+        for x, y in dataset:
+            for name, tensor in self.validate_step(x, y).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -257,6 +218,6 @@ class Ensemble(tf.Module):
 
         saveables = dict()
         for i in range(self.bootstraps):
-            saveables[f'forward_model_{i}'] = self.forward_models[i]
-            saveables[f'forward_model_optim_{i}'] = self.forward_model_optims[i]
+            saveables[f'forward_model'] = self.fm
+            saveables[f'forward_model_optim'] = self.optim
         return saveables

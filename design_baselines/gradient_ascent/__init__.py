@@ -2,17 +2,17 @@ from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
 from design_baselines.utils import gumb_noise
-from design_baselines.csm.trainers import ConservativeMaximumLikelihood
-from design_baselines.csm.nets import ForwardModel
+from design_baselines.gradient_ascent.trainers import MaximumLikelihood
+from design_baselines.gradient_ascent.nets import ForwardModel
 import tensorflow_probability as tfp
 import tensorflow as tf
 import numpy as np
 import os
 
 
-def csm(config):
-    """Train a forward model and perform model based optimization
-    using a conservative objective function
+def gradient_ascent(config):
+    """Train a Score Function to solve a Model-Based Optimization
+    using gradient ascent on the input design
 
     Args:
 
@@ -72,7 +72,6 @@ def csm(config):
         st_x = np.ones_like(x[:1])
 
     # scale the learning rate based on the number of channels in x
-    config['perturbation_lr'] *= np.sqrt(np.prod(x.shape[1:]))
     config['solver_lr'] *= np.sqrt(np.prod(x.shape[1:]))
 
     trs = []
@@ -84,17 +83,10 @@ def csm(config):
             val_size=config['val_size'], bootstraps=1)
 
         # create a trainer for a forward model with a conservative objective
-        trainer = ConservativeMaximumLikelihood(
+        trainer = MaximumLikelihood(
             fm,
             forward_model_optim=tf.keras.optimizers.Adam,
             forward_model_lr=config['forward_model_lr'],
-            target_conservative_gap=config['target_conservative_gap'],
-            initial_alpha=config['initial_alpha'],
-            alpha_optim=tf.keras.optimizers.Adam,
-            alpha_lr=config['alpha_lr'],
-            perturbation_lr=config['perturbation_lr'],
-            perturbation_steps=config['perturbation_steps'],
-            perturbation_backprop=config['perturbation_backprop'],
             is_discrete=config['is_discrete'],
             noise_std=config.get('noise_std', 0.0),
             keep=config.get('keep', 1.0),
@@ -118,16 +110,9 @@ def csm(config):
     preds = [fm.get_distribution(
         solution).mean() * st_y + mu_y for fm in forward_models]
 
-    # evaluate the conservative gap for every model
-    perturb_preds = [tr.fm.get_distribution(
-        tr.optimize(solution)).mean() * st_y + mu_y for tr in trs]
-    perturb_gap = [
-        b - a for a, b in zip(preds, perturb_preds)]
-
     # record the prediction and score to the logger
     logger.record("score", score, 0, percentile=True)
     for n, prediction_i in enumerate(preds):
-        logger.record(f"oracle_{n}/gap", perturb_gap[n], 0)
         logger.record(f"oracle_{n}/prediction", prediction_i, 0)
         logger.record(f"rank_corr/{n}_to_real",
                       spearman(prediction_i[:, 0], score[:, 0]), 0)
@@ -159,16 +144,9 @@ def csm(config):
         preds = [fm.get_distribution(
             solution).mean() * st_y + mu_y for fm in forward_models]
 
-        # evaluate the conservative gap for every model
-        perturb_preds = [tr.fm.get_distribution(
-            tr.optimize(solution)).mean() * st_y + mu_y for tr in trs]
-        perturb_gap = [
-            b - a for a, b in zip(preds, perturb_preds)]
-
         # record the prediction and score to the logger
         logger.record("score", score, i, percentile=True)
         for n, prediction_i in enumerate(preds):
-            logger.record(f"oracle_{n}/gap", perturb_gap[n], i)
             logger.record(f"oracle_{n}/prediction", prediction_i, i)
             logger.record(f"oracle_{n}/grad_norm", tf.linalg.norm(
                 tf.reshape(grads[n], [-1, task.input_size]), axis=-1), i)

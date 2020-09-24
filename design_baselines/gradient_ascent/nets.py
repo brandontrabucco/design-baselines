@@ -5,16 +5,16 @@ import numpy as np
 
 
 class ForwardModel(tf.keras.Sequential):
-    """A Fully Connected Network with 3 trainable layers"""
+    """A Fully Connected Network with several trainable layers"""
 
     distribution = tfpd.MultivariateNormalDiag
 
     def __init__(self,
                  input_shape,
+                 activations=('relu', 'relu'),
                  hidden=2048,
                  initial_max_std=1.5,
-                 initial_min_std=0.5,
-                 act=tfkl.LeakyReLU):
+                 initial_min_std=0.5):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
@@ -35,13 +35,16 @@ class ForwardModel(tf.keras.Sequential):
         self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_min_std).astype(np.float32)), trainable=True)
 
-        super(ForwardModel, self).__init__([
-            tfkl.Flatten(input_shape=input_shape),
-            tfkl.Dense(hidden),
-            act(),
-            tfkl.Dense(hidden),
-            act(),
-            tfkl.Dense(2)])
+        activations = [tfkl.LeakyReLU if act == 'leaky_relu' else
+                       act for act in activations]
+
+        layers = [tfkl.Flatten(input_shape=input_shape)]
+        for act in activations:
+            layers.extend([tfkl.Dense(hidden),
+                           tfkl.Activation(act)
+                           if isinstance(act, str) else act()])
+        layers.append(tfkl.Dense(2))
+        super(ForwardModel, self).__init__(layers)
 
     def get_parameters(self, inputs, **kwargs):
         """Return a dictionary of parameters for a particular distribution

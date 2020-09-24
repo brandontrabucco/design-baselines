@@ -7,7 +7,7 @@ import tensorflow_probability as tfp
 import numpy as np
 
 
-class Conservative(tf.Module):
+class ConservativeMaximumLikelihood(tf.Module):
 
     def __init__(self,
                  forward_model,

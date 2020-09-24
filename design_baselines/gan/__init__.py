@@ -2,7 +2,6 @@ from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.gan.replay_buffer import ReplayBuffer
 from design_baselines.gan.trainers import GAN
-from design_baselines.gan.nets import ForwardModel
 from design_baselines.gan.nets import Discriminator
 from design_baselines.gan.nets import DiscreteGenerator
 from design_baselines.gan.nets import ContinuousGenerator
@@ -12,8 +11,8 @@ import os
 
 
 def gan(config):
-    """Optimize a design problem score using the algorithm MINS
-    otherwise known as Model Inversion Networks
+    """Train a GAN to solve a Model-Based Optimization
+    problem with a hyper-parameter dict 'config'
 
     Args:
 
