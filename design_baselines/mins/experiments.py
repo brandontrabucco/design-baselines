@@ -21,7 +21,7 @@ def cli():
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on AntMorphology-v0
+    """Evaluate MINs on DKittyMorphology-v0
     """
 
     # Final Version
@@ -78,7 +78,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def ant(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on AntMorphology-v0
+    """Evaluate MINs on AntMorphology-v0
     """
 
     # Final Version
@@ -135,7 +135,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on HopperController-v0
+    """Evaluate MINs on HopperController-v0
     """
 
     # Final Version
@@ -192,7 +192,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on Superconductor-v0
+    """Evaluate MINs on Superconductor-v0
     """
 
     # Final Version
