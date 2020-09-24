@@ -1,18 +1,18 @@
 from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
-from design_baselines.autofocused_cbas.trainers import Ensemble
-from design_baselines.autofocused_cbas.trainers import WeightedVAE
-from design_baselines.autofocused_cbas.trainers import CBAS
-from design_baselines.autofocused_cbas.nets import ForwardModel
-from design_baselines.autofocused_cbas.nets import Encoder
-from design_baselines.autofocused_cbas.nets import DiscreteDecoder
-from design_baselines.autofocused_cbas.nets import ContinuousDecoder
+from design_baselines.autofocus.trainers import Ensemble
+from design_baselines.autofocus.trainers import WeightedVAE
+from design_baselines.autofocus.trainers import CBAS
+from design_baselines.autofocus.nets import ForwardModel
+from design_baselines.autofocus.nets import Encoder
+from design_baselines.autofocus.nets import DiscreteDecoder
+from design_baselines.autofocus.nets import ContinuousDecoder
 import tensorflow as tf
 import numpy as np
 import os
 
 
-def autofocused_cbas(config):
+def autofocus(config):
     """Optimize a design problem score using the algorithm CBAS
     otherwise known as Conditioning by Adaptive Sampling
 
@@ -23,11 +23,47 @@ def autofocused_cbas(config):
     """
 
     logger = Logger(config['logging_dir'])
+    task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    x = task.x
+    y = task.y
+
+    if config['normalize_ys']:
+
+        # compute normalization statistics for the score
+        mu_y = np.mean(y, axis=0, keepdims=True)
+        mu_y = mu_y.astype(np.float32)
+        y = y - mu_y
+        st_y = np.std(y, axis=0, keepdims=True)
+        st_y = np.where(np.equal(st_y, 0), 1, st_y)
+        st_y = st_y.astype(np.float32)
+        y = y / st_y
+
+    else:
+
+        # compute normalization statistics for the data vectors
+        mu_y = np.zeros_like(y[:1])
+        st_y = np.ones_like(y[:1])
+
+    if config['normalize_xs'] and not config['is_discrete']:
+
+        # compute normalization statistics for the data vectors
+        mu_x = np.mean(x, axis=0, keepdims=True)
+        mu_x = mu_x.astype(np.float32)
+        x = x - mu_x
+        st_x = np.std(x, axis=0, keepdims=True)
+        st_x = np.where(np.equal(st_x, 0), 1, st_x)
+        st_x = st_x.astype(np.float32)
+        x = x / st_x
+
+    else:
+
+        # compute normalization statistics for the data vectors
+        mu_x = np.zeros_like(x[:1])
+        st_x = np.ones_like(x[:1])
 
     # create the training task and logger
-    task = StaticGraphTask(config['task'], **config['task_kwargs'])
     train_data, val_data = task.build(
-        bootstraps=config['bootstraps'],
+        bx=x, y=y, bootstraps=config['bootstraps'],
         importance_weights=np.ones_like(task.y),
         batch_size=config['oracle_batch_size'],
         val_size=config['val_size'])
@@ -81,7 +117,7 @@ def autofocused_cbas(config):
 
     # build a weighted data set
     train_data, val_data = task.build(
-        importance_weights=np.ones_like(task.y),
+        bx=x, y=y, importance_weights=np.ones_like(task.y),
         batch_size=config['vae_batch_size'],
         val_size=config['val_size'])
 
@@ -127,7 +163,7 @@ def autofocused_cbas(config):
                                      config['percentile'])
 
         # evaluate the sampled designs
-        score = task.score(x[:config['solver_samples']])
+        score = task.score(x[:config['solver_samples']] * st_x + mu_x)
         logger.record("score", score, i, percentile=True)
 
         # build a weighted data set
@@ -176,6 +212,6 @@ def autofocused_cbas(config):
     q_dx = q_decoder.get_distribution(tf.random.normal([
         config['solver_samples'],
         config['latent_size']]), training=False)
-    score = task.score(q_dx.sample())
+    score = task.score(q_dx.sample() * st_x + mu_x)
     logger.record("score", score,
                   config['iterations'], percentile=True)
