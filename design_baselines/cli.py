@@ -2499,6 +2499,133 @@ def plot(dir, tag, xlabel, ylabel, separate_runs):
                     bbox_inches='tight')
 
 
+#############
+
+
+@cli.command()
+@click.option('--task', type=str)
+@click.option('--task-kwargs', type=str, default="{}")
+@click.option('--name', type=str)
+def plot_task(task, task_kwargs, name):
+
+    import ast
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
+    sns.set_style("whitegrid")
+    sns.set_context(
+        "notebook",
+        font_scale=3.5,
+        rc={"lines.linewidth": 3.5,
+            "grid.linewidth": 2.5,
+            'axes.titlesize': 64})
+
+    import design_bench
+    t = design_bench.make(task, **ast.literal_eval(task_kwargs))
+    df = pd.DataFrame({name: t.y[:, 0]})
+
+    plt.clf()
+    g = sns.displot(df, x=name, bins=50,
+                    kind="hist", stat="count",
+                    height=8, aspect=2)
+    g.ax.spines['left'].set_color('black')
+    g.ax.spines['left'].set_linewidth(3.5)
+    g.ax.spines['bottom'].set_color('black')
+    g.ax.spines['bottom'].set_linewidth(3.5)
+    g.ax.set_title(f'{task}', pad=64)
+    plt.ticklabel_format(axis="y", style="sci", scilimits=(0,0))
+    plt.savefig(f'{task}.png',
+                bbox_inches='tight')
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--tag', type=str)
+@click.option('--xlabel', type=str)
+@click.option('--ylabel', type=str)
+@click.option('--pkey', type=str, default='perturbation_backprop')
+@click.option('--pval', type=str, default='True')
+@click.option('--iteration', type=int, default=50)
+@click.option('--legend', is_flag=True)
+def plot_one(dir, tag, xlabel, ylabel, pkey, pval, iteration, legend):
+
+    import glob
+    import os
+    import re
+    import pickle as pkl
+    import pandas as pd
+    import tensorflow as tf
+    import tqdm
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    sns.set_style("whitegrid")
+    sns.set_context("notebook",
+                    font_scale=3.5,
+                    rc={"lines.linewidth": 3.5,
+                        'grid.linewidth': 2.5})
+
+    # get the experiment ids
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
+    matches = [pattern.search(d) for d in dirs]
+    ids = [int(m.group(2)) for m in matches]
+
+    # sort the files by the experiment ids
+    zipped_lists = zip(ids, dirs)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    ids, dirs = [list(tuple) for tuple in tuples]
+
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
+
+    # get the task and algorithm name
+    task_name = params[0]['task']
+    algo_name = matches[0].group(1)
+
+    # read data from tensor board
+    data = pd.DataFrame(columns=['id', xlabel, ylabel])
+    for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
+        for f in glob.glob(os.path.join(d, '*/events.out*')):
+            for e in tf.compat.v1.train.summary_iterator(f):
+                for v in e.summary.value:
+                    if v.tag == tag and str(p[pkey]) == pval:
+                        data = data.append({
+                            'id': i,
+                            ylabel: tf.make_ndarray(v.tensor).tolist(),
+                            xlabel: e.step}, ignore_index=True)
+
+    # get the best sample in the dataset
+    import design_bench
+    import numpy as np
+    if 'num_parallel' in params[0]['task_kwargs']:
+        params[0]['task_kwargs']['num_parallel'] = 8
+    task = design_bench.make(params[0]['task'], **params[0]['task_kwargs'])
+    ind = np.argsort(task.y[:, 0])[::-1][:128]
+    best_y = task.score(task.x[ind]).max()
+
+    # save a separate plot for every hyper parameter
+    plt.clf()
+    g = sns.relplot(x=xlabel, y=ylabel, data=data,
+                    kind="line", height=10, aspect=1.33)
+    plt.plot([iteration, iteration],
+             [data[ylabel].to_numpy().min(), data[ylabel].to_numpy().max()],
+             '--', c='black', label='Evaluation Point')
+    plt.plot([data[xlabel].to_numpy().min(), data[xlabel].to_numpy().max()],
+             [best_y, best_y],
+             '-.', c='orange', label='Best Observed')
+    if legend:
+        plt.legend(loc='lower right')
+    g.set(title=f'{task_name}')
+    plt.savefig(f'{algo_name}_{task_name}_{tag.replace("/", "_")}.png',
+                bbox_inches='tight')
+
+
 @cli.command()
 @click.option('--dir', type=str)
 @click.option('--tag', type=str)

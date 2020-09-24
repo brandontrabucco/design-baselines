@@ -10,10 +10,11 @@ from design_baselines.mins.nets import ContinuousGenerator
 from design_baselines.mins.utils import get_weights
 from design_baselines.mins.utils import get_synthetic_data
 import tensorflow as tf
+import numpy as np
 import os
 
 
-def model_inversion(config):
+def mins(config):
     """Optimize a design problem score using the algorithm MINS
     otherwise known as Model Inversion Networks
 
@@ -28,7 +29,7 @@ def model_inversion(config):
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
     base_temp = config.get('base_temp', None)
 
-    if config['fully_offline']:
+    if config['offline']:
 
         # make several keras neural networks with two hidden layers
         forward_models = [ForwardModel(
@@ -157,11 +158,39 @@ def model_inversion(config):
     x = task.x
     y = task.y
 
-    # compute normalization statistics for the score
-    mu = y.mean(axis=0, keepdims=True)
-    y = y - mu
-    st = y.std(axis=0, keepdims=True)
-    y = y / st
+    if config.get('normalize_ys', False):
+
+        # compute normalization statistics for the score
+        mu_y = np.mean(y, axis=0, keepdims=True)
+        mu_y = mu_y.astype(np.float32)
+        y = y - mu_y
+        st_y = np.std(y, axis=0, keepdims=True)
+        st_y = np.where(np.equal(st_y, 0), 1, st_y)
+        st_y = st_y.astype(np.float32)
+        y = y / st_y
+
+    else:
+
+        # compute normalization statistics for the score
+        mu_y = np.zeros_like(y[:1])
+        st_y = np.ones_like(y[:1])
+
+    if config.get('normalize_xs', False) and not config['is_discrete']:
+
+        # compute normalization statistics for the data vectors
+        mu_x = np.mean(x, axis=0, keepdims=True)
+        mu_x = mu_x.astype(np.float32)
+        x = x - mu_x
+        st_x = np.std(x, axis=0, keepdims=True)
+        st_x = np.where(np.equal(st_x, 0), 1, st_x)
+        st_x = st_x.astype(np.float32)
+        x = x / st_x
+
+    else:
+
+        # compute normalization statistics for the score
+        mu_x = np.zeros_like(x[:1])
+        st_x = np.ones_like(x[:1])
 
     # build a weighted data set using newly collected samples
     train_data, val_data = task.build(
@@ -180,13 +209,17 @@ def model_inversion(config):
 
     # generate samples for exploitation
     solver_xs = explore_gen.sample(condition_ys, temp=0.001)
-    actual_ys = (task.score(solver_xs) - mu) / st
+    actual_ys = (task.score(solver_xs * st_x + mu_x) - mu_y) / st_y
 
     # record score percentiles
     logger.record("exploration/condition_ys",
-                  condition_ys * st + mu, 0, percentile=True)
+                  condition_ys * st_y + mu_y,
+                  0,
+                  percentile=True)
     logger.record("exploration/actual_ys",
-                  actual_ys * st + mu, 0, percentile=True)
+                  actual_ys * st_y + mu_y,
+                  0,
+                  percentile=True)
 
     # train the gan for several epochs
     exploit_gan.launch(
@@ -195,13 +228,17 @@ def model_inversion(config):
 
     # generate samples for exploitation
     solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
-    actual_ys = (task.score(solver_xs) - mu) / st
+    actual_ys = (task.score(solver_xs * st_x + mu_x) - mu_y) / st_y
 
     # record score percentiles
     logger.record("exploitation/condition_ys",
-                  condition_ys * st + mu, 0, percentile=True)
+                  condition_ys * st_y + mu_y,
+                  0,
+                  percentile=True)
     logger.record("exploitation/actual_ys",
-                  actual_ys * st + mu, 0, percentile=True)
+                  actual_ys * st_y + mu_y,
+                  0,
+                  percentile=True)
 
     # prevent the temperature from being annealed further
     if config['is_discrete']:
@@ -238,15 +275,19 @@ def model_inversion(config):
 
         # generate samples for exploration
         solver_xs = explore_gen.sample(condition_ys, temp=0.001)
-        actual_ys = oracle.get_distribution(solver_xs).mean() \
-            if config['fully_offline'] else task.score(solver_xs)
-        actual_ys = (actual_ys - mu) / st
+        actual_ys = oracle.get_distribution(solver_xs * st_x + mu_x).mean() \
+            if config['offline'] else task.score(solver_xs * st_x + mu_x)
+        actual_ys = (actual_ys - mu_y) / st_y
 
         # record score percentiles
         logger.record("exploration/condition_ys",
-                      condition_ys * st + mu, iteration + 1, percentile=True)
+                      condition_ys * st_y + mu_y,
+                      iteration + 1,
+                      percentile=True)
         logger.record("exploration/actual_ys",
-                      actual_ys * st + mu, iteration + 1, percentile=True)
+                      actual_ys * st_y + mu_y,
+                      iteration + 1,
+                      percentile=True)
 
         # concatenate newly paired samples with the existing data set
         x = tf.concat([x, solver_xs], 0)
@@ -272,10 +313,14 @@ def model_inversion(config):
 
         # generate samples for exploitation
         solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
-        actual_ys = (task.score(solver_xs) - mu) / st
+        actual_ys = (task.score(solver_xs * st_x + mu_x) - mu_y) / st_y
 
         # record score percentiles
         logger.record("exploitation/condition_ys",
-                      condition_ys * st + mu, iteration + 1, percentile=True)
+                      condition_ys * st_y + mu_y,
+                      iteration + 1,
+                      percentile=True)
         logger.record("exploitation/actual_ys",
-                      actual_ys * st + mu, iteration + 1, percentile=True)
+                      actual_ys * st_y + mu_y,
+                      iteration + 1,
+                      percentile=True)
