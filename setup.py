@@ -14,4 +14,5 @@ setup(
         'console_scripts': ('design-baselines=design_baselines.cli:cli',
                             'csm=design_baselines.csm.experiments:cli',
                             'gan=design_baselines.gan.experiments:cli',
-                            'mins=design_baselines.mins.experiments:cli')})
+                            'mins=design_baselines.mins.experiments:cli',
+                            'cbas=design_baselines.cbas.experiments:cli')})

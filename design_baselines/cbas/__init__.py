@@ -12,7 +12,7 @@ import numpy as np
 import os
 
 
-def condition_by_adaptive_sampling(config):
+def cbas(config):
     """Optimize a design problem score using the algorithm CBAS
     otherwise known as Conditioning by Adaptive Sampling
 
@@ -23,12 +23,49 @@ def condition_by_adaptive_sampling(config):
     """
 
     logger = Logger(config['logging_dir'])
+    task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    x = task.x
+    y = task.y
+
+    if config['normalize_ys']:
+
+        # compute normalization statistics for the score
+        mu_y = np.mean(y, axis=0, keepdims=True)
+        mu_y = mu_y.astype(np.float32)
+        y = y - mu_y
+        st_y = np.std(y, axis=0, keepdims=True)
+        st_y = np.where(np.equal(st_y, 0), 1, st_y)
+        st_y = st_y.astype(np.float32)
+        y = y / st_y
+
+    else:
+
+        # compute normalization statistics for the data vectors
+        mu_y = np.zeros_like(y[:1])
+        st_y = np.ones_like(y[:1])
+
+    if config['normalize_xs'] and not config['is_discrete']:
+
+        # compute normalization statistics for the data vectors
+        mu_x = np.mean(x, axis=0, keepdims=True)
+        mu_x = mu_x.astype(np.float32)
+        x = x - mu_x
+        st_x = np.std(x, axis=0, keepdims=True)
+        st_x = np.where(np.equal(st_x, 0), 1, st_x)
+        st_x = st_x.astype(np.float32)
+        x = x / st_x
+
+    else:
+
+        # compute normalization statistics for the data vectors
+        mu_x = np.zeros_like(x[:1])
+        st_x = np.ones_like(x[:1])
 
     # create the training task and logger
-    task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    train_data, val_data = task.build(bootstraps=config['bootstraps'],
-                                      batch_size=config['ensemble_batch_size'],
-                                      val_size=config['val_size'])
+    train_data, val_data = task.build(
+        x=x, y=y, bootstraps=config['bootstraps'],
+        batch_size=config['ensemble_batch_size'],
+        val_size=config['val_size'])
 
     # make several keras neural networks with two hidden layers
     forward_models = [ForwardModel(
@@ -39,9 +76,10 @@ def condition_by_adaptive_sampling(config):
         for b in range(config['bootstraps'])]
 
     # create a trainer for a forward model with a conservative objective
-    ensemble = Ensemble(forward_models,
-                        forward_model_optim=tf.keras.optimizers.Adam,
-                        forward_model_lr=config['ensemble_lr'])
+    ensemble = Ensemble(
+        forward_models,
+        forward_model_optim=tf.keras.optimizers.Adam,
+        forward_model_lr=config['ensemble_lr'])
 
     # create a manager for saving algorithms state to the disk
     ensemble_manager = tf.train.CheckpointManager(
@@ -54,7 +92,6 @@ def condition_by_adaptive_sampling(config):
                     val_data,
                     logger,
                     config['ensemble_epochs'])
-
     # determine which arcitecture for the decoder to use
     decoder = DiscreteDecoder \
         if config['is_discrete'] else ContinuousDecoder
@@ -78,9 +115,10 @@ def condition_by_adaptive_sampling(config):
         os.path.join(config['logging_dir'], 'p_vae'), 1)
 
     # build a weighted data set
-    train_data, val_data = task.build(importance_weights=np.ones_like(task.y),
-                                      batch_size=config['vae_batch_size'],
-                                      val_size=config['val_size'])
+    train_data, val_data = task.build(
+        x=x, y=y, importance_weights=np.ones_like(task.y),
+        batch_size=config['vae_batch_size'],
+        val_size=config['val_size'])
 
     # train the initial vae fit to the original data distribution
     p_manager.restore_or_initialize()
@@ -120,13 +158,17 @@ def condition_by_adaptive_sampling(config):
     for i in range(config['iterations']):
 
         # generate an importance weighted dataset
-        x, y, w = cbas.generate_data(config['online_batches'],
-                                     config['vae_batch_size'],
-                                     config['percentile'])
+        x, y, w = cbas.generate_data(
+            config['online_batches'],
+            config['vae_batch_size'],
+            config['percentile'])
 
         # evaluate the sampled designs
-        score = task.score(x[:config['solver_samples']])
-        logger.record("score", score, i, percentile=True)
+        score = task.score(x[:config['solver_samples']] * st_x + mu_x)
+        logger.record("score",
+                      score,
+                      i,
+                      percentile=True)
 
         # build a weighted data set
         train_data, val_data = task.build(
@@ -137,7 +179,8 @@ def condition_by_adaptive_sampling(config):
             val_size=config['val_size'])
 
         # train a vae fit using weighted maximum likelihood
-        start_epoch = config['online_epochs'] * i + config['offline_epochs']
+        start_epoch = config['online_epochs'] * i + \
+                      config['offline_epochs']
         q_vae.launch(train_data,
                      val_data,
                      logger,
@@ -150,7 +193,10 @@ def condition_by_adaptive_sampling(config):
     q_manager.save()
 
     # sample designs from the prior
-    q_dx = q_decoder.get_distribution(tf.random.normal([
-        config['solver_samples'], config['latent_size']]), training=False)
-    score = task.score(q_dx.sample())
-    logger.record("score", score, config['iterations'], percentile=True)
+    z = tf.random.normal([config['solver_samples'], config['latent_size']])
+    q_dx = q_decoder.get_distribution(z, training=False)
+    score = task.score(q_dx.sample() * st_x + mu_x)
+    logger.record("score",
+                  score,
+                  config['iterations'],
+                  percentile=True)
