@@ -2629,6 +2629,111 @@ def plot_one(dir, tag, xlabel, ylabel, pkey, pval, iteration, legend):
 @cli.command()
 @click.option('--dir', type=str)
 @click.option('--tag', type=str)
+@click.option('--label', type=str)
+@click.option('--pone', type=str, default='perturbation_steps')
+@click.option('--ptwo', type=str, default='initial_alpha')
+@click.option('--iterations', multiple=True, default=[12, 25, 50, 75, 100, 125, 150, 175, 200])
+def ablation_heatmap(dir, tag, label, pone, ptwo, iterations):
+
+    import glob
+    import os
+    import re
+    import pickle as pkl
+    import pandas as pd
+    import tensorflow as tf
+    import tqdm
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    def pretty(s):
+        return s.replace('_', ' ').title()
+
+    sns.set_style("whitegrid")
+    sns.set_context("notebook",
+                    font_scale=2.5,
+                    rc={"lines.linewidth": 3.5,
+                        'grid.linewidth': 2.5})
+
+    # get the experiment ids
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
+    matches = [pattern.search(d) for d in dirs]
+    ids = [int(m.group(2)) for m in matches]
+
+    # sort the files by the experiment ids
+    zipped_lists = zip(ids, dirs)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    ids, dirs = [list(tuple) for tuple in tuples]
+
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
+
+    # get the task and algorithm name
+    task_name = params[0]['task']
+    algo_name = matches[0].group(1)
+
+    # read data from tensor board
+    data = pd.DataFrame(columns=[label,
+                                 pretty(pone),
+                                 pretty(ptwo),
+                                 'Solver Steps'])
+    for d, p in tqdm.tqdm(zip(dirs, params)):
+        for f in glob.glob(os.path.join(d, '*/events.out*')):
+            for e in tf.compat.v1.train.summary_iterator(f):
+                for v in e.summary.value:
+                    if v.tag == tag and e.step in iterations:
+                        data = data.append({
+                            label: tf.make_ndarray(v.tensor).tolist(),
+                            pretty(pone): p[pone],
+                            pretty(ptwo): p[ptwo],
+                            'Solver Steps': e.step
+                            }, ignore_index=True)
+
+    # get the best sample in the dataset
+    plt.clf()
+    pivot = pd.pivot_table(data,
+                           index=pretty(pone),
+                           columns=pretty(ptwo),
+                           values=label,
+                           aggfunc=np.mean)
+    sns.heatmap(pivot)
+    plt.title(f'{task_name}')
+    plt.savefig(f'{algo_name}_{task_name}_{tag.replace("/", "_")}_{pone}_{ptwo}.png',
+                bbox_inches='tight')
+
+    # get the best sample in the dataset
+    plt.clf()
+    pivot = pd.pivot_table(data,
+                           index='Solver Steps',
+                           columns=pretty(ptwo),
+                           values=label,
+                           aggfunc=np.mean)
+    sns.heatmap(pivot)
+    plt.title(f'{task_name}')
+    plt.savefig(f'{algo_name}_{task_name}_{tag.replace("/", "_")}_solver_steps_{ptwo}.png',
+                bbox_inches='tight')
+
+    # get the best sample in the dataset
+    plt.clf()
+    pivot = pd.pivot_table(data,
+                           index=pretty(pone),
+                           columns='Solver Steps',
+                           values=label,
+                           aggfunc=np.mean)
+    sns.heatmap(pivot)
+    plt.title(f'{task_name}')
+    plt.savefig(f'{algo_name}_{task_name}_{tag.replace("/", "_")}_{pone}_solver_steps.png',
+                bbox_inches='tight')
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--tag', type=str)
 @click.option('--iteration', type=int)
 def evaluate(dir, tag, iteration):
 
