@@ -235,7 +235,7 @@ def ablate_steps(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
         "target_conservative_gap": 0.0,
-        "initial_alpha": 10.0,
+        "initial_alpha": 5.0,
         "alpha_lr": 0.0,
         "perturbation_lr": 0.01,
         "perturbation_steps": tune.grid_search([
