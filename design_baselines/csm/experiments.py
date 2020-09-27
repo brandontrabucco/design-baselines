@@ -29,6 +29,7 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             webui_host='127.0.0.1',
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
@@ -41,7 +42,7 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
         "temp": 5.0,
         "val_size": 200,
         "batch_size": 128,
-        "epochs": 100,
+        "epochs": 200,
         "activations": [['leaky_relu', 'leaky_relu']],
         "hidden_size": 256,
         "initial_max_std": 0.2,
@@ -77,6 +78,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             webui_host='127.0.0.1',
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
@@ -125,6 +127,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             webui_host='127.0.0.1',
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
@@ -172,11 +175,12 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             webui_host='127.0.0.1',
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
-        "task_kwargs": {"split_percentile": 20, 'num_parallel': 2},
+        "task_kwargs": {"split_percentile": 20, 'num_parallel': 12},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
@@ -185,11 +189,11 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "batch_size": 128,
         "epochs": 100,
         "activations": [['leaky_relu', 'leaky_relu']],
-        "hidden_size": 2048,
+        "hidden_size": 256,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
-        "target_conservative_gap": 0.2,
+        "target_conservative_gap": 1000.0,
         "initial_alpha": 1.0,
         "alpha_lr": 0.05,
         "perturbation_lr": 0.01,
@@ -219,6 +223,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             webui_host='127.0.0.1',
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
@@ -266,6 +271,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             webui_host='127.0.0.1',
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
@@ -313,6 +319,7 @@ def ablate_steps(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             webui_host='127.0.0.1',
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
