@@ -67,34 +67,8 @@ def disc_noise(x, keep=0.9, temp=5.0):
 
     p = tf.ones_like(x)
     p = p / tf.reduce_sum(p, axis=-1, keepdims=True)
-    h = tf.math.log(keep * x + (1.0 - keep) * p)
-    return tfpd.RelaxedOneHotCategorical(temp, logits=h).sample()
-
-
-@tf.function(experimental_relax_shapes=True)
-def gumb_noise(x, keep=1.0, temp=1.0):
-    """Add noise to a input that is either a continuous value or a probability
-    distribution over discrete categorical values
-    Args:
-    x: tf.Tensor
-        a tensor that will have noise added to it, such that the resulting
-        tensor is sound given its definition
-    keep: float
-        the amount of probability mass to keep on the element that is activated
-        teh rest is redistributed evenly to all elements
-    temp: float
-        the temperature of teh gumbel distribution that is used to corrupt
-        the input probabilities x
-    Returns:
-    noisy_x: tf.Tensor
-        a tensor that has noise added to it, which has the interpretation of
-        the original tensor (such as a probability distribution)
-    """
-
-    noise = tf.ones_like(x)
-    noise = noise / tf.reduce_sum(noise, axis=-1, keepdims=True)
-    noise = tfpd.RelaxedOneHotCategorical(temp, probs=noise).sample()
-    return keep * x + (1.0 - keep) * noise
+    p = keep * x + (1.0 - keep) * p
+    return tfpd.RelaxedOneHotCategorical(temp, probs=p).sample()
 
 
 @tf.function(experimental_relax_shapes=True)

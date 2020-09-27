@@ -29,8 +29,6 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=16000000000,
-             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
@@ -39,13 +37,13 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
         "is_discrete": True,
         "normalize_ys": True,
         "normalize_xs": False,
-        "keep": 0.6,
-        "temp": 100.0,
+        "keep": 0.999,
+        "temp": 5.0,
         "val_size": 200,
         "batch_size": 128,
         "epochs": 100,
         "activations": [['leaky_relu', 'leaky_relu']],
-        "hidden_size": 2048,
+        "hidden_size": 256,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
@@ -73,8 +71,6 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=16000000000,
-             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
@@ -83,13 +79,13 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "is_discrete": True,
         "normalize_ys": True,
         "normalize_xs": False,
-        "keep": 0.6,
-        "temp": 100.0,
+        "keep": 0.999,
+        "temp": 5.0,
         "val_size": 200,
         "batch_size": 128,
         "epochs": 100,
         "activations": [['leaky_relu', 'leaky_relu']],
-        "hidden_size": 2048,
+        "hidden_size": 256,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
@@ -117,8 +113,6 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=16000000000,
-             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
@@ -160,8 +154,6 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=16000000000,
-             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
@@ -203,8 +195,6 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=16000000000,
-             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
@@ -246,8 +236,6 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=16000000000,
-             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",

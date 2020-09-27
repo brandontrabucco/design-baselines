@@ -1,5 +1,5 @@
 from design_baselines.utils import spearman
-from design_baselines.utils import gumb_noise
+from design_baselines.utils import disc_noise
 from design_baselines.utils import cont_noise
 from collections import defaultdict
 import tensorflow as tf
@@ -112,7 +112,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         """
 
         # corrupt the inputs with noise
-        x0 = gumb_noise(x, self.keep, self.temp) \
+        x0 = disc_noise(x, self.keep, self.temp) \
             if self.is_discrete else cont_noise(x, self.noise_std)
 
         statistics = dict()
@@ -182,7 +182,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         """
 
         # corrupt the inputs with noise
-        x0 = gumb_noise(x, self.keep, self.temp) \
+        x0 = disc_noise(x, self.keep, self.temp) \
             if self.is_discrete else cont_noise(x, self.noise_std)
 
         statistics = dict()

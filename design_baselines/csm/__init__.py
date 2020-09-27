@@ -1,7 +1,7 @@
 from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
-from design_baselines.utils import gumb_noise
+from design_baselines.utils import disc_noise
 from design_baselines.csm.trainers import ConservativeMaximumLikelihood
 from design_baselines.csm.nets import ForwardModel
 import tensorflow_probability as tfp
@@ -108,7 +108,7 @@ def csm(config):
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
     x = tf.gather(x, indices, axis=0)
-    x = tf.math.log(gumb_noise(
+    x = tf.math.log(disc_noise(
         x, config.get('keep', 0.001), config.get('temp', 0.001))) \
         if config['is_discrete'] else x
 
