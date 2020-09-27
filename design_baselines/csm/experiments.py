@@ -26,13 +26,13 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.gradient_ascent import gradient_ascent
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=8000000000,
-             memory=8000000000,
+             object_store_memory=16000000000,
+             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(gradient_ascent, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
         "task_kwargs": {'split_percentile': 80},
@@ -76,13 +76,13 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.gradient_ascent import gradient_ascent
+    from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=8000000000,
-             memory=8000000000,
+             object_store_memory=16000000000,
+             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(gradient_ascent, config={
+    tune.run(csm, config={
         "logging_dir": "data",
         "task": "GFP-v0",
         "task_kwargs": {'seed': tune.randint(1000)},
@@ -129,8 +129,8 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=8000000000,
-             memory=8000000000,
+             object_store_memory=16000000000,
+             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
@@ -178,8 +178,8 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=8000000000,
-             memory=8000000000,
+             object_store_memory=16000000000,
+             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
@@ -227,8 +227,8 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=8000000000,
-             memory=8000000000,
+             object_store_memory=16000000000,
+             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
@@ -276,8 +276,8 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=8000000000,
-             memory=8000000000,
+             object_store_memory=16000000000,
+             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
@@ -325,8 +325,8 @@ def ablate_steps(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.csm import csm
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             object_store_memory=8000000000,
-             memory=8000000000,
+             object_store_memory=16000000000,
+             memory=16000000000,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(csm, config={
         "logging_dir": "data",
