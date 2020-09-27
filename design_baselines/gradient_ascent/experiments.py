@@ -29,7 +29,7 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             webui_host='127.0.0.1',
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
@@ -72,7 +72,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             webui_host='127.0.0.1',
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
@@ -115,7 +115,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             webui_host='127.0.0.1',
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
@@ -157,7 +157,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             webui_host='127.0.0.1',
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
@@ -199,7 +199,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             webui_host='127.0.0.1',
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
@@ -241,7 +241,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
-             webui_host='127.0.0.1',
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
