@@ -183,7 +183,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(csm, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
-        "task_kwargs": {"split_percentile": 20, 'num_parallel': 12},
+        "task_kwargs": {"split_percentile": 20, 'num_parallel': 2},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
