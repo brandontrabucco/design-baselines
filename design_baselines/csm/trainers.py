@@ -11,19 +11,21 @@ class ConservativeMaximumLikelihood(tf.Module):
 
     def __init__(self,
                  forward_model,
+                 vanilla_model,
                  forward_model_optim=tf.keras.optimizers.Adam,
                  forward_model_lr=0.001,
-                 target_conservative_gap=tf.constant(10.0),
-                 initial_alpha=0.0001,
+                 target_conservative_gap=None,
+                 target_rank_corr_gap=tf.constant(-0.05),
+                 initial_alpha=1.0,
                  alpha_optim=tf.keras.optimizers.Adam,
-                 alpha_lr=0.001,
-                 perturbation_lr=0.001,
-                 perturbation_steps=100,
-                 perturbation_backprop=False,
+                 alpha_lr=0.05,
+                 perturbation_lr=0.01,
+                 perturbation_steps=50,
+                 perturbation_backprop=True,
                  is_discrete=False,
                  noise_std=0.0,
-                 keep=0.0,
-                 temp=0.0):
+                 keep=0.999,
+                 temp=5.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -39,18 +41,23 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         super().__init__()
         self.fm = forward_model
+        self.vm = vanilla_model
         self.fm_optim = forward_model_optim(learning_rate=forward_model_lr)
-        self.target_conservative_gap = target_conservative_gap
+        self.vm_optim = forward_model_optim(learning_rate=forward_model_lr)
 
-        # create training machinery for lagrange multiplier
+        # lagrangian dual descent
         self.log_alpha = tf.Variable(np.log(initial_alpha).astype(np.float32))
-        self.alpha = tfp.util.DeferredTensor(self.log_alpha, tf.exp)
+        self.alpha = tfp.util.DeferredTensor(self.log_alpha, tf.math.softplus)
         self.alpha_optim = alpha_optim(learning_rate=alpha_lr)
 
         # create machinery for sampling adversarial examples
+        self.target_conservative_gap = target_conservative_gap
+        self.target_rank_corr_gap = target_rank_corr_gap
         self.perturbation_lr = perturbation_lr
         self.perturbation_steps = perturbation_steps
         self.perturbation_backprop = perturbation_backprop
+
+        # extra parameters for controlling data formats
         self.is_discrete = is_discrete
         self.noise_std = noise_std
         self.keep = keep
@@ -119,11 +126,37 @@ class ConservativeMaximumLikelihood(tf.Module):
         with tf.GradientTape(persistent=True) as tape:
 
             # calculate the prediction error and accuracy of the model
+            d = self.vm.get_distribution(x0, training=True)
+            nll = -d.log_prob(y)
+            statistics[f'train/vm/nll'] = nll
+
+            # evaluate how correct the rank of the model predictions are
+            vm_rank_corr = spearman(y[:, 0], d.mean()[:, 0])
+            statistics[f'train/vm/rank_corr'] = vm_rank_corr
+
+            # model loss that combines maximum likelihood
+            model_loss = nll
+
+            # build the total and lagrangian losses
+            denom = tf.reduce_sum(b)
+            total_loss = tf.math.divide_no_nan(
+                tf.reduce_sum(b * model_loss), denom)
+
+        grads = tape.gradient(
+            total_loss, self.vm.trainable_variables)
+        self.vm_optim.apply_gradients(
+            zip(grads, self.vm.trainable_variables))
+
+        with tf.GradientTape(persistent=True) as tape:
+
+            # calculate the prediction error and accuracy of the model
             d = self.fm.get_distribution(x0, training=True)
             nll = -d.log_prob(y)
+            statistics[f'train/fm/nll'] = nll
 
             # evaluate how correct the rank fo the model predictions are
-            rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+            fm_rank_corr = spearman(y[:, 0], d.mean()[:, 0])
+            statistics[f'train/fm/rank_corr'] = fm_rank_corr
 
             # calculate the conservative gap
             perturb = self.optimize(x0, training=False)
@@ -132,32 +165,41 @@ class ConservativeMaximumLikelihood(tf.Module):
 
             # calculate the prediction error and accuracy of the model
             perturb_d = self.fm.get_distribution(perturb, training=False)
-
-            # build the lagrangian loss
             conservative_gap = (perturb_d.mean() - d.mean())[:, 0]
-            gap = (self.alpha * self.target_conservative_gap -
-                   self.alpha * conservative_gap)
+            statistics[f'train/fm/conservative_gap'] = conservative_gap
+            rank_corr_gap = fm_rank_corr - vm_rank_corr
+            statistics[f'train/fm/rank_corr_gap'] = rank_corr_gap
+
+            # build a lagrangian
+            alpha_loss = tf.zeros([1])
+            if self.target_rank_corr_gap is None and \
+                    self.target_conservative_gap is not None:
+                alpha_loss = (self.alpha * self.target_conservative_gap -
+                              self.alpha * conservative_gap)
+
+            if self.target_conservative_gap is None and \
+                    self.target_rank_corr_gap is not None:
+                alpha_loss = (self.alpha * self.target_rank_corr_gap -
+                              self.alpha * rank_corr_gap)
 
             # model loss that combines maximum likelihood with a constraint
             model_loss = nll + self.alpha * conservative_gap
+            statistics[f'train/fm/alpha_loss'] = alpha_loss
 
             # build the total and lagrangian losses
             denom = tf.reduce_sum(b)
             total_loss = tf.math.divide_no_nan(
                 tf.reduce_sum(b * model_loss), denom)
             alpha_loss = tf.math.divide_no_nan(
-                tf.reduce_sum(b * gap), denom)
+                tf.reduce_sum(b * alpha_loss), denom)
 
-        grads = tape.gradient(total_loss, self.fm.trainable_variables)
-        self.fm_optim.apply_gradients(zip(grads, self.fm.trainable_variables))
-        grads = tape.gradient(alpha_loss, self.log_alpha)
-        self.alpha_optim.apply_gradients([[grads, self.log_alpha]])
-
-        statistics[f'train/nll'] = nll
-        statistics[f'train/alpha'] = self.alpha
-        statistics[f'train/alpha_loss'] = gap
-        statistics[f'train/rank_corr'] = rank_correlation
-        statistics[f'train/gap'] = conservative_gap
+        grads = tape.gradient(
+            total_loss, self.fm.trainable_variables)
+        self.fm_optim.apply_gradients(
+            zip(grads, self.fm.trainable_variables))
+        self.alpha_optim.apply_gradients([[
+            tape.gradient(alpha_loss, self.log_alpha), self.log_alpha]])
+        statistics[f'train/fm/alpha'] = self.alpha
 
         return statistics
 
@@ -188,11 +230,22 @@ class ConservativeMaximumLikelihood(tf.Module):
         statistics = dict()
 
         # calculate the prediction error and accuracy of the model
-        d = self.fm.get_distribution(x0, training=False)
+        d = self.vm.get_distribution(x0, training=False)
         nll = -d.log_prob(y)
+        statistics[f'validate/vm/nll'] = nll
 
         # evaluate how correct the rank fo the model predictions are
         rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+        statistics[f'validate/vm/rank_corr'] = rank_correlation
+
+        # calculate the prediction error and accuracy of the model
+        d = self.fm.get_distribution(x0, training=False)
+        nll = -d.log_prob(y)
+        statistics[f'validate/fm/nll'] = nll
+
+        # evaluate how correct the rank fo the model predictions are
+        rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+        statistics[f'validate/fm/rank_corr'] = rank_correlation
 
         # calculate the conservative gap
         perturb = self.optimize(x0, training=False)
@@ -202,10 +255,7 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         # build the lagrangian loss
         conservative_gap = (perturb_d.mean() - d.mean())[:, 0]
-
-        statistics[f'validate/nll'] = nll
-        statistics[f'validate/rank_corr'] = rank_correlation
-        statistics[f'validate/gap'] = conservative_gap
+        statistics[f'validate/fm/gap'] = conservative_gap
 
         return statistics
 
@@ -299,6 +349,8 @@ class ConservativeMaximumLikelihood(tf.Module):
         for i in range(self.bootstraps):
             saveables[f'forward_model'] = self.fm
             saveables[f'forward_model_optim'] = self.fm_optim
+            saveables[f'vanilla_model'] = self.vm
+            saveables[f'vanilla_model_optim'] = self.vm_optim
             saveables[f'log_alpha'] = self.log_alpha
             saveables[f'alpha_optim'] = self.alpha_optim
         return saveables

@@ -33,6 +33,20 @@ def csm(config):
         initial_min_std=config['initial_min_std'])
         for activations in config['activations']]
 
+    # make several keras neural networks with different architectures
+    vanilla_models = [ForwardModel(
+        task.input_shape,
+        activations=activations,
+        hidden=config['hidden_size'],
+        initial_max_std=config['initial_max_std'],
+        initial_min_std=config['initial_min_std'])
+        for activations in config['activations']]
+
+    # sync corresponding models
+    for model_a, model_b in zip(
+            forward_models, vanilla_models):
+        model_b.set_weights(model_a.get_weights())
+
     # save the initial dataset statistics for safe keeping
     x = task.x
     y = task.y
@@ -85,10 +99,11 @@ def csm(config):
 
         # create a trainer for a forward model with a conservative objective
         trainer = ConservativeMaximumLikelihood(
-            fm,
+            fm, vanilla_models[i],
             forward_model_optim=tf.keras.optimizers.Adam,
             forward_model_lr=config['forward_model_lr'],
             target_conservative_gap=config['target_conservative_gap'],
+            target_rank_corr_gap=config['target_rank_corr_gap'],
             initial_alpha=config['initial_alpha'],
             alpha_optim=tf.keras.optimizers.Adam,
             alpha_lr=config['alpha_lr'],
@@ -106,11 +121,13 @@ def csm(config):
                        config['epochs'], header=f'oracle_{i}/')
 
     # select the top k initial designs from the dataset
+    mean_x = tf.reduce_mean(x, axis=0, keepdims=True)
     indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
-    x = tf.gather(x, indices, axis=0)
-    x = tf.math.log(disc_noise(
-        x, config.get('keep', 0.001), config.get('temp', 0.001))) \
-        if config['is_discrete'] else x
+    initial_x = tf.gather(x, indices, axis=0)
+    x = tf.math.log(disc_noise(initial_x,
+                               config.get('keep', 0.999),
+                               config.get('temp', 0.001))) \
+        if config['is_discrete'] else initial_x
 
     # evaluate the starting point
     solution = tf.math.softmax(x) if config['is_discrete'] else x
@@ -126,6 +143,10 @@ def csm(config):
 
     # record the prediction and score to the logger
     logger.record("score", score, 0, percentile=True)
+    logger.record("distance/travelled",
+                  tf.linalg.norm(solution - initial_x), 0)
+    logger.record("distance/from_mean",
+                  tf.linalg.norm(solution - mean_x), 0)
     for n, prediction_i in enumerate(preds):
         logger.record(f"oracle_{n}/gap", perturb_gap[n], 0)
         logger.record(f"oracle_{n}/prediction", prediction_i, 0)
@@ -134,10 +155,6 @@ def csm(config):
         if n > 0:
             logger.record(f"rank_corr/0_to_{n}",
                           spearman(preds[0][:, 0], prediction_i[:, 0]), 0)
-
-    # and keep track of the best design sampled so far
-    best_solution = None
-    best_score = None
 
     # perform gradient ascent on the score through the forward model
     for i in range(1, config['solver_steps'] + 1):
@@ -167,6 +184,10 @@ def csm(config):
 
         # record the prediction and score to the logger
         logger.record("score", score, i, percentile=True)
+        logger.record("distance/travelled",
+                      tf.linalg.norm(solution - initial_x), i)
+        logger.record("distance/from_mean",
+                      tf.linalg.norm(solution - mean_x), i)
         for n, prediction_i in enumerate(preds):
             logger.record(f"oracle_{n}/gap", perturb_gap[n], i)
             logger.record(f"oracle_{n}/prediction", prediction_i, i)
@@ -180,14 +201,8 @@ def csm(config):
                 logger.record(f"grad_corr/0_to_{n}", tfp.stats.correlation(
                     grads[0], grads[n], sample_axis=0, event_axis=None), i)
 
-        # update the best design every iteration
-        idx = np.argmax(score)
-        if best_solution is None or score[idx] > best_score:
-            best_score = score[idx]
-            best_solution = solution[idx]
-
-    # save the best design to the disk
-    np.save(os.path.join(
-        config['logging_dir'], 'score.npy'), best_score)
-    np.save(os.path.join(
-        config['logging_dir'], 'solution.npy'), best_solution)
+        # save the best design to the disk
+        np.save(os.path.join(
+            config['logging_dir'], f'score_{i}.npy'), score)
+        np.save(os.path.join(
+            config['logging_dir'], f'solution_{i}.npy'), solution)

@@ -229,7 +229,7 @@ def plot_one(dir, tag, xlabel, ylabel, pkey, pval, iteration, legend):
 @click.option('--label', type=str)
 @click.option('--pone', type=str, default='perturbation_steps')
 @click.option('--ptwo', type=str, default='initial_alpha')
-@click.option('--iterations', multiple=True, default=list(range(0, 1000, 20)))
+@click.option('--iterations', multiple=True, default=list(range(0, 220, 20)))
 def ablation_heatmap(dir, tag, label, pone, ptwo, iterations):
 
     import glob
