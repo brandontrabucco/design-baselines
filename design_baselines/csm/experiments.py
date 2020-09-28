@@ -192,7 +192,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "batch_size": 128,
         "epochs": 100,
         "activations": [['leaky_relu', 'leaky_relu']],
-        "hidden_size": 256,
+        "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
