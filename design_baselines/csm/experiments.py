@@ -21,7 +21,7 @@ def cli():
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on AntMorphology-v0
+    """Evaluate Conservative Score Models on MoleculeActivity-v0
     """
 
     # Final Version
@@ -71,7 +71,7 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on AntMorphology-v0
+    """Evaluate Conservative Score Models on GFP-v0
     """
 
     # Final Version
