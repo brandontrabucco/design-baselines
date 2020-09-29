@@ -1,7 +1,7 @@
 from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
-from design_baselines.utils import disc_noise
+from design_baselines.utils import soften_noise
 from design_baselines.csm.trainers import ConservativeMaximumLikelihood
 from design_baselines.csm.nets import ForwardModel
 import tensorflow_probability as tfp
@@ -124,9 +124,9 @@ def csm(config):
     mean_x = tf.reduce_mean(x, axis=0, keepdims=True)
     indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
     initial_x = tf.gather(x, indices, axis=0)
-    x = tf.math.log(disc_noise(initial_x,
-                               config.get('keep', 0.999),
-                               config.get('temp', 0.001))) \
+    x = tf.math.log(soften_noise(initial_x,
+                                 config.get('keep', 0.999),
+                                 config.get('temp', 0.001))) \
         if config['is_discrete'] else initial_x
 
     # evaluate the starting point

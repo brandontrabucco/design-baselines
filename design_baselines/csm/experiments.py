@@ -38,8 +38,8 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
         "is_discrete": True,
         "normalize_ys": True,
         "normalize_xs": False,
-        "keep": 0.999,
-        "temp": 5.0,
+        "keep": 0.6,
+        "temp": 1.0,
         "val_size": 200,
         "batch_size": 128,
         "epochs": 200,
@@ -48,8 +48,8 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
-        "target_conservative_gap": None,
-        "target_rank_corr_gap": -0.01,
+        "target_conservative_gap": 1.0,
+        "target_rank_corr_gap": None,
         "initial_alpha": 1.0,
         "alpha_lr": 0.01,
         "perturbation_lr": 0.01,
@@ -88,8 +88,8 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "is_discrete": True,
         "normalize_ys": True,
         "normalize_xs": False,
-        "keep": 0.999,
-        "temp": 5.0,
+        "keep": 0.6,
+        "temp": 1.0,
         "val_size": 200,
         "batch_size": 128,
         "epochs": 200,
@@ -98,8 +98,8 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
-        "target_conservative_gap": None,
-        "target_rank_corr_gap": -0.01,
+        "target_conservative_gap": 2.0,
+        "target_rank_corr_gap": None,
         "initial_alpha": 1.0,
         "alpha_lr": 0.01,
         "perturbation_lr": 0.01,
@@ -147,8 +147,8 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
-        "target_conservative_gap": None,
-        "target_rank_corr_gap": -0.01,
+        "target_conservative_gap": 2.0,
+        "target_rank_corr_gap": None,
         "initial_alpha": 1.0,
         "alpha_lr": 0.01,
         "perturbation_lr": 0.01,
@@ -196,8 +196,8 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
-        "target_conservative_gap": None,
-        "target_rank_corr_gap": -0.01,
+        "target_conservative_gap": 2.0,
+        "target_rank_corr_gap": None,
         "initial_alpha": 1.0,
         "alpha_lr": 0.01,
         "perturbation_lr": 0.01,
@@ -245,8 +245,8 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
-        "target_conservative_gap": None,
-        "target_rank_corr_gap": -0.01,
+        "target_conservative_gap": 0.2,
+        "target_rank_corr_gap": None,
         "initial_alpha": 1.0,
         "alpha_lr": 0.01,
         "perturbation_lr": 0.01,
@@ -294,8 +294,8 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "forward_model_lr": 0.001,
-        "target_conservative_gap": None,
-        "target_rank_corr_gap": -0.01,
+        "target_conservative_gap": 0.5,
+        "target_rank_corr_gap": None,
         "initial_alpha": 1.0,
         "alpha_lr": 0.01,
         "perturbation_lr": 0.01,
@@ -308,6 +308,18 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
+
+
+"""
+
+gradient-ascent gfp --local-dir ~/gradient-ascent-gfp --cpus 8 --gpus 4 --num-parallel 8 --num-samples 16;
+gradient-ascent molecule --local-dir ~/gradient-ascent-molecule --cpus 8 --gpus 4 --num-parallel 8 --num-samples 16;
+gradient-ascent superconductor --local-dir ~/gradient-ascent-superconductor --cpus 8 --gpus 4 --num-parallel 8 --num-samples 16;
+gradient-ascent hopper --local-dir ~/gradient-ascent-hopper --cpus 8 --gpus 4 --num-parallel 8 --num-samples 16;
+gradient-ascent ant --local-dir ~/gradient-ascent-ant --cpus 8 --gpus 4 --num-parallel 8 --num-samples 16;
+gradient-ascent dkitty --local-dir ~/gradient-ascent-dkitty --cpus 8 --gpus 4 --num-parallel 8 --num-samples 16;
+
+"""
 
 
 @cli.command()
