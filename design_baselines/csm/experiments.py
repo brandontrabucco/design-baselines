@@ -121,7 +121,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on AntMorphology-v0
+    """Evaluate Conservative Score Models on DKittyMorphology-v0
     """
 
     # Final Version

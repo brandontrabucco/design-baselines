@@ -72,9 +72,9 @@ def disc_noise(x, keep=0.9, temp=5.0):
 
 
 @tf.function(experimental_relax_shapes=True)
-def soften_noise(x, keep=0.9, temp=5.0):
-    """Add noise to a input that is either a continuous value or a probability
-    distribution over discrete categorical values
+def soft_noise(x, keep=0.9):
+    """Softens a discrete one-hot distribution so that the maximum entry is
+    keep and the minimum entries are (1 - keep)
 
     Args:
 
@@ -82,23 +82,19 @@ def soften_noise(x, keep=0.9, temp=5.0):
         a tensor that will have noise added to it, such that the resulting
         tensor is sound given its definition
     keep: float
-        the amount of probability mass to keep on the element that is activated
-        teh rest is redistributed evenly to all elements
-    temp: float
-        the temperature of the gumbel distribution that is used to corrupt
-        the input probabilities x
+        the amount of probability mass to keep on the element that is
+        activated; the rest is redistributed to all elements
 
     Returns:
 
-    noisy_x: tf.Tensor
-        a tensor that has noise added to it, which has the interpretation of
-        the original tensor (such as a probability distribution)
+    smooth_x: tf.Tensor
+        a smoothed version of x that represents a discrete probability
+        distribution of categorical variables
     """
 
     p = tf.ones_like(x)
     p = p / tf.reduce_sum(p, axis=-1, keepdims=True)
-    z = tfpd.RelaxedOneHotCategorical(temp, probs=p).sample()
-    return keep * x + (1.0 - keep) * z
+    return keep * x + (1.0 - keep) * p
 
 
 @tf.function(experimental_relax_shapes=True)
