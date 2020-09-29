@@ -179,6 +179,8 @@ class ConservativeMaximumLikelihood(tf.Module):
 
             if self.target_conservative_gap is None and \
                     self.target_rank_corr_gap is not None:
+                # scale the constraint to be relative to the current performance
+                rank_corr_gap = tf.math.divide_no_nan(rank_corr_gap, vm_rank_corr)
                 alpha_loss = (self.alpha * self.target_rank_corr_gap -
                               self.alpha * rank_corr_gap)
 
