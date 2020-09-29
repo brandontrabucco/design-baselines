@@ -149,7 +149,7 @@ class ConservativeMaximumLikelihood(tf.Module):
 
             # determine which samples to start optimization from
             p0 = tf.math.log(x0) if self.is_discrete else x0
-            p0 = tf.where(tf.random.uniform([batch_dim, 1])
+            p0 = tf.where(tf.random.uniform([batch_dim] + [1 for _ in x.shape[1:]])
                           < self.negatives_fraction,
                           p0, self.solution[:batch_dim])
 
@@ -236,7 +236,7 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         # determine which samples to start optimization from
         p0 = tf.math.log(x0) if self.is_discrete else x0
-        p0 = tf.where(tf.random.uniform([batch_dim, 1])
+        p0 = tf.where(tf.random.uniform([batch_dim] + [1 for _ in x.shape[1:]])
                       < self.negatives_fraction,
                       p0, self.solution[:batch_dim])
 

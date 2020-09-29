@@ -94,11 +94,13 @@ def online(config):
         if config['is_discrete'] else initial_x
 
     # create the starting point for the optimizer
+    evaluations = 0
     trainer.solution = tf.Variable(x)
     trainer.done = tf.Variable(
-        tf.fill([config['batch_size'], 1], False))
+        tf.fill([config['batch_size']] + [1 for _ in x.shape[1:]], False))
 
     def evaluate_solution(xt):
+        nonlocal evaluations
 
         # evaluate the design using the oracle and the forward model
         with tf.GradientTape() as tape:
@@ -110,20 +112,21 @@ def online(config):
         score = task.score(solution * st_x + mu_x)
         grads = tape.gradient(model, xt)
         model = model * st_y + mu_y
+        evaluations += 1
 
         # record the prediction and score to the logger
         logger.record("score",
-                      score, trainer.step, percentile=True)
+                      score, evaluations, percentile=True)
         logger.record("distance/travelled",
-                      tf.linalg.norm(solution - initial_x), trainer.step)
+                      tf.linalg.norm(solution - initial_x), evaluations)
         logger.record("distance/from_mean",
-                      tf.linalg.norm(solution - mean_x), trainer.step)
+                      tf.linalg.norm(solution - mean_x), evaluations)
         logger.record(f"oracle/prediction",
-                      model, trainer.step)
+                      model, evaluations)
         logger.record(f"oracle/grad_norm", tf.linalg.norm(
-            tf.reshape(grads, [-1, task.input_size]), axis=-1), trainer.step)
+            tf.reshape(grads, [-1, task.input_size]), axis=-1), evaluations)
         logger.record(f"rank_corr/model_to_real",
-                      spearman(model[:, 0], score[:, 0]), trainer.step)
+                      spearman(model[:, 0], score[:, 0]), evaluations)
 
     # keep track of when to record performance
     interval = trainer.solver_interval
