@@ -2,6 +2,7 @@ from ray import tune
 import click
 import ray
 import os
+from random import randint
 
 
 @click.group()
@@ -30,7 +31,7 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
     tune.run(online, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
@@ -79,7 +80,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
     tune.run(online, config={
         "logging_dir": "data",
         "task": "GFP-v0",
@@ -128,7 +129,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
     tune.run(online, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
@@ -177,7 +178,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
     tune.run(online, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
@@ -226,7 +227,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
     tune.run(online, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -275,7 +276,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
     tune.run(online, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
@@ -294,12 +295,12 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
         "forward_model_lr": 0.001,
         "initial_alpha": 1.0,
         "alpha_lr": 0.05,
-        "target_conservatism": 0.5,
-        "negatives_fraction": 0.5,
-        "lookahead_steps": 10,
+        "target_conservatism": 1.0,
+        "negatives_fraction": 0.9,
+        "lookahead_steps": 5,
         "lookahead_backprop": True,
         "solver_lr": 0.01,
-        "solver_interval": 10,
+        "solver_interval": 50,
         "solver_warmup": 500,
         "solver_steps": 1},
         num_samples=num_samples,
