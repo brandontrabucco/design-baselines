@@ -74,7 +74,7 @@ def plot(dir, tag, xlabel, ylabel, separate_runs):
         for f in glob.glob(os.path.join(d, '*/events.out*')):
             for e in tf.compat.v1.train.summary_iterator(f):
                 for v in e.summary.value:
-                    if v.tag == tag:
+                    if v.tag == tag and e.step < 500:
                         row = {'id': i,
                                ylabel: tf.make_ndarray(v.tensor).tolist(),
                                xlabel: e.step}
