@@ -3,7 +3,9 @@ from design_baselines.logger import Logger
 from design_baselines.utils import spearman
 from design_baselines.utils import soft_noise
 from design_baselines.gradient_ascent.trainers import MaximumLikelihood
+from design_baselines.gradient_ascent.trainers import Ensemble
 from design_baselines.gradient_ascent.nets import ForwardModel
+from collections import defaultdict
 import tensorflow_probability as tfp
 import tensorflow as tf
 import numpy as np
@@ -74,6 +76,49 @@ def gradient_ascent(config):
     # scale the learning rate based on the number of channels in x
     config['solver_lr'] *= np.sqrt(np.prod(x.shape[1:]))
 
+    # make a neural network to predict scores
+    held_out_models = [ForwardModel(
+        task.input_shape,
+        activations=['relu' if i == j else 'tanh' for j in range(8)],
+        hidden=256,
+        initial_max_std=config['initial_max_std'],
+        initial_min_std=config['initial_min_std'])
+        for i in range(8)]
+
+    # create a trainer for a forward model with a conservative objective
+    held_out_trainer = Ensemble(
+        held_out_models,
+        forward_model_optim=tf.keras.optimizers.Adam,
+        forward_model_lr=0.001)
+
+    # create a bootstrapped data set
+    held_out_train_data, held_out_validate_data = task.build(
+        x=x, y=y,
+        batch_size=config['batch_size'],
+        val_size=config['val_size'],
+        bootstraps=len(held_out_models))
+
+    # train a held-out model on the validation set
+    for e in range(100):
+
+        statistics = defaultdict(list)
+        for xi, yi, bi in held_out_train_data:
+            for name, tensor in held_out_trainer.train_step(xi, yi, bi).items():
+                statistics["held_out/" + name].append(tensor)
+
+        for name in statistics.keys():
+            logger.record(
+                name, tf.concat(statistics[name], axis=0), e)
+
+        statistics = defaultdict(list)
+        for xi, yi in held_out_validate_data:
+            for name, tensor in held_out_trainer.validate_step(xi, yi).items():
+                statistics["held_out/" + name].append(tensor)
+
+        for name in statistics.keys():
+            logger.record(
+                name, tf.concat(statistics[name], axis=0), e)
+
     trs = []
     for i, fm in enumerate(forward_models):
 
@@ -89,8 +134,7 @@ def gradient_ascent(config):
             forward_model_lr=config['forward_model_lr'],
             is_discrete=config['is_discrete'],
             noise_std=config.get('noise_std', 0.0),
-            keep=config.get('keep', 1.0),
-            temp=config.get('temp', 0.001))
+            keep=config.get('keep', 1.0))
 
         # train the model for an additional number of epochs
         trs.append(trainer)
@@ -102,8 +146,7 @@ def gradient_ascent(config):
     indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
     initial_x = tf.gather(x, indices, axis=0)
     x = tf.math.log(soft_noise(initial_x,
-                               config.get('keep', 0.999),
-                               config.get('temp', 0.001))) \
+                               config.get('keep', 0.999))) \
         if config['is_discrete'] else initial_x
 
     # evaluate the starting point
@@ -143,6 +186,30 @@ def gradient_ascent(config):
         score = task.score(solution * st_x + mu_x)
         preds = [fm.get_distribution(
             solution).mean() * st_y + mu_y for fm in forward_models]
+
+        held_out_m = [m.get_distribution(solution).mean()
+                      for m in held_out_models]
+        held_out_s = [m.get_distribution(solution).stddev()
+                      for m in held_out_models]
+
+        max_of_mean = tf.reduce_max(held_out_m, axis=0)
+        max_of_stddev = tf.reduce_max(held_out_s, axis=0)
+        min_of_mean = tf.reduce_min(held_out_m, axis=0)
+        min_of_stddev = tf.reduce_min(held_out_s, axis=0)
+        mean_of_mean = tf.reduce_mean(held_out_m, axis=0)
+        mean_of_stddev = tf.reduce_mean(held_out_s, axis=0)
+        logger.record(f"oracle/max_of_mean",
+                      max_of_mean, i)
+        logger.record(f"oracle/max_of_stddev",
+                      max_of_stddev, i)
+        logger.record(f"oracle/min_of_mean",
+                      min_of_mean, i)
+        logger.record(f"oracle/min_of_stddev",
+                      min_of_stddev, i)
+        logger.record(f"oracle/mean_of_mean",
+                      mean_of_mean, i)
+        logger.record(f"oracle/mean_of_stddev",
+                      mean_of_stddev, i)
 
         # record the prediction and score to the logger
         logger.record("score", score, i, percentile=True)
