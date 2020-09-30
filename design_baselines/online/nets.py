@@ -5,9 +5,9 @@ import numpy as np
 
 
 class ForwardModel(tf.keras.Sequential):
-    """A Fully Connected Network with several trainable layers"""
+    """A Fully Connected Network with 2 trainable layers"""
 
-    distribution = tfpd.MultivariateNormalDiag
+    distribution = tfpd.Normal
 
     def __init__(self,
                  input_shape,
@@ -36,6 +36,7 @@ class ForwardModel(tf.keras.Sequential):
             initial_min_std).astype(np.float32)), trainable=True)
 
         activations = [tfkl.LeakyReLU if act == 'leaky_relu' else
+                       tfkl.Activation(tf.math.cos) if act == 'cos' else
                        act for act in activations]
 
         layers = [tfkl.Flatten(input_shape=input_shape)]
@@ -46,7 +47,7 @@ class ForwardModel(tf.keras.Sequential):
         layers.append(tfkl.Dense(2))
         super(ForwardModel, self).__init__(layers)
 
-    def get_parameters(self, inputs, **kwargs):
+    def get_params(self, inputs, **kwargs):
         """Return a dictionary of parameters for a particular distribution
         family such as the mean and variance of a gaussian
 
@@ -65,7 +66,7 @@ class ForwardModel(tf.keras.Sequential):
         mean, logstd = tf.split(prediction, 2, axis=-1)
         logstd = self.max_logstd - tf.nn.softplus(self.max_logstd - logstd)
         logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
-        return {"loc": mean, "scale_diag": tf.exp(logstd)}
+        return {"loc": mean, "scale": tf.math.exp(logstd)}
 
     def get_distribution(self, inputs, **kwargs):
         """Return a distribution over the outputs of this model, for example
@@ -82,4 +83,4 @@ class ForwardModel(tf.keras.Sequential):
             a tensorflow probability distribution over outputs of the model
         """
 
-        return self.distribution(**self.get_parameters(inputs, **kwargs))
+        return self.distribution(**self.get_params(inputs, **kwargs))
