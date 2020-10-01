@@ -89,7 +89,10 @@ def gradient_ascent(config):
     held_out_trainer = Ensemble(
         held_out_models,
         forward_model_optim=tf.keras.optimizers.Adam,
-        forward_model_lr=0.001)
+        forward_model_lr=0.001,
+        is_discrete=config['is_discrete'],
+        continuous_noise_std=config.get('continuous_noise_std', 0.0),
+        discrete_smoothing=config.get('discrete_smoothing', 0.6))
 
     # create a bootstrapped data set
     held_out_train_data, held_out_validate_data = task.build(
@@ -133,8 +136,8 @@ def gradient_ascent(config):
             forward_model_optim=tf.keras.optimizers.Adam,
             forward_model_lr=config['forward_model_lr'],
             is_discrete=config['is_discrete'],
-            noise_std=config.get('noise_std', 0.0),
-            keep=config.get('keep', 1.0))
+            continuous_noise_std=config.get('continuous_noise_std', 0.0),
+            discrete_smoothing=config.get('discrete_smoothing', 0.6))
 
         # train the model for an additional number of epochs
         trs.append(trainer)
@@ -146,7 +149,7 @@ def gradient_ascent(config):
     indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
     initial_x = tf.gather(x, indices, axis=0)
     x = tf.math.log(soft_noise(initial_x,
-                               config.get('keep', 0.999))) \
+                               config.get('discrete_smoothing', 0.6))) \
         if config['is_discrete'] else initial_x
 
     # evaluate the starting point
@@ -170,16 +173,22 @@ def gradient_ascent(config):
     # perform gradient ascent on the score through the forward model
     for i in range(1, config['solver_steps'] + 1):
         # back propagate through the forward model
-        grads = []
-        for fm in forward_models:
-            with tf.GradientTape() as tape:
-                tape.watch(x)
+        with tf.GradientTape() as tape:
+            tape.watch(x)
+            predictions = []
+            for fm in forward_models:
                 solution = tf.math.softmax(x) if config['is_discrete'] else x
-                score = fm.get_distribution(solution).mean()
-            grads.append(tape.gradient(score, x))
+                predictions.append(fm.get_distribution(solution).mean())
+            if config['aggregation_method'] == 'mean':
+                score = tf.reduce_min(predictions, axis=0)
+            if config['aggregation_method'] == 'min':
+                score = tf.reduce_min(predictions, axis=0)
+            if config['aggregation_method'] == 'random':
+                score = predictions[np.random.randint(len(predictions))]
+        grads = tape.gradient(score, x)
 
         # use the conservative optimizer to update the solution
-        x = x + config['solver_lr'] * grads[np.random.randint(len(grads))]
+        x = x + config['solver_lr'] * grads
         solution = tf.math.softmax(x) if config['is_discrete'] else x
 
         # evaluate the design using the oracle and the forward model
@@ -198,17 +207,17 @@ def gradient_ascent(config):
         min_of_stddev = tf.reduce_min(held_out_s, axis=0)
         mean_of_mean = tf.reduce_mean(held_out_m, axis=0)
         mean_of_stddev = tf.reduce_mean(held_out_s, axis=0)
-        logger.record(f"oracle/max_of_mean",
+        logger.record(f"held_out/max_of_mean",
                       max_of_mean, i)
-        logger.record(f"oracle/max_of_stddev",
+        logger.record(f"held_out/max_of_stddev",
                       max_of_stddev, i)
-        logger.record(f"oracle/min_of_mean",
+        logger.record(f"held_out/min_of_mean",
                       min_of_mean, i)
-        logger.record(f"oracle/min_of_stddev",
+        logger.record(f"held_out/min_of_stddev",
                       min_of_stddev, i)
-        logger.record(f"oracle/mean_of_mean",
+        logger.record(f"held_out/mean_of_mean",
                       mean_of_mean, i)
-        logger.record(f"oracle/mean_of_stddev",
+        logger.record(f"held_out/mean_of_stddev",
                       mean_of_stddev, i)
 
         # record the prediction and score to the logger

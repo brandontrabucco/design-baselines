@@ -11,7 +11,10 @@ class Ensemble(tf.Module):
     def __init__(self,
                  forward_models,
                  forward_model_optim=tf.keras.optimizers.Adam,
-                 forward_model_lr=0.001):
+                 forward_model_lr=0.001,
+                 is_discrete=False,
+                 continuous_noise_std=0.0,
+                 discrete_smoothing=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -28,6 +31,11 @@ class Ensemble(tf.Module):
         super().__init__()
         self.forward_models = forward_models
         self.bootstraps = len(forward_models)
+
+        # create machinery for sampling adversarial examples
+        self.is_discrete = is_discrete
+        self.noise_std = continuous_noise_std
+        self.keep = discrete_smoothing
 
         # create optimizers for each model in the ensemble
         self.forward_model_optims = [
@@ -91,6 +99,10 @@ class Ensemble(tf.Module):
 
         statistics = dict()
 
+        # corrupt the inputs with noise
+        x0 = soft_noise(x, self.keep) \
+            if self.is_discrete else cont_noise(x, self.noise_std)
+
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
             fm_optim = self.forward_model_optims[i]
@@ -98,7 +110,7 @@ class Ensemble(tf.Module):
             with tf.GradientTape(persistent=True) as tape:
 
                 # calculate the prediction error and accuracy of the model
-                d = fm.get_distribution(x, training=True)
+                d = fm.get_distribution(x0, training=True)
                 nll = -d.log_prob(y)[:, 0]
 
                 # evaluate how correct the rank fo the model predictions are
@@ -138,11 +150,15 @@ class Ensemble(tf.Module):
 
         statistics = dict()
 
+        # corrupt the inputs with noise
+        x0 = soft_noise(x, self.keep) \
+            if self.is_discrete else cont_noise(x, self.noise_std)
+
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
 
             # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(x, training=False)
+            d = fm.get_distribution(x0, training=False)
             nll = -d.log_prob(y)[:, 0]
 
             # evaluate how correct the rank fo the model predictions are
@@ -252,8 +268,8 @@ class MaximumLikelihood(tf.Module):
                  forward_model_optim=tf.keras.optimizers.Adam,
                  forward_model_lr=0.001,
                  is_discrete=False,
-                 noise_std=0.0,
-                 keep=0.0):
+                 continuous_noise_std=0.0,
+                 discrete_smoothing=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -274,8 +290,8 @@ class MaximumLikelihood(tf.Module):
 
         # create machinery for sampling adversarial examples
         self.is_discrete = is_discrete
-        self.noise_std = noise_std
-        self.keep = keep
+        self.noise_std = continuous_noise_std
+        self.keep = discrete_smoothing
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,

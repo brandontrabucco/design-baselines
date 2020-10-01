@@ -3,6 +3,7 @@ from design_baselines.logger import Logger
 from design_baselines.utils import spearman
 from design_baselines.utils import soft_noise
 from design_baselines.csm.trainers import ConservativeMaximumLikelihood
+from design_baselines.csm.trainers import Ensemble
 from design_baselines.csm.nets import ForwardModel
 import tensorflow_probability as tfp
 import tensorflow as tf
@@ -23,29 +24,6 @@ def csm(config):
     # create the training task and logger
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-
-    # make several keras neural networks with different architectures
-    forward_models = [ForwardModel(
-        task.input_shape,
-        activations=activations,
-        hidden=config['hidden_size'],
-        initial_max_std=config['initial_max_std'],
-        initial_min_std=config['initial_min_std'])
-        for activations in config['activations']]
-
-    # make several keras neural networks with different architectures
-    vanilla_models = [ForwardModel(
-        task.input_shape,
-        activations=activations,
-        hidden=config['hidden_size'],
-        initial_max_std=config['initial_max_std'],
-        initial_min_std=config['initial_min_std'])
-        for activations in config['activations']]
-
-    # sync corresponding models
-    for model_a, model_b in zip(
-            forward_models, vanilla_models):
-        model_b.set_weights(model_a.get_weights())
 
     # save the initial dataset statistics for safe keeping
     x = task.x
@@ -89,21 +67,50 @@ def csm(config):
     config['perturbation_lr'] *= np.sqrt(np.prod(x.shape[1:]))
     config['solver_lr'] *= np.sqrt(np.prod(x.shape[1:]))
 
-    trs = []
-    for i, fm in enumerate(forward_models):
+    # make a neural network to predict scores
+    held_out_models = [ForwardModel(
+        task.input_shape,
+        activations=['relu' if i == j else 'tanh' for j in range(8)],
+        hidden=256,
+        initial_max_std=config['initial_max_std'],
+        initial_min_std=config['initial_min_std'])
+        for i in range(8)]
 
-        # create a bootstrapped data set
-        train_data, validate_data = task.build(
-            x=x, y=y, batch_size=config['batch_size'],
-            val_size=config['val_size'], bootstraps=1)
+    # create a trainer for a forward model with a conservative objective
+    held_out_trainer = Ensemble(
+        held_out_models,
+        forward_model_optim=tf.keras.optimizers.Adam,
+        forward_model_lr=0.001,
+        is_discrete=config['is_discrete'],
+        continuous_noise_std=config.get('continuous_noise_std', 0.0),
+        discrete_smoothing=config.get('discrete_smoothing', 0.6))
+
+    # create a bootstrapped data set
+    train_data, validate_data = task.build(
+        x=x, y=y, batch_size=config['batch_size'],
+        val_size=config['val_size'], bootstraps=8)
+
+    # train the model for an additional number of epochs
+    held_out_trainer.launch(train_data, validate_data, logger,
+                            config['epochs'], header=f'held_out/')
+
+    # make several keras neural networks with different architectures
+    forward_models = [ForwardModel(
+        task.input_shape,
+        activations=activations,
+        hidden=config['hidden_size'],
+        initial_max_std=config['initial_max_std'],
+        initial_min_std=config['initial_min_std'])
+        for activations in config['activations']]
+
+    for i, forward_model in enumerate(forward_models):
 
         # create a trainer for a forward model with a conservative objective
         trainer = ConservativeMaximumLikelihood(
-            fm, vanilla_models[i],
+            forward_model,
             forward_model_optim=tf.keras.optimizers.Adam,
             forward_model_lr=config['forward_model_lr'],
-            target_conservative_gap=config['target_conservative_gap'],
-            target_rank_corr_gap=config['target_rank_corr_gap'],
+            target_conservatism=config['target_conservatism'],
             initial_alpha=config['initial_alpha'],
             alpha_optim=tf.keras.optimizers.Adam,
             alpha_lr=config['alpha_lr'],
@@ -111,22 +118,24 @@ def csm(config):
             perturbation_steps=config['perturbation_steps'],
             perturbation_backprop=config['perturbation_backprop'],
             is_discrete=config['is_discrete'],
-            noise_std=config.get('noise_std', 0.0),
-            keep=config.get('keep', 1.0),
-            temp=config.get('temp', 0.001))
+            continuous_noise_std=config.get('continuous_noise_std', 0.0),
+            discrete_smoothing=config.get('discrete_smoothing', 0.6))
+
+        # create a bootstrapped data set
+        train_data, validate_data = task.build(
+            x=x, y=y, batch_size=config['batch_size'],
+            val_size=config['val_size'], bootstraps=1)
 
         # train the model for an additional number of epochs
-        trs.append(trainer)
         trainer.launch(train_data, validate_data, logger,
                        config['epochs'], header=f'oracle_{i}/')
 
     # select the top k initial designs from the dataset
     mean_x = tf.reduce_mean(x, axis=0, keepdims=True)
-    indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
+    indices = tf.math.top_k(y[:, 0], k=config['batch_size'])[1]
     initial_x = tf.gather(x, indices, axis=0)
     x = tf.math.log(soft_noise(initial_x,
-                               config.get('keep', 0.999),
-                               config.get('temp', 0.001))) \
+                               config.get('discrete_smoothing', 0.6))) \
         if config['is_discrete'] else initial_x
 
     # evaluate the starting point
@@ -135,20 +144,11 @@ def csm(config):
     preds = [fm.get_distribution(
         solution).mean() * st_y + mu_y for fm in forward_models]
 
-    # evaluate the conservative gap for every model
-    perturb_preds = [tr.fm.get_distribution(
-        tr.optimize(solution)).mean() * st_y + mu_y for tr in trs]
-    perturb_gap = [
-        b - a for a, b in zip(preds, perturb_preds)]
-
     # record the prediction and score to the logger
     logger.record("score", score, 0, percentile=True)
-    logger.record("distance/travelled",
-                  tf.linalg.norm(solution - initial_x), 0)
-    logger.record("distance/from_mean",
-                  tf.linalg.norm(solution - mean_x), 0)
+    logger.record("distance/travelled", tf.linalg.norm(solution - initial_x), 0)
+    logger.record("distance/from_mean", tf.linalg.norm(solution - mean_x), 0)
     for n, prediction_i in enumerate(preds):
-        logger.record(f"oracle_{n}/gap", perturb_gap[n], 0)
         logger.record(f"oracle_{n}/prediction", prediction_i, 0)
         logger.record(f"rank_corr/{n}_to_real",
                       spearman(prediction_i[:, 0], score[:, 0]), 0)
@@ -159,16 +159,22 @@ def csm(config):
     # perform gradient ascent on the score through the forward model
     for i in range(1, config['solver_steps'] + 1):
         # back propagate through the forward model
-        grads = []
-        for fm in forward_models:
-            with tf.GradientTape() as tape:
-                tape.watch(x)
+        with tf.GradientTape() as tape:
+            tape.watch(x)
+            predictions = []
+            for fm in forward_models:
                 solution = tf.math.softmax(x) if config['is_discrete'] else x
-                score = fm.get_distribution(solution).mean()
-            grads.append(tape.gradient(score, x))
+                predictions.append(fm.get_distribution(solution).mean())
+            if config['aggregation_method'] == 'mean':
+                score = tf.reduce_min(predictions, axis=0)
+            if config['aggregation_method'] == 'min':
+                score = tf.reduce_min(predictions, axis=0)
+            if config['aggregation_method'] == 'random':
+                score = predictions[np.random.randint(len(predictions))]
+        grads = tape.gradient(score, x)
 
         # use the conservative optimizer to update the solution
-        x = x + config['solver_lr'] * grads[np.random.randint(len(grads))]
+        x = x + config['solver_lr'] * grads
         solution = tf.math.softmax(x) if config['is_discrete'] else x
 
         # evaluate the design using the oracle and the forward model
@@ -176,20 +182,35 @@ def csm(config):
         preds = [fm.get_distribution(
             solution).mean() * st_y + mu_y for fm in forward_models]
 
-        # evaluate the conservative gap for every model
-        perturb_preds = [tr.fm.get_distribution(
-            tr.optimize(solution)).mean() * st_y + mu_y for tr in trs]
-        perturb_gap = [
-            b - a for a, b in zip(preds, perturb_preds)]
+        held_out_m = [m.get_distribution(solution).mean()
+                      for m in held_out_models]
+        held_out_s = [m.get_distribution(solution).stddev()
+                      for m in held_out_models]
+
+        max_of_mean = tf.reduce_max(held_out_m, axis=0)
+        max_of_stddev = tf.reduce_max(held_out_s, axis=0)
+        min_of_mean = tf.reduce_min(held_out_m, axis=0)
+        min_of_stddev = tf.reduce_min(held_out_s, axis=0)
+        mean_of_mean = tf.reduce_mean(held_out_m, axis=0)
+        mean_of_stddev = tf.reduce_mean(held_out_s, axis=0)
+        logger.record(f"held_out/max_of_mean",
+                      max_of_mean, i)
+        logger.record(f"held_out/max_of_stddev",
+                      max_of_stddev, i)
+        logger.record(f"held_out/min_of_mean",
+                      min_of_mean, i)
+        logger.record(f"held_out/min_of_stddev",
+                      min_of_stddev, i)
+        logger.record(f"held_out/mean_of_mean",
+                      mean_of_mean, i)
+        logger.record(f"held_out/mean_of_stddev",
+                      mean_of_stddev, i)
 
         # record the prediction and score to the logger
         logger.record("score", score, i, percentile=True)
-        logger.record("distance/travelled",
-                      tf.linalg.norm(solution - initial_x), i)
-        logger.record("distance/from_mean",
-                      tf.linalg.norm(solution - mean_x), i)
+        logger.record("distance/travelled", tf.linalg.norm(solution - initial_x), i)
+        logger.record("distance/from_mean", tf.linalg.norm(solution - mean_x), i)
         for n, prediction_i in enumerate(preds):
-            logger.record(f"oracle_{n}/gap", perturb_gap[n], i)
             logger.record(f"oracle_{n}/prediction", prediction_i, i)
             logger.record(f"oracle_{n}/grad_norm", tf.linalg.norm(
                 tf.reshape(grads[n], [-1, task.input_size]), axis=-1), i)
