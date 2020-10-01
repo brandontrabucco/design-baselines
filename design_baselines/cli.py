@@ -226,6 +226,85 @@ def plot_one(dir, tag, xlabel, ylabel, pkey, pval, iteration, legend):
 @cli.command()
 @click.option('--dir', type=str)
 @click.option('--tag', type=str)
+@click.option('--param', type=str)
+@click.option('--xlabel', type=str)
+@click.option('--ylabel', type=str)
+@click.option('--eval-tag', type=str)
+def plot_comparison(dir, tag, param, xlabel, ylabel, eval_tag):
+
+    import glob
+    import os
+    import re
+    import numpy as np
+    import pickle as pkl
+    import pandas as pd
+    import tensorflow as tf
+    import tqdm
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    sns.set_style("whitegrid")
+    sns.set_context("notebook",
+                    font_scale=3.5,
+                    rc={"lines.linewidth": 3.5,
+                        'grid.linewidth': 2.5})
+
+    # get the experiment ids
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
+    matches = [pattern.search(d) for d in dirs]
+    ids = [int(m.group(2)) for m in matches]
+
+    # sort the files by the experiment ids
+    zipped_lists = zip(ids, dirs)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    ids, dirs = [list(tuple) for tuple in tuples]
+
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
+
+    # get the task and algorithm name
+    task_name = params[0]['task']
+    algo_name = matches[0].group(1)
+
+    # read data from tensor board
+    data = pd.DataFrame(columns=['id', xlabel, ylabel])
+    for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
+        it_to_tag = dict()
+        it_to_eval_tag = dict()
+        for f in glob.glob(os.path.join(d, '*/events.out*')):
+            for e in tf.compat.v1.train.summary_iterator(f):
+                for v in e.summary.value:
+                    if v.tag == tag:
+                        it_to_tag[e.step] = tf.make_ndarray(v.tensor).tolist()
+                    if v.tag == eval_tag:
+                        it_to_eval_tag[e.step] = tf.make_ndarray(v.tensor).tolist()
+
+        if len(it_to_eval_tag) > 0:
+            eval_position = int(np.argmax(list(it_to_eval_tag.values())))
+            iteration = list(it_to_eval_tag.keys())[eval_position]
+            score = it_to_tag[iteration]
+            data = data.append({
+                'id': i,
+                ylabel: score,
+                xlabel: p[param]}, ignore_index=True)
+
+    # save a separate plot for every hyper parameter
+    plt.clf()
+    g = sns.relplot(x=xlabel, y=ylabel, data=data,
+                    kind="line", height=10, aspect=1.33)
+    g.set(title=f'Ablate {task_name}')
+    plt.savefig(f'{algo_name}_{task_name}_ablate_{param}_{tag.replace("/", "_")}.png',
+                bbox_inches='tight')
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--tag', type=str)
 @click.option('--label', type=str)
 @click.option('--pone', type=str, default='perturbation_steps')
 @click.option('--ptwo', type=str, default='initial_alpha')
