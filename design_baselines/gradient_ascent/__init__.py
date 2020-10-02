@@ -10,6 +10,7 @@ import tensorflow_probability as tfp
 import tensorflow as tf
 import numpy as np
 import os
+import glob
 
 
 def gradient_ascent(config):
@@ -241,3 +242,126 @@ def gradient_ascent(config):
             config['logging_dir'], f'score_{i}.npy'), score)
         np.save(os.path.join(
             config['logging_dir'], f'solution_{i}.npy'), solution)
+
+
+def ablate_architecture(config):
+    """Train a forward model and perform model based optimization
+    using a conservative objective function
+
+    Args:
+
+    config: dict
+        a dictionary of hyper parameters such as the learning rate
+    """
+
+    # create the training task and logger
+    logger = Logger(config['logging_dir'])
+    task = StaticGraphTask(config['task'], **config['task_kwargs'])
+
+    # save the initial dataset statistics for safe keeping
+    x = task.x
+    y = task.y
+
+    if config['normalize_ys']:
+        # compute normalization statistics for the score
+        mu_y = np.mean(y, axis=0, keepdims=True).astype(np.float32)
+        y = y - mu_y
+        st_y = np.std(y, axis=0, keepdims=True).astype(np.float32)
+        st_y = np.where(np.equal(st_y, 0), 1, st_y)
+        y = y / st_y
+    else:
+        # compute normalization statistics for the score
+        mu_y = np.zeros_like(y[:1])
+        st_y = np.ones_like(y[:1])
+
+    if config['normalize_xs'] and not config['is_discrete']:
+        # compute normalization statistics for the data vectors
+        mu_x = np.mean(x, axis=0, keepdims=True).astype(np.float32)
+        x = x - mu_x
+        st_x = np.std(x, axis=0, keepdims=True).astype(np.float32)
+        st_x = np.where(np.equal(st_x, 0), 1, st_x)
+        x = x / st_x
+    else:
+        # compute normalization statistics for the score
+        mu_x = np.zeros_like(x[:1])
+        st_x = np.ones_like(x[:1])
+
+    # make a neural network to predict scores
+    held_out_models = [ForwardModel(
+        task.input_shape,
+        activations=config['activations'][0],
+        hidden=256,
+        initial_max_std=config['initial_max_std'],
+        initial_min_std=config['initial_min_std'])
+        for i in range(8)]
+
+    # create a trainer for a forward model with a conservative objective
+    held_out_trainer = Ensemble(
+        held_out_models,
+        forward_model_optim=tf.keras.optimizers.Adam,
+        forward_model_lr=0.001)
+
+    # create a bootstrapped data set
+    held_out_train_data, held_out_validate_data = task.build(
+        x=x, y=y,
+        batch_size=config['batch_size'],
+        val_size=config['val_size'],
+        bootstraps=len(held_out_models))
+
+    # train a held-out model on the validation set
+    for e in range(100):
+
+        statistics = defaultdict(list)
+        for xi, yi, bi in held_out_train_data:
+            for name, tensor in held_out_trainer.train_step(xi, yi, bi).items():
+                statistics["held_out2/" + name].append(tensor)
+
+        for name in statistics.keys():
+            logger.record(
+                name, tf.concat(statistics[name], axis=0), e)
+
+        statistics = defaultdict(list)
+        for xi, yi in held_out_validate_data:
+            for name, tensor in held_out_trainer.validate_step(xi, yi).items():
+                statistics["held_out2/" + name].append(tensor)
+
+        for name in statistics.keys():
+            logger.record(
+                name, tf.concat(statistics[name], axis=0), e)
+
+    def evaluate_solution(solution, evaluations):
+
+        # evaluate the design using the oracle and the forward model
+        held_out_m = [m.get_distribution(solution).mean()
+                      for m in held_out_models]
+        held_out_s = [m.get_distribution(solution).stddev()
+                      for m in held_out_models]
+
+        max_of_mean = tf.reduce_max(held_out_m, axis=0)
+        max_of_stddev = tf.reduce_max(held_out_s, axis=0)
+        min_of_mean = tf.reduce_min(held_out_m, axis=0)
+        min_of_stddev = tf.reduce_min(held_out_s, axis=0)
+        mean_of_mean = tf.reduce_mean(held_out_m, axis=0)
+        mean_of_stddev = tf.reduce_mean(held_out_s, axis=0)
+
+        logger.record(f"oracle/same_architecture/max_of_mean",
+                      max_of_mean, evaluations)
+        logger.record(f"oracle/same_architecture/max_of_stddev",
+                      max_of_stddev, evaluations)
+        logger.record(f"oracle/same_architecture/min_of_mean",
+                      min_of_mean, evaluations)
+        logger.record(f"oracle/same_architecture/min_of_stddev",
+                      min_of_stddev, evaluations)
+        logger.record(f"oracle/same_architecture/mean_of_mean",
+                      mean_of_mean, evaluations)
+        logger.record(f"oracle/same_architecture/mean_of_stddev",
+                      mean_of_stddev, evaluations)
+
+    # train a held-out model on the validation set
+
+    for file_name in glob.glob(
+            os.path.join(config['logging_dir'], f'solution_*.npy')):
+
+        iteration = file_name.split('_')[-1].split('.')[0]
+        solution = np.load(file_name)
+        evaluate_solution(solution, int(iteration))

@@ -8,6 +8,7 @@ from design_baselines.online.nets import ForwardModel
 from collections import defaultdict
 import tensorflow as tf
 import numpy as np
+import glob
 
 
 def online(config):

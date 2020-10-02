@@ -24,6 +24,16 @@ design-baselines compare-runs \
 --tag 'score/100th' \
 --max-iterations 200
 
+design-baselines ablate-architecture \
+--hopper ~/final-results/online/gradient-ascent-hopper/gradient_ascent/ \
+--superconductor ~/final-results/online/gradient-ascent-superconductor/gradient_ascent/ \
+--gfp ~/final-results/online/gradient-ascent-gfp/gradient_ascent/ \
+--molecule ~/final-results/online/gradient-ascent-molecule/gradient_ascent/ \
+--tag 'score/100th' \
+--tag 'score/100th' \
+--tag 'score/100th' \
+--max-iterations 200
+
 """
 
 
@@ -34,6 +44,7 @@ design-baselines compare-runs \
 @click.option('--molecule', multiple=True)
 @click.option('--names', multiple=True)
 @click.option('--tag', type=str)
+@click.option('--dashed-tag', type=str)
 @click.option('--max-iterations', type=int)
 def compare_runs(hopper,
                  superconductor,
@@ -41,8 +52,10 @@ def compare_runs(hopper,
                  molecule,
                  names,
                  tag,
+                 dashed_tag,
                  max_iterations):
 
+    from collections import defaultdict
     import seaborn as sns
     import matplotlib
     import matplotlib.pyplot as plt
@@ -50,6 +63,7 @@ def compare_runs(hopper,
     import os
     import re
     import pandas as pd
+    import numpy as np
     import tensorflow as tf
     import tqdm
 
@@ -105,10 +119,10 @@ def compare_runs(hopper,
             'MoleculeActivity-v0': molecule_dir}
 
     task_to_ylabel = {
-        'HopperController-v0': "Average Return",
-        'Superconductor-v0': "Critical Temperature",
-        'GFP-v0': "Protein Fluorescence",
-        'MoleculeActivity-v0': "Drug Activity"}
+        'HopperController-v0': "Average return",
+        'Superconductor-v0': "Critical temperature",
+        'GFP-v0': "Protein fluorescence",
+        'MoleculeActivity-v0': "Drug activity"}
 
     fig, axes = plt.subplots(
         nrows=1, ncols=4, figsize=(25.0, 5.0))
@@ -129,10 +143,13 @@ def compare_runs(hopper,
         ylabel = task_to_ylabel[task]
         data = pd.DataFrame(columns=[
             'Algorithm',
-            'Gradient Ascent Steps',
+            'Gradient ascent steps',
             ylabel])
 
+        name_to_eval = dict()
+
         for name, task_to_dir_i in name_to_dir.items():
+            it_to_eval_tag = defaultdict(list)
 
             for d in tqdm.tqdm(task_to_dir_i[task]):
                 for f in glob.glob(os.path.join(d, '*/events.out*')):
@@ -142,19 +159,51 @@ def compare_runs(hopper,
 
                                 data = data.append({
                                     'Algorithm': name,
-                                    'Gradient Ascent Steps': e.step,
+                                    'Gradient ascent steps': e.step,
                                     ylabel: tf.make_ndarray(v.tensor).tolist(),
                                     }, ignore_index=True)
 
+                            if v.tag == dashed_tag and e.step < max_iterations:
+                                it_to_eval_tag[e.step].append(
+                                    tf.make_ndarray(v.tensor).tolist())
+
+            name_to_eval[name] = it_to_eval_tag
+
         axis = task_to_axis[task]
 
-        sns.lineplot(
-            x='Gradient Ascent Steps',
+        axis = sns.lineplot(
+            x='Gradient ascent steps',
             y=ylabel,
             hue='Algorithm',
             data=data,
             ax=axis,
+            linewidth=4,
             legend=False)
+
+        iteration = -1
+        for name, it_to_eval_tag in name_to_eval.items():
+            iteration += 1
+            original_data = data.loc[data['Algorithm']
+                                     == name][ylabel].to_numpy()
+            y_min = original_data.min()
+            y_max = original_data.max()
+
+            xs, ys = zip(*it_to_eval_tag.items())
+            xs = np.array(xs)
+            ys = np.array([np.mean(yi) for yi in ys])
+
+            ys = (ys - ys.min()) / (ys.max() - ys.min())
+            ys = ys * (y_max - y_min) + y_min
+
+            indices = np.argsort(xs)
+            xs = xs[indices]
+            ys = ys[indices]
+
+            axis.plot(xs,
+                      ys,
+                      linestyle='--',
+                      linewidth=4,
+                      color=color_palette[iteration])
 
         axis.spines['right'].set_visible(False)
         axis.spines['top'].set_visible(False)
@@ -163,22 +212,252 @@ def compare_runs(hopper,
         axis.yaxis.set_tick_params(labelsize=16)
         axis.xaxis.set_tick_params(labelsize=16)
 
-        axis.set_xlabel('Gradient Ascent Steps', fontsize=24)
-        axis.set_ylabel(ylabel, fontsize=24)
-        axis.set_title(task, fontsize=24)
+        axis.set_xlabel(r'\textbf{Gradient ascent steps}', fontsize=24)
+        axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
         axis.grid(color='grey',
                   linestyle='dotted',
-                  linewidth=1)
+                  linewidth=2)
 
-    plt.legend(name_to_dir.keys(),
-               ncol=len(name_to_dir.keys()),
+    plt.legend([r'\textbf{' + x.capitalize() + '}' for x in name_to_dir.keys()] +
+               [r'\textbf{Prediction ' + x.lower() + '}' for x in name_to_eval.keys()],
+               ncol=len(name_to_dir.keys()) + len(name_to_eval.keys()),
                loc='lower center',
-               bbox_to_anchor=(-1.3, -0.5),
-               fontsize=16,
+               bbox_to_anchor=(-1.4, -0.5),
+               fontsize=20,
                fancybox=True)
     fig.subplots_adjust(bottom=0.3)
     plt.tight_layout()
-    fig.savefig('compare_runs.png')
+    fig.savefig('compare_runs.pdf')
+
+
+"""
+
+design-baselines compare-runs \
+--hopper ~/final-results/online/online-hopper/online/ \
+--hopper ~/final-results/online/gradient-ascent-hopper/gradient_ascent/ \
+--superconductor ~/final-results/online/online-superconductor/online/ \
+--superconductor ~/final-results/online/gradient-ascent-superconductor/gradient_ascent/ \
+--gfp ~/final-results/online/online-gfp/online/ \
+--gfp ~/final-results/online/gradient-ascent-gfp/gradient_ascent/ \
+--molecule ~/final-results/online/online-molecule/online/ \
+--molecule ~/final-results/online/gradient-ascent-molecule/gradient_ascent/ \
+--names 'Conservative Objective Models' \
+--names 'Gradient Ascent' \
+--tag 'score/100th' \
+--max-iterations 500
+
+design-baselines ablate-architecture \
+--hopper ~/final-results/online/gradient-ascent-hopper/gradient_ascent/ \
+--superconductor ~/final-results/online/gradient-ascent-superconductor/gradient_ascent/ \
+--gfp ~/final-results/online/gradient-ascent-gfp/gradient_ascent/ \
+--molecule ~/final-results/online/gradient-ascent-molecule/gradient_ascent/ \
+--tag 'oracle_0/prediction/mean' \
+--evaluator-one 'oracle/min_of_mean/mean' \
+--evaluator-two 'oracle/same_architecture/min_of_mean/mean' \
+--max-iterations 500
+
+"""
+
+
+@cli.command()
+@click.option('--hopper', type=str)
+@click.option('--superconductor', type=str)
+@click.option('--gfp', type=str)
+@click.option('--molecule', type=str)
+@click.option('--tag', type=str)
+@click.option('--evaluator-one', type=str)
+@click.option('--evaluator-two', type=str)
+@click.option('--max-iterations', type=int)
+def ablate_architecture(hopper,
+                        superconductor,
+                        gfp,
+                        molecule,
+                        tag,
+                        evaluator_one,
+                        evaluator_two,
+                        max_iterations):
+
+    from collections import defaultdict
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import glob
+    import os
+    import re
+    import pandas as pd
+    import numpy as np
+    import tensorflow as tf
+    import tqdm
+
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.palplot(palette)
+    sns.set_palette(palette)
+
+    pattern = re.compile(
+        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
+        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+
+    hopper_dir = [d for d in glob.glob(
+        os.path.join(hopper, '*'))
+        if pattern.search(d) is not None]
+    superconductor_dir = [d for d in glob.glob(
+        os.path.join(superconductor, '*'))
+        if pattern.search(d) is not None]
+    gfp_dir = [d for d in glob.glob(
+        os.path.join(gfp, '*'))
+        if pattern.search(d) is not None]
+    molecule_dir = [d for d in glob.glob(
+        os.path.join(molecule, '*'))
+        if pattern.search(d) is not None]
+
+    task_to_dir = {
+        'HopperController-v0': hopper_dir,
+        'Superconductor-v0': superconductor_dir,
+        'GFP-v0': gfp_dir,
+        'MoleculeActivity-v0': molecule_dir}
+
+    task_to_ylabel = {
+        'HopperController-v0': "Predicted return",
+        'Superconductor-v0': "Predicted temperature",
+        'GFP-v0': "Predicted fluorescence",
+        'MoleculeActivity-v0': "Predicted activity"}
+
+    fig, axes = plt.subplots(
+        nrows=1, ncols=4, figsize=(25.0, 5.0))
+
+    task_to_axis = {
+        'HopperController-v0': axes[0],
+        'Superconductor-v0': axes[1],
+        'GFP-v0': axes[2],
+        'MoleculeActivity-v0': axes[3]}
+
+    for task in [
+            'HopperController-v0',
+            'Superconductor-v0',
+            'GFP-v0',
+            'MoleculeActivity-v0']:
+
+        # read data from tensor board
+        ylabel = task_to_ylabel[task]
+        data = pd.DataFrame(columns=[
+            'Algorithm',
+            'Gradient ascent steps',
+            ylabel])
+
+        it_to_eval_one = defaultdict(list)
+        it_to_eval_two = defaultdict(list)
+
+        for d in tqdm.tqdm(task_to_dir[task]):
+            for f in glob.glob(os.path.join(d, '*/events.out*')):
+                for e in tf.compat.v1.train.summary_iterator(f):
+                    for v in e.summary.value:
+                        if v.tag == tag and e.step < max_iterations:
+
+                            data = data.append({
+                                'Gradient ascent steps': e.step,
+                                ylabel: tf.make_ndarray(v.tensor).tolist(),
+                                }, ignore_index=True)
+
+                        if v.tag == evaluator_one and e.step < max_iterations:
+                            it_to_eval_one[e.step].append(
+                                tf.make_ndarray(v.tensor).tolist())
+
+                        if v.tag == evaluator_two and e.step < max_iterations:
+                            it_to_eval_two[e.step].append(
+                                tf.make_ndarray(v.tensor).tolist())
+
+        if len(it_to_eval_one.keys()) == 0:
+            print(task, 'A')
+            exit()
+        if len(it_to_eval_two.keys()) == 0:
+            print(task, 'B')
+            exit()
+
+        axis = task_to_axis[task]
+
+        axis = sns.lineplot(
+            x='Gradient ascent steps',
+            y=ylabel,
+            data=data,
+            ax=axis,
+            linewidth=4,
+            legend=False)
+
+        original_data = data[ylabel].to_numpy()
+        y_min = original_data.min()
+        y_max = original_data.max()
+
+        xs, ys = zip(*it_to_eval_one.items())
+        xs = np.array(xs)
+        ys = np.array([np.mean(yi) for yi in ys])
+
+        ys = (ys - ys.min()) / (ys.max() - ys.min())
+        ys = ys * (y_max - y_min) + y_min
+
+        indices = np.argsort(xs)
+        xs = xs[indices]
+        ys = ys[indices]
+
+        axis.plot(xs,
+                  ys,
+                  linestyle='--',
+                  linewidth=4,
+                  color=color_palette[0])
+
+        xs, ys = zip(*it_to_eval_two.items())
+        xs = np.array(xs)
+        ys = np.array([np.mean(yi) for yi in ys])
+
+        ys = (ys - ys.min()) / (ys.max() - ys.min())
+        ys = ys * (y_max - y_min) / 2 + y_min
+
+        indices = np.argsort(xs)
+        xs = xs[indices]
+        ys = ys[indices]
+
+        axis.plot(xs,
+                  ys,
+                  linestyle='--',
+                  linewidth=4,
+                  color=color_palette[1])
+
+        axis.spines['right'].set_visible(False)
+        axis.spines['top'].set_visible(False)
+        axis.yaxis.set_ticks_position('left')
+        axis.xaxis.set_ticks_position('bottom')
+        axis.yaxis.set_tick_params(labelsize=16)
+        axis.xaxis.set_tick_params(labelsize=16)
+
+        axis.set_xlabel(r'\textbf{Gradient ascent steps}', fontsize=24)
+        axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
+        axis.grid(color='grey',
+                  linestyle='dotted',
+                  linewidth=2)
+
+    plt.legend([r'\textbf{Training Prediction}',
+                r'\textbf{Naive Ensemble}',
+                r'\textbf{Varying Activations}'],
+               ncol=4,
+               loc='lower center',
+               bbox_to_anchor=(-1.4, -0.5),
+               fontsize=20,
+               fancybox=True)
+    fig.subplots_adjust(bottom=0.3)
+    plt.tight_layout()
+    fig.savefig('ablate_architecture.pdf')
 
 
 @cli.command()
@@ -491,6 +770,85 @@ def plot_comparison(dir, tag, param, xlabel, ylabel, eval_tag):
     g.set(title=f'Ablate {task_name}')
     plt.savefig(f'{algo_name}_{task_name}_ablate_{param}_{tag.replace("/", "_")}.png',
                 bbox_inches='tight')
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--tag', type=str)
+@click.option('--eval-tag', type=str)
+def evaluate_offline_per_seed(dir, tag, eval_tag):
+
+    import glob
+    import os
+    import re
+    import numpy as np
+    import pickle as pkl
+    import tensorflow as tf
+    import tqdm
+    import seaborn as sns
+    from collections import defaultdict
+
+    sns.set_style("whitegrid")
+    sns.set_context("notebook",
+                    font_scale=3.5,
+                    rc={"lines.linewidth": 3.5,
+                        'grid.linewidth': 2.5})
+
+    # get the experiment ids
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
+    matches = [pattern.search(d) for d in dirs]
+    ids = [int(m.group(2)) for m in matches]
+
+    # sort the files by the experiment ids
+    zipped_lists = zip(ids, dirs)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    ids, dirs = [list(tuple) for tuple in tuples]
+
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
+
+    # get the task and algorithm name
+    task_name = params[0]['task']
+    algo_name = matches[0].group(1)
+
+    scores = []
+    its = []
+    tag_set = set()
+
+    # read data from tensor board
+    for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
+        it_to_tag = defaultdict(list)
+        it_to_eval_tag = defaultdict(list)
+        for f in glob.glob(os.path.join(d, '*/events.out*')):
+            for e in tf.compat.v1.train.summary_iterator(f):
+                for v in e.summary.value:
+                    if v.tag not in tag_set:
+                        tag_set.add(v.tag)
+                    if v.tag == tag and e.step < 500:
+                        it_to_tag[e.step].append(tf.make_ndarray(v.tensor).tolist())
+                    if v.tag == eval_tag and e.step < 500:
+                        it_to_eval_tag[e.step].append(tf.make_ndarray(v.tensor).tolist())
+
+        if len(it_to_eval_tag.keys()) > 0:
+            keys, values = zip(*it_to_eval_tag.items())
+            values = [np.mean(vs) for vs in values]
+            iteration = keys[int(np.argmax(values))]
+            scores.append(it_to_tag[iteration])
+            its.append(iteration)
+
+    if len(scores) == 0:
+        print(dir, tag, eval_tag, tag_set)
+        exit()
+    mean = np.mean(scores)
+    std = np.std(scores)
+
+    # save a separate plot for every hyper parameter
+    print(f'Evaluate {task_name} At {np.mean(its)}\n\t{mean} +- {std}')
 
 
 @cli.command()
