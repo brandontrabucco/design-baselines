@@ -150,7 +150,8 @@ def cbas(config):
     cbas = CBAS(ensemble,
                 p_vae,
                 q_vae,
-                latent_size=config['latent_size'])
+                latent_size=config['latent_size'],
+                alpha=config['alpha'])
 
     # train and validate the q_vae using online samples
     q_encoder.set_weights(p_encoder.get_weights())
@@ -161,7 +162,7 @@ def cbas(config):
         x, y, w = cbas.generate_data(
             config['online_batches'],
             config['vae_batch_size'],
-            config['percentile'])
+            tf.convert_to_tensor(100 * (i + 1) / config['iterations']))
 
         # evaluate the sampled designs
         score = task.score(x[:config['solver_samples']] * st_x + mu_x)

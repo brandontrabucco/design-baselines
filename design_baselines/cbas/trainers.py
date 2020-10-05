@@ -319,7 +319,8 @@ class WeightedVAE(tf.Module):
 
             # build the kl loss
             kl = dz.kl_divergence(prior)[:, tf.newaxis]
-            total_loss = tf.reduce_mean(w * (nll + self.vae_beta * kl))
+            total_loss = tf.reduce_sum(
+                w * (nll + self.vae_beta * kl)) / tf.reduce_sum(w)
 
         grads = tape.gradient(total_loss, var_list)
         self.optim.apply_gradients(zip(grads, var_list))
@@ -469,7 +470,8 @@ class CBAS(tf.Module):
                  ensemble,
                  p_vae,
                  q_vae,
-                 latent_size=20):
+                 latent_size=20,
+                 alpha=0.2):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -492,6 +494,7 @@ class CBAS(tf.Module):
         self.p_vae = p_vae
         self.q_vae = q_vae
         self.latent_size = latent_size
+        self.alpha = alpha
 
     @tf.function(experimental_relax_shapes=True)
     def generate_data(self,
@@ -554,4 +557,4 @@ class CBAS(tf.Module):
 
         return tf.concat(xs, axis=0), \
                tf.concat(ys, axis=0), \
-               tf.concat(ws, axis=0)
+               tf.math.pow(tf.concat(ws, axis=0), self.alpha)

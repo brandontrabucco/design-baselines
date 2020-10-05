@@ -230,6 +230,106 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
+@click.option('--local-dir', type=str, default='gradient-ascent-hopper')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def normalized_hopper(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate Conservative Score Models on HopperController-v0
+    """
+
+    # Final Version
+
+    from design_baselines.gradient_ascent import gradient_ascent
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             include_dashboard=False,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(gradient_ascent, config={
+        "logging_dir": "data",
+        "task": "HopperController-v0",
+        "task_kwargs": {},
+        "is_discrete": False,
+        "normalize_ys": True,
+        "normalize_xs": True,
+        "continuous_noise_std": 0.0,
+        "val_size": 200,
+        "batch_size": 128,
+        "epochs": 100,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "forward_model_lr": 0.001,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": tune.grid_search([0.1,
+                                       0.05,
+                                       0.02,
+                                       0.01,
+                                       0.005,
+                                       0.002,
+                                       0.001,
+                                       0.0005]),
+        "solver_steps": 1000},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='unnormalized-hopper-hopper')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def unnormalized_hopper(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate Conservative Score Models on HopperController-v0
+    """
+
+    # Final Version
+
+    from design_baselines.gradient_ascent import gradient_ascent
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             include_dashboard=False,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(gradient_ascent, config={
+        "logging_dir": "data",
+        "task": "HopperController-v0",
+        "task_kwargs": {},
+        "is_discrete": False,
+        "normalize_ys": False,
+        "normalize_xs": False,
+        "continuous_noise_std": 0.0,
+        "val_size": 200,
+        "batch_size": 128,
+        "epochs": 100,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "forward_model_lr": 0.001,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": tune.grid_search([0.00005,
+                                       0.00002,
+                                       0.00001,
+                                       0.000005,
+                                       0.000002,
+                                       0.000001,
+                                       0.0000005,
+                                       0.0000002]),
+        "solver_steps": 200},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
 @click.option('--local-dir', type=str, default='gradient-ascent-superconductor')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)

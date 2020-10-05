@@ -8,6 +8,136 @@ def cli():
     """
 
 
+@cli.command()
+@click.option('--dir1', type=str)
+@click.option('--dir2', type=str)
+@click.option('--name1', type=str)
+@click.option('--name2', type=str)
+@click.option('--tag', type=str)
+@click.option('--max-iterations', type=int)
+def plot_two_exp(dir1,
+                 dir2,
+                 name1,
+                 name2,
+                 tag,
+                 max_iterations):
+
+    from collections import defaultdict
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import glob
+    import os
+    import re
+    import pandas as pd
+    import numpy as np
+    import tensorflow as tf
+    import tqdm
+
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.palplot(palette)
+    sns.set_palette(palette)
+
+    pattern = re.compile(
+        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
+        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+
+    dir1 = [d for d in glob.glob(
+        os.path.join(dir1, '*'))
+        if pattern.search(d) is not None]
+    dir2 = [d for d in glob.glob(
+        os.path.join(dir2, '*'))
+        if pattern.search(d) is not None]
+
+    task_to_ylabel = {
+        'HopperController-v0': "Average return"}
+
+    fig, axes = plt.subplots(
+        nrows=1, ncols=1, figsize=(8.0, 8.0))
+
+    task_to_axis = {
+        'HopperController-v0': axes}
+
+    for task in [
+            'HopperController-v0']:
+
+        # read data from tensor board
+        ylabel = task_to_ylabel[task]
+        data = pd.DataFrame(columns=[
+            'Algorithm',
+            'Gradient ascent steps',
+            ylabel])
+
+        for d in tqdm.tqdm(dir1):
+            for f in glob.glob(os.path.join(d, '*/events.out*')):
+                for e in tf.compat.v1.train.summary_iterator(f):
+                    for v in e.summary.value:
+                        if v.tag == tag and e.step < max_iterations:
+
+                            data = data.append({
+                                'Algorithm': name1,
+                                'Gradient ascent steps': e.step,
+                                ylabel: tf.make_ndarray(v.tensor).tolist(),
+                                }, ignore_index=True)
+
+        for d in tqdm.tqdm(dir2):
+            for f in glob.glob(os.path.join(d, '*/events.out*')):
+                for e in tf.compat.v1.train.summary_iterator(f):
+                    for v in e.summary.value:
+                        if v.tag == tag and e.step < max_iterations:
+
+                            data = data.append({
+                                'Algorithm': name2,
+                                'Gradient ascent steps': e.step,
+                                ylabel: tf.make_ndarray(v.tensor).tolist(),
+                                }, ignore_index=True)
+
+        axis = task_to_axis[task]
+
+        axis = sns.lineplot(
+            x='Gradient ascent steps',
+            y=ylabel,
+            hue='Algorithm',
+            data=data,
+            ax=axis,
+            linewidth=4,
+            legend=False)
+
+        axis.spines['right'].set_visible(False)
+        axis.spines['top'].set_visible(False)
+        axis.yaxis.set_ticks_position('left')
+        axis.xaxis.set_ticks_position('bottom')
+        axis.yaxis.set_tick_params(labelsize=16)
+        axis.xaxis.set_tick_params(labelsize=16)
+
+        axis.set_xlabel(r'\textbf{Gradient ascent steps}', fontsize=24)
+        axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
+        axis.grid(color='grey',
+                  linestyle='dotted',
+                  linewidth=2)
+
+    plt.legend([r'\textbf{' + name1.capitalize() + '}',
+                r'\textbf{' + name2.capitalize() + '}'],
+               ncol=1,
+               loc='upper center',
+               fontsize=20,
+               fancybox=True)
+    plt.tight_layout()
+    fig.savefig('plot_two_exp.pdf')
+
+
 """
 
 design-baselines compare-runs \
