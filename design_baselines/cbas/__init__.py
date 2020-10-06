@@ -79,7 +79,10 @@ def cbas(config):
     ensemble = Ensemble(
         forward_models,
         forward_model_optim=tf.keras.optimizers.Adam,
-        forward_model_lr=config['ensemble_lr'])
+        forward_model_lr=config['ensemble_lr'],
+        is_discrete=config['is_discrete'],
+        continuous_noise_std=config.get('continuous_noise_std', 0.0),
+        discrete_keep=config.get('discrete_keep', 1.0))
 
     # create a manager for saving algorithms state to the disk
     ensemble_manager = tf.train.CheckpointManager(
@@ -103,11 +106,15 @@ def cbas(config):
     p_decoder = decoder(task.input_shape,
                         config['latent_size'],
                         hidden=config['hidden_size'])
-    p_vae = WeightedVAE(p_encoder,
-                        p_decoder,
-                        vae_optim=tf.keras.optimizers.Adam,
-                        vae_lr=config['vae_lr'],
-                        vae_beta=config['vae_beta'])
+    p_vae = WeightedVAE(
+        p_encoder,
+        p_decoder,
+        vae_optim=tf.keras.optimizers.Adam,
+        vae_lr=config['vae_lr'],
+        vae_beta=config['vae_beta'],
+        is_discrete=config['is_discrete'],
+        continuous_noise_std=config.get('continuous_noise_std', 0.0),
+        discrete_keep=config.get('discrete_keep', 1.0))
 
     # create a manager for saving algorithms state to the disk
     p_manager = tf.train.CheckpointManager(
@@ -143,15 +150,14 @@ def cbas(config):
     # create a manager for saving algorithms state to the disk
     q_manager = tf.train.CheckpointManager(
         tf.train.Checkpoint(**q_vae.get_saveables()),
-        directory=os.path.join(config['logging_dir'], 'q_vae'),
-        max_to_keep=1)
+        os.path.join(config['logging_dir'], 'q_vae'), 1)
 
     # create the cbas importance weight generator
-    cbas = CBAS(ensemble,
-                p_vae,
-                q_vae,
-                latent_size=config['latent_size'],
-                alpha=config['alpha'])
+    cbas = CBAS(
+        ensemble, p_vae, q_vae,
+        latent_size=config['latent_size'],
+        importance_sampling_exponent=config['importance_sampling_exponent'],
+        importance_sampling_clip=config['importance_sampling_clip'])
 
     # train and validate the q_vae using online samples
     q_encoder.set_weights(p_encoder.get_weights())
@@ -163,6 +169,7 @@ def cbas(config):
             config['online_batches'],
             config['vae_batch_size'],
             tf.convert_to_tensor(100 * (i + 1) / config['iterations']))
+        logger.record("importance_weights", w, i)
 
         # evaluate the sampled designs
         score = task.score(x[:config['solver_samples']] * st_x + mu_x)

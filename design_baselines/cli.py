@@ -15,6 +15,215 @@ def cli():
 @click.option('--name2', type=str)
 @click.option('--tag', type=str)
 @click.option('--max-iterations', type=int)
+def plot_two_sweeps(dir1,
+                    dir2,
+                    name1,
+                    name2,
+                    tag,
+                    max_iterations):
+
+    from collections import defaultdict
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import glob
+    import os
+    import re
+    import pandas as pd
+    import numpy as np
+    import tensorflow as tf
+    import tqdm
+    import pickle as pkl
+
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.palplot(palette)
+    sns.set_palette(palette)
+
+    pattern = re.compile(
+        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
+        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+
+    dir1 = [d for d in glob.glob(
+        os.path.join(dir1, '*'))
+        if pattern.search(d) is not None]
+    dir2 = [d for d in glob.glob(
+        os.path.join(dir2, '*'))
+        if pattern.search(d) is not None]
+
+    # get the hyper parameters for each experiment
+    params1 = []
+    for d in dir1:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params1.append(pkl.load(f))
+
+    # get the hyper parameters for each experiment
+    params2 = []
+    for d in dir2:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params2.append(pkl.load(f))
+
+    task_to_ylabel = {
+        'HopperController-v0': "Average return"}
+
+    fig, axes = plt.subplots(
+        nrows=1, ncols=1, figsize=(8.0, 8.0))
+
+    task_to_axis = {
+        'HopperController-v0': axes}
+
+    lr1_to_alpha = {
+        0.1: 0.0,
+        0.05: 0.0,
+        0.02: 0.5,
+        0.01: 1.0,
+        0.005: 0.5,
+        0.002: 0.0,
+        0.001: 0.0,
+        0.0005: 0.0
+    }
+
+    lr2_to_alpha = {
+        0.00005: 0.0,
+        0.00002: 0.0,
+        0.00001: 0.0,
+        0.000005: 0.0,
+        0.000002: 0.5,
+        0.000001: 1.0,
+        0.0000005: 0.5,
+        0.0000002: 0.0
+    }
+
+    for task in [
+            'HopperController-v0']:
+
+        # read data from tensor board
+        ylabel = task_to_ylabel[task]
+        data = pd.DataFrame(columns=[
+            'Algorithm',
+            'Gradient ascent steps',
+            ylabel])
+
+        lr1_to_score = {}
+        for d, p in tqdm.tqdm(zip(dir1, params1)):
+
+            if p["solver_lr"] not in lr1_to_score:
+                lr1_to_score[p["solver_lr"]] = defaultdict(list)
+
+            for f in glob.glob(os.path.join(d, '*/events.out*')):
+                for e in tf.compat.v1.train.summary_iterator(f):
+                    for v in e.summary.value:
+                        if v.tag == tag and e.step < max_iterations:
+
+                            score = tf.make_ndarray(v.tensor).tolist()
+                            if p["solver_lr"] == 0.01:
+                                data = data.append({
+                                    'Gradient ascent steps': e.step,
+                                    'Algorithm': name1,
+                                    ylabel: score}, ignore_index=True)
+                            else:
+                                lr1_to_score[p["solver_lr"]][e.step].append(score)
+
+        lr2_to_score = dict()
+        for d, p in tqdm.tqdm(zip(dir2, params2)):
+
+            if p["solver_lr"] not in lr2_to_score:
+                lr2_to_score[p["solver_lr"]] = defaultdict(list)
+
+            for f in glob.glob(os.path.join(d, '*/events.out*')):
+                for e in tf.compat.v1.train.summary_iterator(f):
+                    for v in e.summary.value:
+                        if v.tag == tag and e.step < max_iterations:
+
+                            score = tf.make_ndarray(v.tensor).tolist()
+                            if p["solver_lr"] == 0.000001:
+                                data = data.append({
+                                    'Gradient ascent steps': e.step,
+                                    'Algorithm': name2,
+                                    ylabel: score}, ignore_index=True)
+                            else:
+                                lr2_to_score[p["solver_lr"]][e.step].append(score)
+
+        axis = task_to_axis[task]
+
+        axis = sns.lineplot(
+            x='Gradient ascent steps',
+            y=ylabel,
+            hue='Algorithm',
+            data=data,
+            ax=axis,
+            linewidth=4,
+            legend=False)
+
+        for lr, plot_data in lr1_to_score.items():
+            xs = np.array(list(plot_data.keys()))
+            ys = np.array([np.mean(l) for l in plot_data.values()])
+            indices = np.argsort(xs)
+            xs = xs[indices]
+            ys = ys[indices]
+
+            axis.plot(xs,
+                      ys,
+                      linestyle='--',
+                      linewidth=2,
+                      alpha=lr1_to_alpha[lr],
+                      color=color_palette[0])
+
+        for lr, plot_data in lr2_to_score.items():
+            xs = np.array(list(plot_data.keys()))
+            ys = np.array([np.mean(l) for l in plot_data.values()])
+            indices = np.argsort(xs)
+            xs = xs[indices]
+            ys = ys[indices]
+
+            axis.plot(xs,
+                      ys,
+                      linestyle='--',
+                      linewidth=2,
+                      alpha=lr2_to_alpha[lr],
+                      color=color_palette[1])
+
+        axis.spines['right'].set_visible(False)
+        axis.spines['top'].set_visible(False)
+        axis.yaxis.set_ticks_position('left')
+        axis.xaxis.set_ticks_position('bottom')
+        axis.yaxis.set_tick_params(labelsize=16)
+        axis.xaxis.set_tick_params(labelsize=16)
+
+        axis.set_xlabel(r'\textbf{Gradient ascent steps}', fontsize=24)
+        axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
+        axis.grid(color='grey',
+                  linestyle='dotted',
+                  linewidth=2)
+
+    plt.legend([r'\textbf{' + name1.capitalize() + '}',
+                r'\textbf{' + name2.capitalize() + '}'],
+               ncol=1,
+               loc='lower left',
+               fontsize=20,
+               fancybox=True)
+    plt.tight_layout()
+    fig.savefig('plot_two_sweeps.pdf')
+
+
+@cli.command()
+@click.option('--dir1', type=str)
+@click.option('--dir2', type=str)
+@click.option('--name1', type=str)
+@click.option('--name2', type=str)
+@click.option('--tag', type=str)
+@click.option('--max-iterations', type=int)
 def plot_two_exp(dir1,
                  dir2,
                  name1,

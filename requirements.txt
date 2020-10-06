@@ -135,6 +135,5 @@ widgetsnbextension==3.5.1
 wrapt==1.12.1
 yarl==1.4.2
 zipp==3.1.0
--e git+git://github.com/brandontrabucco/design-bench.git#egg=design_bench
--e git+git://github.com/brandontrabucco/morphing-agents.git#egg=morphing_agents
+design-bench[all]
 -e .
