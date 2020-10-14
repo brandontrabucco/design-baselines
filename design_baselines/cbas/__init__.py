@@ -156,8 +156,8 @@ def cbas(config):
     cbas = CBAS(
         ensemble, p_vae, q_vae,
         latent_size=config['latent_size'],
-        importance_sampling_exponent=config['importance_sampling_exponent'],
-        importance_sampling_clip=config['importance_sampling_clip'])
+        max_log_w=config['max_log_w'],
+        min_log_w=config['min_log_w'])
 
     # train and validate the q_vae using online samples
     q_encoder.set_weights(p_encoder.get_weights())
@@ -169,7 +169,20 @@ def cbas(config):
             config['online_batches'],
             config['vae_batch_size'],
             tf.convert_to_tensor(100 * (i + 1) / config['iterations']))
-        logger.record("importance_weights", w, i)
+
+        # record the attention weights
+        logger.record("importance_sampling/weights", w, i)
+
+        # statistics of weights
+        sample_size_0 = tf.reduce_sum(w) ** 2 / tf.reduce_sum(w ** 2)
+        logger.record("importance_sampling/sample_size_0",
+                      sample_size_0, i)
+        sample_size_1 = tf.reduce_sum(w ** 2) ** 2 / tf.reduce_sum(w ** 4)
+        logger.record("importance_sampling/sample_size_1",
+                      sample_size_1, i)
+        sample_size_2 = tf.reduce_sum(w ** 2) ** 3 / tf.reduce_sum(w ** 3) ** 2
+        logger.record("importance_sampling/sample_size_2",
+                      sample_size_2, i)
 
         # evaluate the sampled designs
         score = task.score(x[:config['solver_samples']] * st_x + mu_x)

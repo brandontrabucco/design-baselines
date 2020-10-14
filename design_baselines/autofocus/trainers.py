@@ -1,4 +1,6 @@
 from design_baselines.utils import spearman
+from design_baselines.utils import disc_noise
+from design_baselines.utils import cont_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
 import tensorflow_probability as tfp
@@ -10,7 +12,10 @@ class Ensemble(tf.Module):
     def __init__(self,
                  forward_models,
                  forward_model_optim=tf.keras.optimizers.Adam,
-                 forward_model_lr=0.001):
+                 forward_model_lr=0.001,
+                 is_discrete=False,
+                 continuous_noise_std=0.0,
+                 discrete_keep=1.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -27,6 +32,9 @@ class Ensemble(tf.Module):
         super().__init__()
         self.forward_models = forward_models
         self.bootstraps = len(forward_models)
+        self.is_discrete = is_discrete
+        self.continuous_noise_std = continuous_noise_std
+        self.discrete_keep = discrete_keep
 
         # create optimizers for each model in the ensemble
         self.forward_model_optims = [
@@ -82,6 +90,8 @@ class Ensemble(tf.Module):
             a batch of training labels shaped like [batch_size, 1]
         b: tf.Tensor
             bootstrap indicators shaped like [batch_size, num_oracles]
+        w: tf.Tensor
+            tensor of importance weights shaped like [batch_size, 1]
 
         Returns:
 
@@ -95,6 +105,12 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
             fm_optim = self.forward_model_optims[i]
 
+            # corrupt the inputs with noise
+            if self.is_discrete:
+                x = disc_noise(x, keep=self.discrete_keep, temp=1e-3)
+            else:
+                x = cont_noise(x, self.continuous_noise_std)
+
             with tf.GradientTape(persistent=True) as tape:
 
                 # calculate the prediction error and accuracy of the model
@@ -105,8 +121,8 @@ class Ensemble(tf.Module):
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
                 # build the total loss and weight by the bootstrap
-                total_loss = tf.math.divide_no_nan(tf.reduce_sum(
-                    w[:, 0] * b[:, i] * nll), tf.reduce_sum(b[:, i]))
+                total_loss = tf.math.divide_no_nan(
+                    tf.reduce_sum(w * b[:, i] * nll), tf.reduce_sum(b[:, i]))
 
             grads = tape.gradient(total_loss, fm.trainable_variables)
             fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
@@ -140,6 +156,12 @@ class Ensemble(tf.Module):
 
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
+
+            # corrupt the inputs with noise
+            if self.is_discrete:
+                x = disc_noise(x, keep=self.discrete_keep, temp=1e-3)
+            else:
+                x = cont_noise(x, self.continuous_noise_std)
 
             # calculate the prediction error and accuracy of the model
             d = fm.get_distribution(x, training=False)
@@ -252,7 +274,10 @@ class WeightedVAE(tf.Module):
                  decoder,
                  vae_optim=tf.keras.optimizers.Adam,
                  vae_lr=0.001,
-                 vae_beta=1.0):
+                 vae_beta=1.0,
+                 is_discrete=False,
+                 continuous_noise_std=0.0,
+                 discrete_keep=1.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -275,6 +300,9 @@ class WeightedVAE(tf.Module):
         self.decoder = decoder
         self.optim = vae_optim(learning_rate=vae_lr)
         self.vae_beta = vae_beta
+        self.is_discrete = is_discrete
+        self.continuous_noise_std = continuous_noise_std
+        self.discrete_keep = discrete_keep
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
@@ -303,6 +331,12 @@ class WeightedVAE(tf.Module):
         var_list = []
         var_list.extend(self.encoder.trainable_variables)
         var_list.extend(self.decoder.trainable_variables)
+
+        # corrupt the inputs with noise
+        if self.is_discrete:
+            x = disc_noise(x, keep=self.discrete_keep, temp=1e-3)
+        else:
+            x = cont_noise(x, self.continuous_noise_std)
 
         with tf.GradientTape() as tape:
 
@@ -351,6 +385,12 @@ class WeightedVAE(tf.Module):
         """
 
         statistics = dict()
+
+        # corrupt the inputs with noise
+        if self.is_discrete:
+            x = disc_noise(x, keep=self.discrete_keep, temp=1e-3)
+        else:
+            x = cont_noise(x, self.continuous_noise_std)
 
         # build distributions for the data x and latent variable z
         dz = self.encoder.get_distribution(x, training=False)
@@ -470,7 +510,9 @@ class CBAS(tf.Module):
                  ensemble,
                  p_vae,
                  q_vae,
-                 latent_size=20):
+                 latent_size=20,
+                 max_log_w=2.0,
+                 min_log_w=-4.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -493,6 +535,8 @@ class CBAS(tf.Module):
         self.p_vae = p_vae
         self.q_vae = q_vae
         self.latent_size = latent_size
+        self.max_log = max_log_w
+        self.min_log = min_log_w
 
     @tf.function(experimental_relax_shapes=True)
     def generate_data(self,
@@ -540,19 +584,24 @@ class CBAS(tf.Module):
             while len(log_w.shape) > 2:
                 log_w = tf.reduce_sum(log_w, axis=1)
 
+            # soft clipping of the importance weights
+            log_w = self.max_log - tf.nn.softplus(self.max_log - log_w)
+            log_w = self.min_log + tf.nn.softplus(log_w - self.min_log)
+            w = tf.math.exp(log_w)
+
+            # add the collected samples to the dataset
             xs.append(x)
             ys.append(y)
-            ws.append(tf.math.exp(log_w))
+            ws.append(w)
 
         # locate the cutoff for the scores below the percentile
         gamma = tfp.stats.percentile(ys, percentile)
-
         for j in range(num_batches):
-
             # re-weight by the cumulative probability of the score
             d = self.ensemble.get_distribution(xs[j])
-            ws[j] *= 1.0 - d.cdf(tf.fill([num_samples, 1], gamma))
+            ws[j] = ws[j] * (1.0 - d.cdf(tf.fill([num_samples, 1], gamma)))
 
+        # manipulate the importance weights to reduce variance
         return tf.concat(xs, axis=0), \
                tf.concat(ys, axis=0), \
                tf.concat(ws, axis=0)
@@ -583,6 +632,8 @@ class CBAS(tf.Module):
                 p_dx.log_prob(x)[..., tf.newaxis]
         while len(log_w.shape) > 2:
             log_w = tf.reduce_sum(log_w, axis=1)
+        log_w = self.max_log - tf.nn.softplus(self.max_log - log_w)
+        log_w = self.min_log + tf.nn.softplus(log_w - self.min_log)
         return tf.math.exp(log_w)
 
     def autofocus_weights(self, x, batch_size=32):

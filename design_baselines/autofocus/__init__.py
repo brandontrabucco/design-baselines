@@ -80,7 +80,10 @@ def autofocus(config):
     ensemble = Ensemble(
         forward_models,
         forward_model_optim=tf.keras.optimizers.Adam,
-        forward_model_lr=config['ensemble_lr'])
+        forward_model_lr=config['ensemble_lr'],
+        is_discrete=config['is_discrete'],
+        continuous_noise_std=config.get('continuous_noise_std', 0.0),
+        discrete_keep=config.get('discrete_keep', 1.0))
 
     # create a manager for saving algorithms state to the disk
     ensemble_manager = tf.train.CheckpointManager(
@@ -104,11 +107,15 @@ def autofocus(config):
     p_decoder = decoder(task.input_shape,
                         config['latent_size'],
                         hidden=config['hidden_size'])
-    p_vae = WeightedVAE(p_encoder,
-                        p_decoder,
-                        vae_optim=tf.keras.optimizers.Adam,
-                        vae_lr=config['vae_lr'],
-                        vae_beta=config['vae_beta'])
+    p_vae = WeightedVAE(
+        p_encoder,
+        p_decoder,
+        vae_optim=tf.keras.optimizers.Adam,
+        vae_lr=config['vae_lr'],
+        vae_beta=config['vae_beta'],
+        is_discrete=config['is_discrete'],
+        continuous_noise_std=config.get('continuous_noise_std', 0.0),
+        discrete_keep=config.get('discrete_keep', 1.0))
 
     # create a manager for saving algorithms state to the disk
     p_manager = tf.train.CheckpointManager(
@@ -135,23 +142,27 @@ def autofocus(config):
     q_decoder = decoder(task.input_shape,
                         config['latent_size'],
                         hidden=config['hidden_size'])
-    q_vae = WeightedVAE(q_encoder,
-                        q_decoder,
-                        vae_optim=tf.keras.optimizers.Adam,
-                        vae_lr=config['vae_lr'],
-                        vae_beta=config['vae_beta'])
+    q_vae = WeightedVAE(
+        q_encoder,
+        q_decoder,
+        vae_optim=tf.keras.optimizers.Adam,
+        vae_lr=config['vae_lr'],
+        vae_beta=config['vae_beta'],
+        is_discrete=config['is_discrete'],
+        continuous_noise_std=config.get('continuous_noise_std', 0.0),
+        discrete_keep=config.get('discrete_keep', 1.0))
 
     # create a manager for saving algorithms state to the disk
     q_manager = tf.train.CheckpointManager(
         tf.train.Checkpoint(**q_vae.get_saveables()),
-        directory=os.path.join(config['logging_dir'], 'q_vae'),
-        max_to_keep=1)
+        os.path.join(config['logging_dir'], 'q_vae'), 1)
 
     # create the cbas importance weight generator
-    cbas = CBAS(ensemble,
-                p_vae,
-                q_vae,
-                latent_size=config['latent_size'])
+    cbas = CBAS(
+        ensemble, p_vae, q_vae,
+        latent_size=config['latent_size'],
+        max_log_w=config['max_log_w'],
+        min_log_w=config['min_log_w'])
 
     # train and validate the q_vae using online samples
     q_encoder.set_weights(p_encoder.get_weights())
@@ -162,7 +173,21 @@ def autofocus(config):
         x_t, y_t, w = cbas.generate_data(
             config['online_batches'],
             config['vae_batch_size'],
-            config['percentile'])
+            tf.convert_to_tensor(100 * (i + 1) / config['iterations']))
+
+        # record the attention weights
+        logger.record("importance_sampling/weights", w, i)
+
+        # statistics of weights
+        sample_size_0 = tf.reduce_sum(w) ** 2 / tf.reduce_sum(w ** 2)
+        logger.record("importance_sampling/sample_size_0",
+                      sample_size_0, i)
+        sample_size_1 = tf.reduce_sum(w ** 2) ** 2 / tf.reduce_sum(w ** 4)
+        logger.record("importance_sampling/sample_size_1",
+                      sample_size_1, i)
+        sample_size_2 = tf.reduce_sum(w ** 2) ** 3 / tf.reduce_sum(w ** 3) ** 2
+        logger.record("importance_sampling/sample_size_2",
+                      sample_size_2, i)
 
         # evaluate the sampled designs
         score = task.score(x_t[:config['solver_samples']] * st_x + mu_x)
@@ -196,6 +221,20 @@ def autofocus(config):
             importance_weights=v.numpy(),
             batch_size=config['ensemble_batch_size'],
             val_size=config['val_size'])
+
+        # record the attention weights
+        logger.record("importance_sampling/oracle_weights", v, i)
+
+        # statistics of weights
+        sample_size_0 = tf.reduce_sum(v) ** 2 / tf.reduce_sum(v ** 2)
+        logger.record("importance_sampling/oracle_sample_size_0",
+                      sample_size_0, i)
+        sample_size_1 = tf.reduce_sum(v ** 2) ** 2 / tf.reduce_sum(v ** 4)
+        logger.record("importance_sampling/oracle_sample_size_1",
+                      sample_size_1, i)
+        sample_size_2 = tf.reduce_sum(v ** 2) ** 3 / tf.reduce_sum(v ** 3) ** 2
+        logger.record("importance_sampling/oracle_sample_size_2",
+                      sample_size_2, i)
 
         # train a vae fit using weighted maximum likelihood
         start_epoch = config['autofocus_epochs'] * i + \

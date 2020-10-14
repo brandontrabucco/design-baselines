@@ -43,7 +43,12 @@ class Logger(object):
         step = tf.cast(tf.convert_to_tensor(step), tf.int64)
         with self.writer.as_default():
 
-            if percentile:
+            if tf.equal(tf.size(value), 1):
+
+                # log one statistic of the incoming tensors
+                tf.summary.scalar(key, value, step=step)
+
+            elif percentile:
 
                 # log several statistics of the incoming tensors
                 tf.summary.scalar(key + '/100th',

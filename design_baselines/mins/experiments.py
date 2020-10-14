@@ -147,7 +147,8 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'split_percentile': tune.grid_search([
+            100, 90, 80, 70, 60, 50, 40, 30, 20, 10])},
         "val_size": 200,
         "offline": False,
         "is_discrete": False,
@@ -204,7 +205,8 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
-        "task_kwargs": {'split_percentile': 80},
+        "task_kwargs": {'split_percentile': tune.grid_search([
+            100, 90, 80, 70, 60, 50, 40, 30, 20, 10])},
         "val_size": 200,
         "offline": False,
         "is_discrete": False,
@@ -261,7 +263,8 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
-        "task_kwargs": {'split_percentile': 80},
+        "task_kwargs": {'split_percentile': tune.grid_search([
+            100, 90, 80, 70, 60, 50, 40, 30, 20, 10])},
         "val_size": 200,
         "offline": False,
         "is_discrete": True,
@@ -320,7 +323,9 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "GFP-v0",
-        "task_kwargs": {'seed': tune.randint(1000)},
+        "task_kwargs": {'seed': tune.randint(1000),
+                        'split_percentile': tune.grid_search([
+            100, 90, 80, 70, 60, 50, 40, 30, 20, 10])},
         "val_size": 200,
         "offline": False,
         "is_discrete": True,

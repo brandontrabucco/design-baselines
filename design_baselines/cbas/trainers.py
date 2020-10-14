@@ -351,8 +351,7 @@ class WeightedVAE(tf.Module):
 
             # build the kl loss
             kl = dz.kl_divergence(prior)[:, tf.newaxis]
-            total_loss = tf.reduce_sum(
-                w * (nll + self.vae_beta * kl)) / tf.reduce_sum(w)
+            total_loss = tf.reduce_mean(w * (nll + self.vae_beta * kl))
 
         grads = tape.gradient(total_loss, var_list)
         self.optim.apply_gradients(zip(grads, var_list))
@@ -509,8 +508,8 @@ class CBAS(tf.Module):
                  p_vae,
                  q_vae,
                  latent_size=20,
-                 importance_sampling_exponent=0.2,
-                 importance_sampling_clip=0.05):
+                 max_log_w=2.0,
+                 min_log_w=-4.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -533,8 +532,8 @@ class CBAS(tf.Module):
         self.p_vae = p_vae
         self.q_vae = q_vae
         self.latent_size = latent_size
-        self.exponent = importance_sampling_exponent
-        self.clip = importance_sampling_clip
+        self.max_log = max_log_w
+        self.min_log = min_log_w
 
     @tf.function(experimental_relax_shapes=True)
     def generate_data(self,
@@ -582,11 +581,12 @@ class CBAS(tf.Module):
             while len(log_w.shape) > 2:
                 log_w = tf.reduce_sum(log_w, axis=1)
 
-            # reduce variance in the generative model
+            # soft clipping of the importance weights
+            log_w = self.max_log - tf.nn.softplus(self.max_log - log_w)
+            log_w = self.min_log + tf.nn.softplus(log_w - self.min_log)
             w = tf.math.exp(log_w)
-            w = tf.math.pow(w, self.exponent)
-            w = tf.clip_by_value(w, self.clip, 1.0 - self.clip)
 
+            # add the collected samples to the dataset
             xs.append(x)
             ys.append(y)
             ws.append(w)
@@ -597,7 +597,7 @@ class CBAS(tf.Module):
 
             # re-weight by the cumulative probability of the score
             d = self.ensemble.get_distribution(xs[j])
-            ws[j] *= 1.0 - d.cdf(tf.fill([num_samples, 1], gamma))
+            ws[j] = ws[j] * (1.0 - d.cdf(tf.fill([num_samples, 1], gamma)))
 
         # manipulate the importance weights to reduce variance
         return tf.concat(xs, axis=0), \

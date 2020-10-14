@@ -819,19 +819,17 @@ def plot(dir, tag, xlabel, ylabel, separate_runs):
     import matplotlib
     import matplotlib.pyplot as plt
 
-    plt.rcParams['text.usetex'] = True
-
+    plt.rcParams['text.usetex'] = False
     matplotlib.rc('font', family='serif', serif='cm10')
     matplotlib.rc('mathtext', fontset='cm')
-
-    font = {'family': 'normal',
-            'weight': 'normal',
-            'size': 13}
-
-    matplotlib.rc('font', **font)
-
-    color_palette = ['#EE7733', '#0077BB', '#33BBEE', '#009988', '#CC3311', '#EE3377', '#BBBBBB', '#000000']
-
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
     palette = sns.color_palette(color_palette)
     sns.palplot(palette)
     sns.set_palette(palette)
@@ -940,7 +938,7 @@ def plot_task(task, task_kwargs, name):
     g.ax.spines['bottom'].set_color('black')
     g.ax.spines['bottom'].set_linewidth(3.5)
     g.ax.set_title(f'{task}', pad=64)
-    plt.ticklabel_format(axis="y", style="sci", scilimits=(0,0))
+    plt.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
     plt.savefig(f'{task}.png',
                 bbox_inches='tight')
 
@@ -1033,14 +1031,15 @@ def plot_one(dir, tag, xlabel, ylabel, pkey, pval, iteration, legend):
 
 
 @cli.command()
-@click.option('--dir', type=str)
+@click.option('--superconductor', type=str)
+@click.option('--molecule', type=str)
 @click.option('--tag', type=str)
 @click.option('--param', type=str)
 @click.option('--xlabel', type=str)
-@click.option('--ylabel', type=str)
 @click.option('--eval-tag', type=str)
-def plot_comparison(dir, tag, param, xlabel, ylabel, eval_tag):
+def plot_comparison(superconductor, molecule, tag, param, xlabel, eval_tag):
 
+    from collections import defaultdict
     import glob
     import os
     import re
@@ -1051,64 +1050,112 @@ def plot_comparison(dir, tag, param, xlabel, ylabel, eval_tag):
     import tqdm
     import seaborn as sns
     import matplotlib.pyplot as plt
+    import matplotlib
 
-    sns.set_style("whitegrid")
-    sns.set_context("notebook",
-                    font_scale=3.5,
-                    rc={"lines.linewidth": 3.5,
-                        'grid.linewidth': 2.5})
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.palplot(palette)
+    sns.set_palette(palette)
 
-    # get the experiment ids
-    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
-    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
-    matches = [pattern.search(d) for d in dirs]
-    ids = [int(m.group(2)) for m in matches]
+    pattern = re.compile(
+        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
+        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
 
-    # sort the files by the experiment ids
-    zipped_lists = zip(ids, dirs)
-    sorted_pairs = sorted(zipped_lists)
-    tuples = zip(*sorted_pairs)
-    ids, dirs = [list(tuple) for tuple in tuples]
+    superconductor_dir = [d for d in glob.glob(
+        os.path.join(superconductor, '*'))
+        if pattern.search(d) is not None]
+    molecule_dir = [d for d in glob.glob(
+        os.path.join(molecule, '*'))
+        if pattern.search(d) is not None]
 
-    # get the hyper parameters for each experiment
-    params = []
-    for d in dirs:
-        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
-            params.append(pkl.load(f))
+    task_to_dir = {
+        'Superconductor-v0': superconductor_dir,
+        'MoleculeActivity-v0': molecule_dir}
 
-    # get the task and algorithm name
-    task_name = params[0]['task']
-    algo_name = matches[0].group(1)
+    task_to_ylabel = {
+        'Superconductor-v0': "Critical temperature",
+        'MoleculeActivity-v0': "Drug activity"}
 
-    # read data from tensor board
-    data = pd.DataFrame(columns=['id', xlabel, ylabel])
-    for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
-        it_to_tag = dict()
-        it_to_eval_tag = dict()
-        for f in glob.glob(os.path.join(d, '*/events.out*')):
-            for e in tf.compat.v1.train.summary_iterator(f):
-                for v in e.summary.value:
-                    if v.tag == tag:
-                        it_to_tag[e.step] = tf.make_ndarray(v.tensor).tolist()
-                    if v.tag == eval_tag:
-                        it_to_eval_tag[e.step] = tf.make_ndarray(v.tensor).tolist()
+    fig, axes = plt.subplots(
+        nrows=1, ncols=2, figsize=(12.5, 5.0))
+
+    task_to_axis = {
+        'Superconductor-v0': axes[0],
+        'MoleculeActivity-v0': axes[1]}
+
+    for task in [
+            'Superconductor-v0',
+            'MoleculeActivity-v0']:
+
+        ylabel = task_to_ylabel[task]
+        dirs = task_to_dir[task]
+
+        # get the hyper parameters for each experiment
+        params = []
+        for d in dirs:
+            with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+                params.append(pkl.load(f))
+
+        # read data from tensor board
+        data = pd.DataFrame(columns=[xlabel, ylabel])
+        it_to_tag = defaultdict(list)
+        it_to_eval_tag = defaultdict(list)
+        it_to_p = defaultdict(list)
+        for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
+            for f in glob.glob(os.path.join(d, '*/events.out*')):
+                for e in tf.compat.v1.train.summary_iterator(f):
+                    for v in e.summary.value:
+                        if v.tag == tag:
+                            it_to_tag[e.step].append(
+                                tf.make_ndarray(v.tensor).tolist())
+                            it_to_p[e.step].append(p[param])
+                        if v.tag == eval_tag:
+                            it_to_eval_tag[e.step].append(
+                                tf.make_ndarray(v.tensor).tolist())
 
         if len(it_to_eval_tag) > 0:
-            eval_position = int(np.argmax(list(it_to_eval_tag.values())))
+            eval_position = int(np.argmax(
+                [np.mean(vals) for vals in it_to_eval_tag.values()]))
             iteration = list(it_to_eval_tag.keys())[eval_position]
-            score = it_to_tag[iteration]
-            data = data.append({
-                'id': i,
-                ylabel: score,
-                xlabel: p[param]}, ignore_index=True)
+            for score, p in zip(it_to_tag[iteration], it_to_p[iteration]):
+                data = data.append({
+                    ylabel: score,
+                    xlabel: p}, ignore_index=True)
 
-    # save a separate plot for every hyper parameter
-    plt.clf()
-    g = sns.relplot(x=xlabel, y=ylabel, data=data,
-                    kind="line", height=10, aspect=1.33)
-    g.set(title=f'Ablate {task_name}')
-    plt.savefig(f'{algo_name}_{task_name}_ablate_{param}_{tag.replace("/", "_")}.png',
-                bbox_inches='tight')
+        axis = task_to_axis[task]
+        axis.spines['right'].set_visible(False)
+        axis.spines['top'].set_visible(False)
+        axis.yaxis.set_ticks_position('left')
+        axis.xaxis.set_ticks_position('bottom')
+        axis.yaxis.set_tick_params(labelsize=16)
+        axis.xaxis.set_tick_params(labelsize=16)
+
+        sns.lineplot(x=xlabel,
+                     y=ylabel,
+                     data=data,
+                     ax=axis,
+                     linewidth=4,
+                     legend=False)
+        axis.set_xlabel(r'\textbf{' + xlabel + '}', fontsize=24)
+        axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
+        axis.grid(color='grey',
+                  linestyle='dotted',
+                  linewidth=2)
+
+    fig.subplots_adjust(bottom=0.3)
+    plt.tight_layout()
+    fig.savefig('plot_comparison.pdf')
 
 
 @cli.command()
