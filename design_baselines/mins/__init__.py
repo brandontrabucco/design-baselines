@@ -9,6 +9,7 @@ from design_baselines.mins.nets import DiscreteGenerator
 from design_baselines.mins.nets import ContinuousGenerator
 from design_baselines.mins.utils import get_weights
 from design_baselines.mins.utils import get_synthetic_data
+from design_baselines.utils import render_video
 import tensorflow as tf
 import numpy as np
 import os
@@ -324,3 +325,8 @@ def mins(config):
                       actual_ys * st_y + mu_y,
                       iteration + 1,
                       percentile=True)
+
+    # render a video of the best solution found at the end
+    render_video(config,
+                 task,
+                 (solver_xs * st_x + mu_x)[np.argmax(np.reshape(actual_ys, [-1]))])

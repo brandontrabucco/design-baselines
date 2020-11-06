@@ -209,8 +209,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
-        "task_kwargs": {'split_percentile': tune.grid_search([
-            100, 90, 80, 70, 60, 50, 40, 30, 20, 10])},
+        "task_kwargs": {'split_percentile': 100},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
@@ -226,7 +225,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
-        "solver_steps": 1000},
+        "solver_steps": 200},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,

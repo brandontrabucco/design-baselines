@@ -147,3 +147,41 @@ def generate_ensemble(num_layers, *activations):
         return [[act] for act in activations]
     return [[act, *o] for act in activations
             for o in generate_ensemble(num_layers - 1, *activations)]
+
+
+def render_video(config, task, solution):
+
+    if config["task"] == "HopperController-v0":
+
+        import gym
+        import os
+        import numpy as np
+        from skvideo.io import FFmpegWriter
+        out = FFmpegWriter(os.path.join(
+            config['logging_dir'], f'vid.mp4'))
+
+        weights = []
+        for s in task.wrapped_task.stream_shapes:
+            weights.append(np.reshape(solution[0:np.prod(s)], s))
+            solution = solution[np.prod(s):]
+
+        weights.pop(-1)
+
+        def mlp_policy(h):
+            h = np.tanh(h @ weights[0] + weights[1])
+            h = np.tanh(h @ weights[2] + weights[3])
+            return h @ weights[4] + weights[5]
+
+        env = gym.make(task.wrapped_task.env_name)
+
+        for i in range(5):
+            obs, done = env.reset(), False
+            path_returns = np.zeros([1], dtype=np.float32)
+            while not done:
+                obs, rew, done, info = env.step(mlp_policy(obs))
+                path_returns += rew.astype(np.float32)
+
+                out.writeFrame(env.render(
+                    mode='rgb_array', height=500, width=500))
+
+        out.close()

@@ -9,6 +9,158 @@ def cli():
 
 
 @cli.command()
+@click.option('--dir', type=str)
+@click.option('--name', type=str)
+@click.option('--tag', type=str)
+@click.option('--max-iterations', type=int)
+def plot_sample_size(dir,
+                     name,
+                     tag,
+                     max_iterations):
+
+    from collections import defaultdict
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import glob
+    import os
+    import re
+    import pandas as pd
+    import numpy as np
+    import tensorflow as tf
+    import tqdm
+    import pickle as pkl
+
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.palplot(palette)
+    sns.set_palette(palette)
+
+    pattern = re.compile(
+        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
+        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+
+    dirs = [d for d in glob.glob(
+        os.path.join(dir, '*'))
+        if pattern.search(d) is not None]
+
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
+
+    task_to_ylabel = {
+        'HopperController-v0': "Effective sample size"}
+
+    fig, axes = plt.subplots(
+        nrows=1, ncols=1, figsize=(8.0, 8.0))
+
+    task_to_axis = {
+        'HopperController-v0': axes}
+
+    sp_to_alpha = {
+        10: 0.5,
+        20: 1.0,
+        30: 0.5,
+        40: 0.0,
+        50: 0.0,
+        60: 0.0,
+        70: 0.0,
+        80: 0.0,
+        90: 0.0,
+        100: 0.0
+    }
+
+    for task in [
+            'HopperController-v0']:
+
+        # read data from tensor board
+        ylabel = task_to_ylabel[task]
+        data = pd.DataFrame(columns=[
+            'Algorithm',
+            'Importance sampling iteration',
+            ylabel])
+
+        sp_to_score = {}
+        for d, p in tqdm.tqdm(zip(dirs, params)):
+
+            if p["task_kwargs"]["split_percentile"] not in sp_to_score:
+                sp_to_score[p["task_kwargs"]["split_percentile"]] = defaultdict(list)
+
+            for f in glob.glob(os.path.join(d, '*/events.out*')):
+                for e in tf.compat.v1.train.summary_iterator(f):
+                    for v in e.summary.value:
+                        if v.tag == tag and e.step < max_iterations:
+
+                            score = tf.make_ndarray(v.tensor).tolist()
+                            if p["task_kwargs"]["split_percentile"] == 20:
+                                data = data.append({
+                                    'Importance sampling iteration': e.step,
+                                    'Algorithm': name,
+                                    ylabel: score}, ignore_index=True)
+                            else:
+                                sp_to_score[p["task_kwargs"]["split_percentile"]][e.step].append(score)
+
+        axis = task_to_axis[task]
+
+        axis = sns.lineplot(
+            x='Importance sampling iteration',
+            y=ylabel,
+            hue='Algorithm',
+            data=data,
+            ax=axis,
+            linewidth=4,
+            legend=False)
+
+        for lr, plot_data in sp_to_score.items():
+            xs = np.array(list(plot_data.keys()))
+            ys = np.array([np.mean(l) for l in plot_data.values()])
+            indices = np.argsort(xs)
+            xs = xs[indices]
+            ys = ys[indices]
+
+            axis.plot(xs,
+                      ys,
+                      linestyle='--',
+                      linewidth=2,
+                      alpha=sp_to_alpha[lr],
+                      color=color_palette[0])
+
+        axis.spines['right'].set_visible(False)
+        axis.spines['top'].set_visible(False)
+        axis.yaxis.set_ticks_position('left')
+        axis.xaxis.set_ticks_position('bottom')
+        axis.yaxis.set_tick_params(labelsize=16)
+        axis.xaxis.set_tick_params(labelsize=16)
+
+        axis.set_xlabel(r'\textbf{Importance sampling iteration}', fontsize=24)
+        axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
+        axis.grid(color='grey',
+                  linestyle='dotted',
+                  linewidth=2)
+
+    plt.legend([r'\textbf{' + name.capitalize() + '}'],
+               ncol=1,
+               loc='lower left',
+               fontsize=20,
+               fancybox=True)
+    plt.tight_layout()
+    fig.savefig('plot_sample_size.pdf')
+
+
+@cli.command()
 @click.option('--dir1', type=str)
 @click.option('--dir2', type=str)
 @click.option('--name1', type=str)
@@ -805,7 +957,8 @@ def ablate_architecture(hopper,
 @click.option('--xlabel', type=str)
 @click.option('--ylabel', type=str)
 @click.option('--separate-runs', is_flag=True)
-def plot(dir, tag, xlabel, ylabel, separate_runs):
+@click.option('--max-iterations', type=int, default=999999)
+def plot(dir, tag, xlabel, ylabel, separate_runs, max_iterations):
 
     from collections import defaultdict
     import glob
@@ -881,7 +1034,7 @@ def plot(dir, tag, xlabel, ylabel, separate_runs):
         for f in glob.glob(os.path.join(d, '*/events.out*')):
             for e in tf.compat.v1.train.summary_iterator(f):
                 for v in e.summary.value:
-                    if v.tag == tag and e.step:
+                    if v.tag == tag and e.step < max_iterations:
                         row = {'id': i,
                                ylabel: tf.make_ndarray(v.tensor).tolist(),
                                xlabel: e.step}

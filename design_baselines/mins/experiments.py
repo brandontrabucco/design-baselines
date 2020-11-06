@@ -147,8 +147,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
-        "task_kwargs": {'split_percentile': tune.grid_search([
-            100, 90, 80, 70, 60, 50, 40, 30, 20, 10])},
+        "task_kwargs": {'split_percentile': 100},
         "val_size": 200,
         "offline": False,
         "is_discrete": False,

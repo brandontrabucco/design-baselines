@@ -2,6 +2,7 @@ from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
 from design_baselines.utils import soft_noise
+from design_baselines.utils import render_video
 from design_baselines.gradient_ascent.trainers import MaximumLikelihood
 from design_baselines.gradient_ascent.trainers import Ensemble
 from design_baselines.gradient_ascent.nets import ForwardModel
@@ -242,6 +243,11 @@ def gradient_ascent(config):
             config['logging_dir'], f'score_{i}.npy'), score)
         np.save(os.path.join(
             config['logging_dir'], f'solution_{i}.npy'), solution)
+
+    # render a video of the best solution found at the end
+    render_video(config,
+                 task,
+                 (solution * st_x + mu_x)[np.argmax(np.reshape(score, [-1]))])
 
 
 def ablate_architecture(config):

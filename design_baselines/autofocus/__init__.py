@@ -7,6 +7,7 @@ from design_baselines.autofocus.nets import ForwardModel
 from design_baselines.autofocus.nets import Encoder
 from design_baselines.autofocus.nets import DiscreteDecoder
 from design_baselines.autofocus.nets import ContinuousDecoder
+from design_baselines.utils import render_video
 import tensorflow as tf
 import numpy as np
 import os
@@ -253,8 +254,14 @@ def autofocus(config):
     # sample designs from the prior
     z = tf.random.normal([config['solver_samples'], config['latent_size']])
     q_dx = q_decoder.get_distribution(z, training=False)
-    score = task.score(q_dx.sample() * st_x + mu_x)
+    solution = q_dx.sample()
+    score = task.score(solution * st_x + mu_x)
     logger.record("score",
                   score,
                   config['iterations'],
                   percentile=True)
+
+    # render a video of the best solution found at the end
+    render_video(config,
+                 task,
+                 (solution * st_x + mu_x)[np.argmax(np.reshape(score, [-1]))])

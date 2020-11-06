@@ -132,8 +132,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": True,
         "task": "HopperController-v0",
-        "task_kwargs": {'split_percentile': tune.grid_search([
-            100, 90, 80, 70, 60, 50, 40, 30, 20, 10])},
+        "task_kwargs": {'split_percentile': 100},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,

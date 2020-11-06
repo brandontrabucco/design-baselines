@@ -345,8 +345,8 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         # use a while loop to perform gradient ascent on the score
         return tf.while_loop(
-            lambda xt: True,
-            gradient_step, (x,), maximum_iterations=steps)[0]
+            lambda xt: True, gradient_step, (x,),
+            maximum_iterations=steps)[0]
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
@@ -397,9 +397,8 @@ class ConservativeMaximumLikelihood(tf.Module):
                 x_neg = tf.stop_gradient(x_neg)
 
             # calculate the prediction error and accuracy of the model
-            x_pos = tf.math.softmax(x_pos) if self.is_discrete else x_pos
             x_neg = tf.math.softmax(x_neg) if self.is_discrete else x_neg
-            d_pos = self.forward_model.get_distribution(x_pos, training=False)
+            d_pos = self.forward_model.get_distribution(x, training=False)
             d_neg = self.forward_model.get_distribution(x_neg, training=False)
             conservatism = d_neg.mean()[:, 0] - d_pos.mean()[:, 0]
             statistics[f'train/conservatism'] = conservatism
@@ -483,9 +482,8 @@ class ConservativeMaximumLikelihood(tf.Module):
             x_neg = tf.stop_gradient(x_neg)
 
         # calculate the prediction error and accuracy of the model
-        x_pos = tf.math.softmax(x_pos) if self.is_discrete else x_pos
         x_neg = tf.math.softmax(x_neg) if self.is_discrete else x_neg
-        d_pos = self.forward_model.get_distribution(x_pos, training=False)
+        d_pos = self.forward_model.get_distribution(x, training=False)
         d_neg = self.forward_model.get_distribution(x_neg, training=False)
         conservatism = d_neg.mean()[:, 0] - d_pos.mean()[:, 0]
         statistics[f'validate/conservatism'] = conservatism

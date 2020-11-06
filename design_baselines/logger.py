@@ -46,7 +46,7 @@ class Logger(object):
             if tf.equal(tf.size(value), 1):
 
                 # log one statistic of the incoming tensors
-                tf.summary.scalar(key, value, step=step)
+                tf.summary.scalar(key, tf.reshape(value, []), step=step)
 
             elif percentile:
 
