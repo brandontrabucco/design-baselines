@@ -464,6 +464,20 @@ def gfp_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
+"""
+
+sbatch sbatch_grad_gfp_min_ensemble.sh;
+sbatch sbatch_grad_molecule_min_ensemble.sh;
+sbatch sbatch_grad_hopper_min_ensemble.sh;
+sbatch sbatch_grad_superconductor_min_ensemble.sh;
+
+sbatch sbatch_grad_gfp_mean_ensemble.sh;
+sbatch sbatch_grad_molecule_mean_ensemble.sh;
+sbatch sbatch_grad_hopper_mean_ensemble.sh;
+sbatch sbatch_grad_superconductor_mean_ensemble.sh;
+
+"""
+
 
 @cli.command()
 @click.option('--local-dir', type=str, default='gradient-ascent-dkitty')

@@ -243,10 +243,10 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.0001,
+        "forward_model_lr": 0.001,
         "initial_alpha": 1.0,
         "alpha_lr": 0.05,
-        "target_conservatism": 0.5,
+        "target_conservatism": 2.0,  # 0.5
         "negatives_fraction": 0.5,
         "lookahead_steps": 10,
         "lookahead_backprop": False,

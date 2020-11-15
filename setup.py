@@ -18,5 +18,8 @@ setup(
         'gan=design_baselines.gan.experiments:cli',
         'mins=design_baselines.mins.experiments:cli',
         'cbas=design_baselines.cbas.experiments:cli',
+        'cma-es=design_baselines.cma_es.experiments:cli',
+        'bo-qei=design_baselines.bo_qei.experiments:cli',
+        'reinforce=design_baselines.reinforce.experiments:cli',
         'autofocus=design_baselines.autofocus.experiments:cli'
     )})
