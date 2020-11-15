@@ -93,6 +93,11 @@ def bo_qei(config):
                     logger,
                     config['ensemble_epochs'])
 
+    # select the top 1 initial designs from the dataset
+    indices = tf.math.top_k(y[:, 0], k=config['bo_gp_samples'])[1]
+    initial_x = tf.gather(x, indices, axis=0)
+    initial_y = tf.gather(y, indices, axis=0)
+
     from botorch.models import FixedNoiseGP, ModelListGP
     from gpytorch.mlls.sum_marginal_log_likelihood import SumMarginalLogLikelihood
     from botorch.acquisition.objective import GenericMCObjective
@@ -119,7 +124,7 @@ def bo_qei(config):
             input_x = input_x.detach().cpu().numpy()
         else:
             input_x = input_x.detach().numpy()
-        batch_shape = input_x.shape[:-len(task.input_shape)]
+        batch_shape = input_x.shape[:-1]
         # pass the input into a TF model
         input_x = tf.reshape(input_x, [-1, *task.input_shape])
         ys = ensemble.get_distribution(input_x).mean().numpy()
@@ -128,7 +133,7 @@ def bo_qei(config):
         return torch.tensor(ys).type_as(
             original_x).to(device, dtype=dtype)
 
-    NOISE_SE = 0.5
+    NOISE_SE = config['bo_noise_se']
     train_yvar = torch.tensor(NOISE_SE ** 2, device=device, dtype=dtype)
 
     def initialize_model(train_x, train_obj, state_dict=None):
@@ -150,7 +155,8 @@ def bo_qei(config):
 
     BATCH_SIZE = config['bo_batch_size']
     bounds = torch.tensor(
-        [np.min(x, axis=0).tolist(), np.max(x, axis=0).tolist()],
+        [np.min(x, axis=0).reshape([task.input_size]).tolist(),
+         np.max(x, axis=0).reshape([task.input_size]).tolist()],
         device=device, dtype=dtype)
 
     def optimize_acqf_and_get_observation(acq_func):
@@ -176,8 +182,12 @@ def bo_qei(config):
     best_observed_ei = []
 
     # call helper functions to generate initial training data and initialize model
-    train_x_ei = torch.tensor(x).to(device, dtype=dtype)
-    train_obj_ei = torch.tensor(y).to(device, dtype=dtype)
+    train_x_ei = initial_x.numpy().reshape([initial_x.shape[0], task.input_size])
+    train_x_ei = torch.tensor(train_x_ei).to(device, dtype=dtype)
+
+    train_obj_ei = initial_y.numpy().reshape([initial_y.shape[0], 1])
+    train_obj_ei = torch.tensor(train_obj_ei).to(device, dtype=dtype)
+
     best_observed_value_ei = train_obj_ei.max().item()
     mll_ei, model_ei = initialize_model(train_x_ei, train_obj_ei)
     best_observed_ei.append(best_observed_value_ei)
@@ -230,6 +240,7 @@ def bo_qei(config):
         # select the top 1 initial designs from the dataset
         indices = tf.math.top_k(y_sol[:, 0], k=config['solver_samples'])[1]
         solution = tf.gather(x_sol, indices, axis=0)
+        solution = tf.reshape(solution, [-1, *task.input_shape])
 
         # evaluate the found solution and record a video
         score = task.score(solution * st_x + mu_x)

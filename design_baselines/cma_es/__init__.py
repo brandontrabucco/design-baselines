@@ -111,9 +111,11 @@ def cma_es(config):
     for i in range(config['solver_samples']):
         xi = x[i].numpy().flatten().tolist()
         es = cma.CMAEvolutionStrategy(xi, config['cma_sigma'])
-        while not es.stop():
+        step = 0
+        while not es.stop() and step < config['cma_max_iterations']:
             solutions = es.ask()
             es.tell(solutions, [fitness(x) for x in solutions])
+            step += 1
         result.append(
             tf.reshape(es.result.xbest, task.input_shape))
         print(f"CMA: {i + 1} / {config['solver_samples']}")
