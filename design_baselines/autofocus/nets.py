@@ -59,7 +59,7 @@ class ForwardModel(tf.keras.Sequential):
         mean, logstd = tf.split(prediction, 2, axis=-1)
         logstd = self.max_logstd - tf.nn.softplus(self.max_logstd - logstd)
         logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
-        return {"loc": mean, "scale": tf.math.softplus(logstd)}
+        return {"loc": mean, "scale": tf.math.exp(logstd)}
 
     def get_distribution(self, inputs, **kwargs):
         """Return a distribution over the outputs of this model, for example
@@ -243,9 +243,9 @@ class ContinuousDecoder(tf.keras.Sequential):
             the global hidden size of the network
         """
 
-        self.max_logstd = tf.Variable(tf.fill([1, *input_shape], np.log(
+        self.max_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_max_std).astype(np.float32)), trainable=True)
-        self.min_logstd = tf.Variable(tf.fill([1, *input_shape], np.log(
+        self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_min_std).astype(np.float32)), trainable=True)
 
         super(ContinuousDecoder, self).__init__([
@@ -273,7 +273,7 @@ class ContinuousDecoder(tf.keras.Sequential):
         mean, logstd = x[..., 0], x[..., 1]
         logstd = self.max_logstd - tf.nn.softplus(self.max_logstd - logstd)
         logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
-        return {"loc": mean, "scale_diag": tf.math.softplus(logstd)}
+        return {"loc": mean, "scale_diag": tf.math.exp(logstd)}
 
     def get_distribution(self, inputs, **kwargs):
         """Return a distribution over the outputs of this model, for example
