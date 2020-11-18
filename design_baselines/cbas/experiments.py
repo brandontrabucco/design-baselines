@@ -297,12 +297,12 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='cbas-gfp')
+@click.option('--local-dir', type=str, default='cbas-gfp-v1')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
+def gfp_v1(local_dir, cpus, gpus, num_parallel, num_samples):
     """Evaluate CbAS on GFP-v1
     """
 

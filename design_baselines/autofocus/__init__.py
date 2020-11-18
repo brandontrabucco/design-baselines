@@ -200,11 +200,11 @@ def autofocus(config):
         # train a vae fit using weighted maximum likelihood
         start_epoch = config['autofocus_epochs'] * i + \
             config['ensemble_epochs']
-        oracle.launch(train_data,
-                      val_data,
-                      logger,
-                      config['autofocus_epochs'],
-                      start_epoch=start_epoch)
+        ensemble.launch(train_data,
+                        val_data,
+                        logger,
+                        config['autofocus_epochs'],
+                        start_epoch=start_epoch)
 
     # save every model to the disk
     ensemble_manager.save()
