@@ -83,6 +83,7 @@ def online(config):
         solver_warmup=solver_warmup,
         solver_steps=config['solver_steps'],
         is_discrete=config['is_discrete'],
+        constraint_type=config['constraint_type'],
         continuous_noise_std=config.get('continuous_noise_std', 0.0),
         discrete_smoothing=config.get('discrete_smoothing', 0.6))
 

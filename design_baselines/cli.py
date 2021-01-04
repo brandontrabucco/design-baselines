@@ -1460,7 +1460,8 @@ def evaluate_offline(dir, tag, eval_tag):
 @click.option('--dir', type=str)
 @click.option('--tag', type=str)
 @click.option('--iteration', type=int)
-def evaluate_fixed(dir, tag, iteration):
+@click.option('--confidence', is_flag=True)
+def evaluate_fixed(dir, tag, iteration, confidence):
 
     import glob
     import os
@@ -1509,12 +1510,27 @@ def evaluate_fixed(dir, tag, iteration):
                     if v.tag == tag and e.step < 500:
                         it_to_tag[e.step].append(tf.make_ndarray(v.tensor).tolist())
 
+    import numpy as np
+    import scipy.stats
+
+    def mean_confidence_interval(data, confidence=0.95):
+        a = 1.0 * np.array(data)
+        n = len(a)
+        se = scipy.stats.sem(a)
+        return se * scipy.stats.t.ppf((1 + confidence) / 2., n - 1)
+
     if iteration in it_to_tag:
         mean = np.mean(it_to_tag[iteration])
         std = np.std(it_to_tag[iteration])
-
-        # save a separate plot for every hyper parameter
-        print(f'Evaluate {task_name} At {iteration}\n\t{mean} +- {std}')
+        if confidence:
+            ci90 = mean_confidence_interval(np.array(it_to_tag[iteration]), confidence=0.90)
+            ci95 = mean_confidence_interval(np.array(it_to_tag[iteration]), confidence=0.95)
+            ci99 = mean_confidence_interval(np.array(it_to_tag[iteration]), confidence=0.99)
+            #print(f'Evaluate {task_name} At {iteration}\n\t{mean} : ci90={ci90} ci95={ci95} ci99={ci99}')
+            print(f'{task_name}, {algo_name}, {mean}, {ci90}, {ci95}, {ci99}')
+        else:
+            #print(f'Evaluate {task_name} At {iteration}\n\t{mean} +- {std}')
+            print(f'{task_name}, {algo_name}, {mean}, {std}')
 
 
 @cli.command()

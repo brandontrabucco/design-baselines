@@ -265,6 +265,7 @@ class ConservativeMaximumLikelihood(tf.Module):
                  solver_warmup=500,
                  solver_steps=1,
                  is_discrete=False,
+                 constraint_type="mix",
                  continuous_noise_std=0.0,
                  discrete_smoothing=0.6):
         """Build a trainer for an ensemble of probabilistic neural networks
@@ -307,6 +308,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         self.is_discrete = is_discrete
         self.continuous_noise_std = continuous_noise_std
         self.discrete_smoothing = discrete_smoothing
+        self.constraint_type = constraint_type
 
         # save the state of the solution found by the model
         self.step = tf.Variable(tf.constant(0, dtype=tf.int32))
@@ -398,7 +400,9 @@ class ConservativeMaximumLikelihood(tf.Module):
 
             # calculate the prediction error and accuracy of the model
             x_neg = tf.math.softmax(x_neg) if self.is_discrete else x_neg
-            d_pos = self.forward_model.get_distribution(x, training=False)
+            d_pos = self.forward_model.get_distribution(
+                {"dataset": x, "mix": x_pos, "solution": self.solution[:batch_dim]}
+                [self.constraint_type], training=False)
             d_neg = self.forward_model.get_distribution(x_neg, training=False)
             conservatism = d_neg.mean()[:, 0] - d_pos.mean()[:, 0]
             statistics[f'train/conservatism'] = conservatism
@@ -483,7 +487,9 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         # calculate the prediction error and accuracy of the model
         x_neg = tf.math.softmax(x_neg) if self.is_discrete else x_neg
-        d_pos = self.forward_model.get_distribution(x, training=False)
+        d_pos = self.forward_model.get_distribution(
+            {"dataset": x, "mix": x_pos, "solution": self.solution[:batch_dim]}
+            [self.constraint_type], training=False)
         d_neg = self.forward_model.get_distribution(x_neg, training=False)
         conservatism = d_neg.mean()[:, 0] - d_pos.mean()[:, 0]
         statistics[f'validate/conservatism'] = conservatism
