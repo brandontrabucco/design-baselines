@@ -78,6 +78,7 @@ def online(config):
         negatives_fraction=config['negatives_fraction'],
         lookahead_steps=config['lookahead_steps'],
         lookahead_backprop=config['lookahead_backprop'],
+        solver_conservatism=config['solver_conservatism'],
         solver_lr=solver_lr,
         solver_interval=solver_interval,
         solver_warmup=solver_warmup,

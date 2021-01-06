@@ -260,6 +260,7 @@ class ConservativeMaximumLikelihood(tf.Module):
                  negatives_fraction=0.5,
                  lookahead_steps=50,
                  lookahead_backprop=True,
+                 solver_conservatism=0.0,
                  solver_lr=0.01,
                  solver_interval=10,
                  solver_warmup=500,
@@ -303,6 +304,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         self.solver_interval = solver_interval
         self.solver_warmup = solver_warmup
         self.solver_steps = solver_steps
+        self.solver_conservatism = solver_conservatism
 
         # extra parameters for controlling data noise
         self.is_discrete = is_discrete
@@ -431,10 +433,30 @@ class ConservativeMaximumLikelihood(tf.Module):
         if tf.logical_and(
                 tf.equal(tf.math.mod(self.step, self.solver_interval), 0),
                 tf.math.greater_equal(self.step, self.solver_warmup)):
+            with tf.GradientTape() as tape:
+                tape.watch(self.solution)
+
+                # calculate the predicted score of the current solution
+                current_score = self.forward_model.get_distribution(
+                    tf.math.softmax(self.solution)
+                    if self.is_discrete else self.solution, training=False).mean()
+
+                # look into the future and evaluate future solutions
+                future_score = 0.0
+                if self.solver_conservatism > 0.0:
+                    future = self.lookahead(
+                        self.solution, self.solver_steps, training=False)
+                    future_score = self.forward_model.get_distribution(
+                        tf.math.softmax(future)
+                        if self.is_discrete else future, training=False).mean()
+
+                # evaluate the conservatism of the current solution
+                particle_conservatism = (
+                    self.solver_conservatism * future_score - current_score)
+                update = (self.solution - self.solver_lr *
+                          tape.gradient(particle_conservatism, self.solution))
 
             # only update solutions that are not frozen
-            update = self.lookahead(
-                self.solution, self.solver_steps, training=False)
             self.solution.assign(
                 tf.where(self.done, self.solution, update))
 
