@@ -971,6 +971,7 @@ def plot(dir, tag, xlabel, ylabel, separate_runs, max_iterations):
     import seaborn as sns
     import matplotlib
     import matplotlib.pyplot as plt
+    import numpy as np
 
     plt.rcParams['text.usetex'] = False
     matplotlib.rc('font', family='serif', serif='cm10')
@@ -1035,8 +1036,10 @@ def plot(dir, tag, xlabel, ylabel, separate_runs, max_iterations):
             for e in tf.compat.v1.train.summary_iterator(f):
                 for v in e.summary.value:
                     if v.tag == tag and e.step < max_iterations:
+                        y_vals = tf.make_ndarray(v.tensor)
+                        y_vals = np.maximum(y_vals, 0.0)
                         row = {'id': i,
-                               ylabel: tf.make_ndarray(v.tensor).tolist(),
+                               ylabel: y_vals.tolist(),
                                xlabel: e.step}
                         for key in params_of_variation:
                             row[key] = f'{pretty(key)} = {p[key]}'
