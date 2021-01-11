@@ -869,7 +869,7 @@ def molecule_dataset(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(online, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'split_percentile': 80},
         "is_discrete": True,
         "constraint_type": "dataset",
         "normalize_ys": True,
@@ -920,7 +920,7 @@ def molecule_mix(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(online, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'split_percentile': 80},
         "is_discrete": True,
         "constraint_type": "mix",
         "normalize_ys": True,
@@ -971,7 +971,7 @@ def molecule_solution(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(online, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'split_percentile': 80},
         "is_discrete": True,
         "constraint_type": "solution",
         "normalize_ys": True,
@@ -1022,7 +1022,7 @@ def molecule_particle(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(online, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'split_percentile': 80},
         "is_discrete": True,
         "constraint_type": "mix",
         "normalize_ys": True,
@@ -1073,7 +1073,7 @@ def gfp_dataset(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(online, config={
         "logging_dir": "data",
         "task": "GFP-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'seed': tune.randint(1000)},
         "is_discrete": True,
         "constraint_type": "dataset",
         "normalize_ys": True,
@@ -1124,7 +1124,7 @@ def gfp_mix(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(online, config={
         "logging_dir": "data",
         "task": "GFP-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'seed': tune.randint(1000)},
         "is_discrete": True,
         "constraint_type": "mix",
         "normalize_ys": True,
@@ -1175,7 +1175,7 @@ def gfp_solution(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(online, config={
         "logging_dir": "data",
         "task": "GFP-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'seed': tune.randint(1000)},
         "is_discrete": True,
         "constraint_type": "solution",
         "normalize_ys": True,
@@ -1226,7 +1226,7 @@ def gfp_particle(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(online, config={
         "logging_dir": "data",
         "task": "GFP-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'seed': tune.randint(1000)},
         "is_discrete": True,
         "constraint_type": "mix",
         "normalize_ys": True,
