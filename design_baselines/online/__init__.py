@@ -120,13 +120,13 @@ def online(config):
     mean_x = tf.reduce_mean(x, axis=0, keepdims=True)
     indices = tf.math.top_k(y[:, 0], k=config['batch_size'])[1]
     initial_x = tf.gather(x, indices, axis=0)
-    initial_x = tf.math.log(soft_noise(
+    solution_x = tf.math.log(soft_noise(
         initial_x, config.get('discrete_smoothing', 0.6))) \
         if config['is_discrete'] else initial_x
 
     # create the starting point for the optimizer
     evaluations = 0
-    trainer.solution = tf.Variable(initial_x)
+    trainer.solution = tf.Variable(solution_x)
     trainer.done = tf.Variable(tf.fill(
         [config['batch_size']] + [1 for _ in x.shape[1:]], False))
 
