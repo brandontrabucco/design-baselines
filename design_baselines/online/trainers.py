@@ -467,7 +467,7 @@ class ConservativeMaximumLikelihood(tf.Module):
                 self.optimizer_conservatism.assign(particle_conservatism)
                 self.optimizer_constraint.assign(future_score - current_score)
                 self.done.assign(tf.logical_or(tf.reshape(
-                    self.conservatism > self.solver_constraint,
+                    self.optimizer_constraint > self.solver_constraint,
                     tf.shape(self.done)), self.done))
 
             # only update solutions that are not frozen
