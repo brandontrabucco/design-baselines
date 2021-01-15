@@ -261,6 +261,7 @@ class ConservativeMaximumLikelihood(tf.Module):
                  lookahead_steps=50,
                  lookahead_backprop=True,
                  solver_conservatism=0.0,
+                 solver_constraint=999999.0,
                  solver_lr=0.01,
                  solver_interval=10,
                  solver_warmup=500,
@@ -305,6 +306,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         self.solver_warmup = solver_warmup
         self.solver_steps = solver_steps
         self.solver_conservatism = solver_conservatism
+        self.solver_constraint = solver_constraint
 
         # extra parameters for controlling data noise
         self.is_discrete = is_discrete
@@ -315,6 +317,8 @@ class ConservativeMaximumLikelihood(tf.Module):
         # save the state of the solution found by the model
         self.step = tf.Variable(tf.constant(0, dtype=tf.int32))
         self.solution = None
+        self.optimizer_conservatism = None
+        self.optimizer_constraint = None
         self.done = None
 
     @tf.function(experimental_relax_shapes=True)
@@ -419,6 +423,11 @@ class ConservativeMaximumLikelihood(tf.Module):
             total_loss = tf.reduce_mean(model_loss)
             alpha_loss = tf.reduce_mean(alpha_loss)
 
+        if self.optimizer_conservatism is None:
+            self.optimizer_conservatism = tf.Variable(tf.zeros_like(conservatism))
+        if self.optimizer_constraint is None:
+            self.optimizer_constraint = tf.Variable(tf.zeros_like(conservatism))
+
         # take gradient steps on the model
         grads = tape.gradient(
             total_loss, self.forward_model.trainable_variables)
@@ -439,16 +448,14 @@ class ConservativeMaximumLikelihood(tf.Module):
                 # calculate the predicted score of the current solution
                 current_score = self.forward_model.get_distribution(
                     tf.math.softmax(self.solution)
-                    if self.is_discrete else self.solution, training=False).mean()
+                    if self.is_discrete else self.solution, training=False).mean()[:, 0]
 
                 # look into the future and evaluate future solutions
-                future_score = 0.0
-                if self.solver_conservatism > 0.0:
-                    future = self.lookahead(
-                        self.solution, self.solver_steps, training=False)
-                    future_score = self.forward_model.get_distribution(
-                        tf.math.softmax(future)
-                        if self.is_discrete else future, training=False).mean()
+                future = self.lookahead(
+                    self.solution, self.solver_steps, training=False)
+                future_score = self.forward_model.get_distribution(
+                    tf.math.softmax(future)
+                    if self.is_discrete else future, training=False).mean()[:, 0]
 
                 # evaluate the conservatism of the current solution
                 particle_conservatism = (
@@ -456,9 +463,19 @@ class ConservativeMaximumLikelihood(tf.Module):
                 update = (self.solution - self.solver_lr *
                           tape.gradient(particle_conservatism, self.solution))
 
+                # if optimizer conservatism passes threshold stop optimizing
+                self.optimizer_conservatism.assign(particle_conservatism)
+                self.optimizer_constraint.assign(future_score - current_score)
+                self.done.assign(tf.logical_or(tf.reshape(
+                    self.conservatism > self.solver_constraint,
+                    tf.shape(self.done)), self.done))
+
             # only update solutions that are not frozen
             self.solution.assign(
                 tf.where(self.done, self.solution, update))
+        statistics[f'train/done'] = tf.cast(self.done, tf.float32)
+        statistics[f'train/optimizer_conservatism'] = self.optimizer_conservatism
+        statistics[f'train/optimizer_constraint'] = self.optimizer_constraint
 
         return statistics
 

@@ -79,6 +79,7 @@ def online(config):
         lookahead_steps=config['lookahead_steps'],
         lookahead_backprop=config['lookahead_backprop'],
         solver_conservatism=config['solver_conservatism'],
+        solver_constraint=config['solver_constraint'],
         solver_lr=solver_lr,
         solver_interval=solver_interval,
         solver_warmup=solver_warmup,
@@ -233,3 +234,6 @@ def online(config):
         for name in statistics.keys():
             logger.record(
                 name, tf.concat(statistics[name], axis=0), e)
+
+        if tf.reduce_all(trainer.done):
+            break
