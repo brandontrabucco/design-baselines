@@ -254,14 +254,16 @@ class ConservativeMaximumLikelihood(tf.Module):
                  forward_model_opt=tf.keras.optimizers.Adam,
                  forward_model_lr=0.001,
                  initial_alpha=1.0,
+                 initial_beta=0.5,
                  alpha_opt=tf.keras.optimizers.Adam,
+                 beta_opt=tf.keras.optimizers.Adam,
                  alpha_lr=0.05,
+                 beta_lr=0.05,
                  target_conservatism=1.0,
                  negatives_fraction=0.5,
                  lookahead_steps=50,
                  lookahead_backprop=True,
                  solver_conservatism=0.0,
-                 solver_constraint=999999.0,
                  solver_lr=0.01,
                  solver_interval=10,
                  solver_warmup=500,
@@ -290,9 +292,13 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         # lagrangian dual descent variables
         log_alpha = np.log(initial_alpha).astype(np.float32)
+        log_beta = np.log(initial_beta).astype(np.float32)
         self.log_alpha = tf.Variable(log_alpha)
+        self.log_beta = tf.Variable(log_beta)
         self.alpha = tfp.util.DeferredTensor(self.log_alpha, tf.math.softplus)
+        self.beta = tfp.util.DeferredTensor(self.log_beta, tf.math.softplus)
         self.alpha_opt = alpha_opt(learning_rate=alpha_lr)
+        self.beta_opt = beta_opt(learning_rate=beta_lr)
 
         # parameters for controlling the lagrangian dual descent
         self.target_conservatism = target_conservatism
@@ -306,7 +312,6 @@ class ConservativeMaximumLikelihood(tf.Module):
         self.solver_warmup = solver_warmup
         self.solver_steps = solver_steps
         self.solver_conservatism = solver_conservatism
-        self.solver_constraint = solver_constraint
 
         # extra parameters for controlling data noise
         self.is_discrete = is_discrete
@@ -442,8 +447,8 @@ class ConservativeMaximumLikelihood(tf.Module):
         if tf.logical_and(
                 tf.equal(tf.math.mod(self.step, self.solver_interval), 0),
                 tf.math.greater_equal(self.step, self.solver_warmup)):
-            with tf.GradientTape() as tape:
-                tape.watch(self.solution)
+
+            with tf.GradientTape(persistent=True) as tape:
 
                 # calculate the predicted score of the current solution
                 current_score = self.forward_model.get_distribution(
@@ -458,21 +463,29 @@ class ConservativeMaximumLikelihood(tf.Module):
                     if self.is_discrete else future, training=False).mean()[:, 0]
 
                 # evaluate the conservatism of the current solution
-                particle_conservatism = (
-                    self.solver_conservatism * future_score - current_score)
-                update = (self.solution - self.solver_lr *
-                          tape.gradient(particle_conservatism, self.solution))
+                particle_loss = self.beta * future_score - \
+                                (1.0 + self.beta) * current_score - \
+                                self.beta * self.solver_conservatism
 
                 # if optimizer conservatism passes threshold stop optimizing
-                self.optimizer_conservatism.assign(particle_conservatism)
+                self.optimizer_conservatism.assign(particle_loss)
                 self.optimizer_constraint.assign(future_score - current_score)
-                self.done.assign(tf.logical_or(tf.reshape(
-                    self.optimizer_constraint > self.solver_constraint,
-                    tf.shape(self.done)), self.done))
+
+                # build a lagrangian for dual descent
+                beta_loss = -particle_loss
+
+            # calculate an update to the particles
+            update = (self.solution - self.solver_lr *
+                      tape.gradient(particle_loss, self.solution))
+
+            # take gradient steps on beta
+            grads = tape.gradient(beta_loss, self.log_beta)
+            self.beta_opt.apply_gradients([[grads, self.log_beta]])
 
             # only update solutions that are not frozen
             self.solution.assign(
                 tf.where(self.done, self.solution, update))
+        statistics[f'train/beta'] = self.beta
         statistics[f'train/done'] = tf.cast(self.done, tf.float32)
         statistics[f'train/optimizer_conservatism'] = self.optimizer_conservatism
         statistics[f'train/optimizer_constraint'] = self.optimizer_constraint
