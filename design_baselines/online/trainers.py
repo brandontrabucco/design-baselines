@@ -256,9 +256,7 @@ class ConservativeMaximumLikelihood(tf.Module):
                  initial_alpha=1.0,
                  initial_beta=0.5,
                  alpha_opt=tf.keras.optimizers.Adam,
-                 beta_opt=tf.keras.optimizers.Adam,
                  alpha_lr=0.05,
-                 beta_lr=0.05,
                  target_conservatism=1.0,
                  negatives_fraction=0.5,
                  lookahead_steps=50,
@@ -292,13 +290,10 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         # lagrangian dual descent variables
         log_alpha = np.log(initial_alpha).astype(np.float32)
-        log_beta = np.log(initial_beta).astype(np.float32)
         self.log_alpha = tf.Variable(log_alpha)
-        self.log_beta = tf.Variable(log_beta)
+        self.beta = initial_beta
         self.alpha = tfp.util.DeferredTensor(self.log_alpha, tf.math.softplus)
-        self.beta = tfp.util.DeferredTensor(self.log_beta, tf.math.softplus)
         self.alpha_opt = alpha_opt(learning_rate=alpha_lr)
-        self.beta_opt = beta_opt(learning_rate=beta_lr)
 
         # parameters for controlling the lagrangian dual descent
         self.target_conservatism = target_conservatism
@@ -322,8 +317,8 @@ class ConservativeMaximumLikelihood(tf.Module):
         # save the state of the solution found by the model
         self.step = tf.Variable(tf.constant(0, dtype=tf.int32))
         self.solution = None
-        self.optimizer_conservatism = None
-        self.optimizer_constraint = None
+        self.particle_loss = None
+        self.particle_constraint = None
         self.done = None
 
     @tf.function(experimental_relax_shapes=True)
@@ -428,10 +423,10 @@ class ConservativeMaximumLikelihood(tf.Module):
             total_loss = tf.reduce_mean(model_loss)
             alpha_loss = tf.reduce_mean(alpha_loss)
 
-        if self.optimizer_conservatism is None:
-            self.optimizer_conservatism = tf.Variable(tf.zeros_like(conservatism))
-        if self.optimizer_constraint is None:
-            self.optimizer_constraint = tf.Variable(tf.zeros_like(conservatism))
+        if self.particle_loss is None:
+            self.particle_loss = tf.Variable(tf.zeros_like(conservatism))
+        if self.particle_constraint is None:
+            self.particle_constraint = tf.Variable(tf.zeros_like(conservatism))
 
         # take gradient steps on the model
         grads = tape.gradient(
@@ -463,13 +458,11 @@ class ConservativeMaximumLikelihood(tf.Module):
                     if self.is_discrete else future, training=False).mean()[:, 0]
 
                 # evaluate the conservatism of the current solution
-                particle_loss = self.beta * future_score - \
-                                (1.0 + self.beta) * current_score - \
-                                self.beta * self.solver_conservatism
+                particle_loss = future_score - self.beta * current_score
 
                 # if optimizer conservatism passes threshold stop optimizing
-                self.optimizer_conservatism.assign(particle_loss)
-                self.optimizer_constraint.assign(future_score - current_score)
+                self.particle_loss.assign(particle_loss)
+                self.particle_constraint.assign(future_score - current_score)
 
                 # build a lagrangian for dual descent
                 beta_loss = -particle_loss
@@ -487,8 +480,8 @@ class ConservativeMaximumLikelihood(tf.Module):
                 tf.where(self.done, self.solution, update))
         statistics[f'train/beta'] = self.beta
         statistics[f'train/done'] = tf.cast(self.done, tf.float32)
-        statistics[f'train/optimizer_conservatism'] = self.optimizer_conservatism
-        statistics[f'train/optimizer_constraint'] = self.optimizer_constraint
+        statistics[f'train/particle_loss'] = self.particle_loss
+        statistics[f'train/particle_constraint'] = self.particle_constraint
 
         return statistics
 
