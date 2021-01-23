@@ -471,10 +471,6 @@ class ConservativeMaximumLikelihood(tf.Module):
             update = (self.solution - self.solver_lr *
                       tape.gradient(particle_loss, self.solution))
 
-            # take gradient steps on beta
-            grads = tape.gradient(beta_loss, self.log_beta)
-            self.beta_opt.apply_gradients([[grads, self.log_beta]])
-
             # only update solutions that are not frozen
             self.solution.assign(
                 tf.where(self.done, self.solution, update))
