@@ -122,7 +122,7 @@ def reinforce(config):
                 ty = (task.score(tx * st_x + mu_x) - mu_y) / st_y
             else:  # use the surrogate model for optimization
                 ty = ensemble.get_distribution(tx).mean()
-            loss = td.log_prob(tx) * ty
+            loss = td.log_prob(tx) * tf.stop_gradient(ty)
 
         logger.record("reinforce/prediction",
                       ty, iteration, percentile=True)
