@@ -118,7 +118,10 @@ def reinforce(config):
         with tf.GradientTape() as tape:
             td = sampler.get_distribution()
             tx = td.sample(sample_shape=config['reinforce_batch_size'])
-            ty = ensemble.get_distribution(tx).mean()
+            if config['optimize_ground_truth']:
+                ty = (task.score(tx * st_x + mu_x) - mu_y) / st_y
+            else:  # use the surrogate model for optimization
+                ty = ensemble.get_distribution(tx).mean()
             loss = td.log_prob(tx) * ty
 
         logger.record("reinforce/prediction",

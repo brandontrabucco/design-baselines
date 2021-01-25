@@ -33,7 +33,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
-        "task_kwargs": {"split_percentile": 40, 'num_parallel': 2},
+        "task_kwargs": {"split_percentile": 40, 'num_parallel': 1, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "val_size": 200,
         "offline": False,
         "is_discrete": False,
@@ -90,7 +90,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
-        "task_kwargs": {"split_percentile": 20, 'num_parallel': 2},
+        "task_kwargs": {"split_percentile": 20, 'num_parallel': 1, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "val_size": 200,
         "offline": False,
         "is_discrete": False,
@@ -147,7 +147,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
-        "task_kwargs": {'split_percentile': 100},
+        "task_kwargs": {'split_percentile': 100, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "val_size": 200,
         "offline": False,
         "is_discrete": False,
@@ -204,7 +204,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
-        "task_kwargs": {'split_percentile': 80},
+        "task_kwargs": {'split_percentile': 80, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "val_size": 200,
         "offline": False,
         "is_discrete": False,
@@ -261,7 +261,7 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
-        "task_kwargs": {'split_percentile': 80},
+        "task_kwargs": {'split_percentile': 80, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "val_size": 200,
         "offline": False,
         "is_discrete": True,
@@ -321,7 +321,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "logging_dir": "data",
         "task": "GFP-v0",
         "task_kwargs": {'seed': tune.randint(1000),
-                        'split_percentile': 100},
+                        'split_percentile': 100, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "val_size": 200,
         "offline": False,
         "is_discrete": True,
@@ -380,7 +380,7 @@ def gfp_v1(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "GFP-v1",
-        "task_kwargs": {'split_percentile': 20},
+        "task_kwargs": {'split_percentile': 20, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "val_size": 200,
         "offline": False,
         "is_discrete": True,

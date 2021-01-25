@@ -36,7 +36,8 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": True,
         "task": "DKittyMorphology-v0",
-        "task_kwargs": {"split_percentile": 40, 'num_parallel': 2},
+        "task_kwargs": {"split_percentile": 40, 'num_parallel': 1, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": False,
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -77,7 +78,8 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": True,
         "task": "AntMorphology-v0",
-        "task_kwargs": {"split_percentile": 20, 'num_parallel': 2},
+        "task_kwargs": {"split_percentile": 20, 'num_parallel': 1, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": False,
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -118,7 +120,8 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": True,
         "task": "HopperController-v0",
-        "task_kwargs": {'split_percentile': 100},
+        "task_kwargs": {'split_percentile': 100, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": False,
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -159,7 +162,8 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": True,
         "task": "Superconductor-v0",
-        "task_kwargs": {'split_percentile': 80},
+        "task_kwargs": {'split_percentile': 80, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": False,
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -200,7 +204,8 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": False,
         "task": "MoleculeActivity-v0",
-        "task_kwargs": {'split_percentile': 80},
+        "task_kwargs": {'split_percentile': 80, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": False,
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -241,7 +246,8 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": False,
         "task": "GFP-v0",
-        "task_kwargs": {'seed': tune.randint(1000), 'split_percentile': 100},
+        "task_kwargs": {'seed': tune.randint(1000), 'split_percentile': 100, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": False,
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -282,7 +288,8 @@ def gfp_v1(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": False,
         "task": "GFP-v1",
-        "task_kwargs": {'split_percentile': 20},
+        "task_kwargs": {'split_percentile': 20, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": False,
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -299,3 +306,304 @@ def gfp_v1(local_dir, cpus, gpus, num_parallel, num_samples):
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
+
+
+#############
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='reinforce-dkitty-online')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def dkitty_online(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate reinforce on DKittyMorphology-v0
+    """
+
+    # Final Version
+
+    from design_baselines.reinforce import reinforce
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(reinforce, config={
+        "logging_dir": "data",
+        "is_discrete": False,
+        "normalize_ys": True,
+        "normalize_xs": True,
+        "task": "DKittyMorphology-v0",
+        "task_kwargs": {"split_percentile": 40, 'num_parallel': 1,
+                        'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": True,
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "hidden_size": 256,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "reinforce_lr": 0.001,
+        "reinforce_batch_size": 256,
+        "iterations": 100,
+        "solver_samples": 128},
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
+                                  'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='reinforce-ant-online')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def ant_online(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate reinforce on AntMorphology-v0
+    """
+
+    # Final Version
+
+    from design_baselines.reinforce import reinforce
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(reinforce, config={
+        "logging_dir": "data",
+        "is_discrete": False,
+        "normalize_ys": True,
+        "normalize_xs": True,
+        "task": "AntMorphology-v0",
+        "task_kwargs": {"split_percentile": 20, 'num_parallel': 1,
+                        'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": True,
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "hidden_size": 256,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "reinforce_lr": 0.001,
+        "reinforce_batch_size": 256,
+        "iterations": 100,
+        "solver_samples": 128},
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
+                                  'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='reinforce-hopper-online')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def hopper_online(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate reinforce on HopperController-v0
+    """
+
+    # Final Version
+
+    from design_baselines.reinforce import reinforce
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(reinforce, config={
+        "logging_dir": "data",
+        "is_discrete": False,
+        "normalize_ys": True,
+        "normalize_xs": True,
+        "task": "HopperController-v0",
+        "task_kwargs": {'split_percentile': 100, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": True,
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "hidden_size": 256,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "reinforce_lr": 0.001,
+        "reinforce_batch_size": 256,
+        "iterations": 100,
+        "solver_samples": 128},
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
+                                  'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='reinforce-superconductor-online')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def superconductor_online(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate reinforce on Superconductor-v0
+    """
+
+    # Final Version
+
+    from design_baselines.reinforce import reinforce
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(reinforce, config={
+        "logging_dir": "data",
+        "is_discrete": False,
+        "normalize_ys": True,
+        "normalize_xs": True,
+        "task": "Superconductor-v0",
+        "task_kwargs": {'split_percentile': 80, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": True,
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "hidden_size": 256,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "reinforce_lr": 0.001,
+        "reinforce_batch_size": 256,
+        "iterations": 100,
+        "solver_samples": 128},
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
+                                  'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='reinforce-molecule-online')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def molecule_online(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate reinforce on MoleculeActivity-v0
+    """
+
+    # Final Version
+
+    from design_baselines.reinforce import reinforce
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(reinforce, config={
+        "logging_dir": "data",
+        "is_discrete": True,
+        "normalize_ys": True,
+        "normalize_xs": False,
+        "task": "MoleculeActivity-v0",
+        "task_kwargs": {'split_percentile': 80, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": True,
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "hidden_size": 256,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "reinforce_lr": 0.001,
+        "reinforce_batch_size": 256,
+        "iterations": 100,
+        "solver_samples": 128},
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
+                                  'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='reinforce-gfp-online')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def gfp_online(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate reinforce on GFP-v0
+    """
+
+    # Final Version
+
+    from design_baselines.reinforce import reinforce
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(reinforce, config={
+        "logging_dir": "data",
+        "is_discrete": True,
+        "normalize_ys": True,
+        "normalize_xs": False,
+        "task": "GFP-v0",
+        "task_kwargs": {'seed': tune.randint(1000), 'split_percentile': 100,
+                        'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": True,
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "hidden_size": 256,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "reinforce_lr": 0.001,
+        "reinforce_batch_size": 256,
+        "iterations": 100,
+        "solver_samples": 128},
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
+                                  'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='reinforce-gfp-v1-online')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def gfp_v1_online(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate reinforce on GFP-v1
+    """
+
+    # Final Version
+
+    from design_baselines.reinforce import reinforce
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(reinforce, config={
+        "logging_dir": "data",
+        "is_discrete": True,
+        "normalize_ys": True,
+        "normalize_xs": False,
+        "task": "GFP-v1",
+        "task_kwargs": {'split_percentile': 20, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "optimize_ground_truth": True,
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "hidden_size": 256,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "reinforce_lr": 0.001,
+        "reinforce_batch_size": 256,
+        "iterations": 100,
+        "solver_samples": 128},
+             num_samples=num_samples,
+             local_dir=local_dir,
+             resources_per_trial={'cpu': cpus // num_parallel,
+                                  'gpu': gpus / num_parallel - 0.01})
+
