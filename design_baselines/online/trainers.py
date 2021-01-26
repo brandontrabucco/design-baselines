@@ -458,14 +458,11 @@ class ConservativeMaximumLikelihood(tf.Module):
                     if self.is_discrete else future, training=False).mean()[:, 0]
 
                 # evaluate the conservatism of the current solution
-                particle_loss = future_score - self.beta * current_score
+                particle_loss = self.beta * future_score - current_score
 
                 # if optimizer conservatism passes threshold stop optimizing
                 self.particle_loss.assign(particle_loss)
                 self.particle_constraint.assign(future_score - current_score)
-
-                # build a lagrangian for dual descent
-                beta_loss = -particle_loss
 
             # calculate an update to the particles
             update = (self.solution - self.solver_lr *
