@@ -442,7 +442,7 @@ def molecule_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
-        "task_kwargs": {'split_percentile': 80},
+        "task_kwargs": {'split_percentile': 80, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": True,
         "normalize_ys": True,
         "normalize_xs": False,
@@ -485,7 +485,7 @@ def gfp_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "GFP-v0",
-        "task_kwargs": {'seed': tune.randint(1000)},
+        "task_kwargs": {'seed': tune.randint(1000), 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": True,
         "normalize_ys": True,
         "normalize_xs": False,
@@ -528,7 +528,7 @@ def gfp_v1_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "GFP-v1",
-        "task_kwargs": {'split_percentile': 20},
+        "task_kwargs": {'split_percentile': 20, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": True,
         "normalize_ys": True,
         "normalize_xs": False,
@@ -549,20 +549,6 @@ def gfp_v1_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
-
-"""
-
-sbatch sbatch_autofocus_gfp_v1.sh
-sbatch sbatch_cbas_gfp_v1.sh
-sbatch sbatch_grad_gfp_v1.sh
-sbatch sbatch_mins_gfp_v1.sh
-sbatch sbatch_grad_gfp_v1_mean_ensemble.sh
-sbatch sbatch_grad_gfp_v1_min_ensemble.sh
-sbatch sbatch_cma_es_gfp_v1.sh
-sbatch sbatch_bo_qei_gfp_v1.sh
-sbatch sbatch_reinforce_gfp_v1.sh
-
-"""
 
 
 @cli.command()
@@ -585,7 +571,7 @@ def dkitty_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
-        "task_kwargs": {"split_percentile": 40, 'num_parallel': 2},
+        "task_kwargs": {"split_percentile": 40, 'num_parallel': 1, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
@@ -628,7 +614,7 @@ def ant_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
-        "task_kwargs": {"split_percentile": 20, 'num_parallel': 2},
+        "task_kwargs": {"split_percentile": 20, 'num_parallel': 1, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
@@ -671,7 +657,7 @@ def hopper_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
@@ -714,7 +700,7 @@ def superconductor_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_sample
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
@@ -760,7 +746,7 @@ def molecule_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
-        "task_kwargs": {'split_percentile': 80},
+        "task_kwargs": {'split_percentile': 80, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": True,
         "normalize_ys": True,
         "normalize_xs": False,
@@ -803,7 +789,7 @@ def gfp_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "GFP-v0",
-        "task_kwargs": {'seed': tune.randint(1000)},
+        "task_kwargs": {'seed': tune.randint(1000), 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": True,
         "normalize_ys": True,
         "normalize_xs": False,
@@ -846,7 +832,7 @@ def gfp_v1_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "GFP-v1",
-        "task_kwargs": {'split_percentile': 20},
+        "task_kwargs": {'split_percentile': 20, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": True,
         "normalize_ys": True,
         "normalize_xs": False,
@@ -889,7 +875,7 @@ def dkitty_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
-        "task_kwargs": {"split_percentile": 40, 'num_parallel': 2},
+        "task_kwargs": {"split_percentile": 40, 'num_parallel': 1, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
@@ -932,7 +918,7 @@ def ant_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
-        "task_kwargs": {"split_percentile": 20, 'num_parallel': 2},
+        "task_kwargs": {"split_percentile": 20, 'num_parallel': 1, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
@@ -975,7 +961,7 @@ def hopper_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
@@ -1018,7 +1004,7 @@ def superconductor_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
-        "task_kwargs": {},
+        "task_kwargs": {'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
         "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
