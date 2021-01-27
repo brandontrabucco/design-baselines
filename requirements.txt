@@ -71,7 +71,7 @@ Markdown==3.2.2
 MarkupSafe==1.1.1
 matplotlib==3.3.0
 mistune==0.8.4
-morphing-agents==1.2
+morphing-agents==1.4
 msgpack==1.0.0
 mujoco-py==2.0.2.13
 multidict==4.7.6
