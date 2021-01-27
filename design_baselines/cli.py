@@ -958,7 +958,10 @@ def ablate_architecture(hopper,
 @click.option('--ylabel', type=str)
 @click.option('--separate-runs', is_flag=True)
 @click.option('--max-iterations', type=int, default=999999)
-def plot(dir, tag, xlabel, ylabel, separate_runs, max_iterations):
+@click.option('--lower-limit', type=float, default=-999999.)
+@click.option('--upper-limit', type=float, default=999999.)
+def plot(dir, tag, xlabel, ylabel, separate_runs,
+         max_iterations, lower_limit, upper_limit):
 
     from collections import defaultdict
     import glob
@@ -1037,7 +1040,7 @@ def plot(dir, tag, xlabel, ylabel, separate_runs, max_iterations):
                 for v in e.summary.value:
                     if v.tag == tag and e.step < max_iterations:
                         y_vals = tf.make_ndarray(v.tensor)
-                        y_vals = np.maximum(y_vals, 0.0)
+                        y_vals = np.clip(y_vals, lower_limit, upper_limit)
                         row = {'id': i,
                                ylabel: y_vals.tolist(),
                                xlabel: e.step}
