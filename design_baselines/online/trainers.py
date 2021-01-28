@@ -314,9 +314,14 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         # save the state of the solution found by the model
         self.step = tf.Variable(tf.constant(0, dtype=tf.int32))
+        self.previous_solution = None
         self.solution = None
         self.particle_loss = None
-        self.particle_constraint = None
+        self.particle_prediction = None
+        self.particle_constraint0 = None
+        self.particle_constraint1 = None
+        self.particle_constraint2 = None
+        self.particle_constraint3 = None
         self.done = None
 
     @tf.function(experimental_relax_shapes=True)
@@ -421,56 +426,103 @@ class ConservativeMaximumLikelihood(tf.Module):
             total_loss = tf.reduce_mean(model_loss)
             alpha_loss = tf.reduce_mean(alpha_loss)
 
+        # initialize stateful variables at the first iteration
         if self.particle_loss is None:
-            self.particle_loss = tf.Variable(tf.zeros_like(conservatism))
-        if self.particle_constraint is None:
-            self.particle_constraint = tf.Variable(tf.zeros_like(conservatism))
+            initialization = tf.zeros_like(conservatism)
+            self.particle_loss = tf.Variable(initialization)
+            self.particle_prediction = tf.Variable(initialization)
+            self.particle_constraint0 = tf.Variable(initialization)
+            self.particle_constraint1 = tf.Variable(initialization)
+            self.particle_constraint2 = tf.Variable(initialization)
+            self.particle_constraint3 = tf.Variable(initialization)
 
-        # take gradient steps on the model
-        grads = tape.gradient(
+        # calculate gradients using the model
+        alpha_grads = tape.gradient(alpha_loss, self.log_alpha)
+        model_grads = tape.gradient(
             total_loss, self.forward_model.trainable_variables)
-        self.forward_model_opt.apply_gradients(
-            zip(grads, self.forward_model.trainable_variables))
-
-        # take gradient steps on alpha
-        grads = tape.gradient(alpha_loss, self.log_alpha)
-        self.alpha_opt.apply_gradients([[grads, self.log_alpha]])
 
         # occasionally take gradient ascent steps on the solution
         if tf.logical_and(
                 tf.equal(tf.math.mod(self.step, self.solver_interval), 0),
                 tf.math.greater_equal(self.step, self.solver_warmup)):
             with tf.GradientTape() as tape:
-                tape.watch(self.solution)
+
+                # calculate the predicted score of the previous solution
+                previous_score_old_model = self.forward_model.get_distribution(
+                    tf.math.softmax(self.previous_solution) if self.is_discrete
+                    else self.previous_solution, training=False).mean()[:, 0]
 
                 # calculate the predicted score of the current solution
-                current_score = self.forward_model.get_distribution(
-                    tf.math.softmax(self.solution)
-                    if self.is_discrete else self.solution, training=False).mean()[:, 0]
+                current_score_old_model = self.forward_model.get_distribution(
+                    tf.math.softmax(self.solution) if self.is_discrete
+                    else self.solution, training=False).mean()[:, 0]
 
                 # look into the future and evaluate future solutions
-                future = self.lookahead(
+                future_old_model = self.lookahead(
                     self.solution, self.solver_steps, training=False)
-                future_score = self.forward_model.get_distribution(
-                    tf.math.softmax(future)
-                    if self.is_discrete else future, training=False).mean()[:, 0]
+                future_score_old_model = self.forward_model.get_distribution(
+                    tf.math.softmax(future_old_model) if self.is_discrete
+                    else future_old_model, training=False).mean()[:, 0]
+
+                # take gradient steps on the model
+                self.alpha_opt.apply_gradients([[alpha_grads, self.log_alpha]])
+                self.forward_model_opt.apply_gradients(
+                    zip(model_grads, self.forward_model.trainable_variables))
+
+                # calculate the predicted score of the previous solution
+                previous_score_new_model = self.forward_model.get_distribution(
+                    tf.math.softmax(self.previous_solution) if self.is_discrete
+                    else self.previous_solution, training=False).mean()[:, 0]
+
+                # calculate the predicted score of the current solution
+                current_score_new_model = self.forward_model.get_distribution(
+                    tf.math.softmax(self.solution) if self.is_discrete
+                    else self.solution, training=False).mean()[:, 0]
+
+                # look into the future and evaluate future solutions
+                future_new_model = self.lookahead(
+                    self.solution, self.solver_steps, training=False)
+                future_score_new_model = self.forward_model.get_distribution(
+                    tf.math.softmax(future_new_model) if self.is_discrete
+                    else future_new_model, training=False).mean()[:, 0]
 
                 # evaluate the conservatism of the current solution
-                particle_loss = (
-                    self.solver_beta * future_score - current_score)
+                particle_loss = (self.solver_beta * future_score_new_model -
+                                 current_score_new_model)
                 update = (self.solution - self.solver_lr *
                           tape.gradient(particle_loss, self.solution))
+                update_score = self.forward_model.get_distribution(
+                    tf.math.softmax(update) if self.is_discrete
+                    else update, training=False).mean()[:, 0]
 
-                # if optimizer conservatism passes threshold stop optimizing
-                self.particle_loss.assign(particle_loss)
-                self.particle_constraint.assign(future_score - current_score)
+            # if optimizer conservatism passes threshold stop optimizing
+            self.previous_solution.assign(tf.identity(self.solution))
+            self.solution.assign(tf.where(self.done, self.solution, update))
+            self.particle_loss.assign(particle_loss)
+            self.particle_prediction.assign(update_score)
+            self.particle_constraint0.assign(
+                future_score_new_model - current_score_new_model)
+            self.particle_constraint1.assign(
+                current_score_new_model - previous_score_new_model)
+            self.particle_constraint2.assign(
+                current_score_new_model - current_score_old_model)
+            self.particle_constraint3.assign(
+                future_score_new_model - current_score_old_model)
 
-            # only update solutions that are not frozen
-            self.solution.assign(
-                tf.where(self.done, self.solution, update))
+        else:
+
+            # take gradient steps on the model
+            self.alpha_opt.apply_gradients([[alpha_grads, self.log_alpha]])
+            self.forward_model_opt.apply_gradients(
+                zip(model_grads, self.forward_model.trainable_variables))
+
         statistics[f'train/done'] = tf.cast(self.done, tf.float32)
         statistics[f'train/particle_loss'] = self.particle_loss
-        statistics[f'train/particle_constraint'] = self.particle_constraint
+        statistics[f'train/particle_prediction'] = self.particle_prediction
+        statistics[f'train/particle_constraint0'] = self.particle_constraint0
+        statistics[f'train/particle_constraint1'] = self.particle_constraint1
+        statistics[f'train/particle_constraint2'] = self.particle_constraint2
+        statistics[f'train/particle_constraint3'] = self.particle_constraint3
 
         return statistics
 

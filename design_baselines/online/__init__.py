@@ -9,6 +9,7 @@ from collections import defaultdict
 import tensorflow as tf
 import numpy as np
 import glob
+import os
 
 
 def online(config):
@@ -127,6 +128,7 @@ def online(config):
     # create the starting point for the optimizer
     evaluations = 0
     trainer.solution = tf.Variable(solution_x)
+    trainer.previous_solution = tf.Variable(solution_x)
     trainer.done = tf.Variable(tf.fill(
         [config['batch_size']] + [1 for _ in x.shape[1:]], False))
 
@@ -182,6 +184,8 @@ def online(config):
         logger.record(f"rank_corr/model_to_real",
                       spearman(model[:, 0], score[:, 0]), evaluations)
 
+        return score
+
     # train a held-out model on the validation set
     for e in range(100):
 
@@ -207,6 +211,9 @@ def online(config):
     interval = trainer.solver_interval
     warmup = trainer.solver_warmup
 
+    scores = []
+    predictions = []
+
     # train model for many epochs with conservatism
     for e in range(config['epochs']):
 
@@ -219,7 +226,8 @@ def online(config):
             if tf.logical_and(
                     tf.equal(tf.math.mod(trainer.step, interval), 0),
                     tf.math.greater_equal(trainer.step, warmup)):
-                evaluate_solution(trainer.solution)
+                scores.append(evaluate_solution(trainer.solution))
+                predictions.append(trainer.particle_prediction.numpy())
 
         for name in statistics.keys():
             logger.record(
@@ -236,3 +244,9 @@ def online(config):
 
         if tf.reduce_all(trainer.done):
             break
+
+    # save the model predictions and scores to be aggregated later
+    np.save(os.path.join(config['logging_dir'], "scores.npy"),
+            np.concatenate(scores, axis=1))
+    np.save(os.path.join(config['logging_dir'], "predictions.npy"),
+            np.stack(predictions, axis=1))

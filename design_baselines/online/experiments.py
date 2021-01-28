@@ -682,7 +682,7 @@ def superconductor_dataset(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_alpha": 1.0,
         "alpha_lr": 0.05,
         "target_conservatism": 0.05,
-        "negatives_fraction": tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]),
+        "negatives_fraction": tune.grid_search([0.0, 0.1, 0.3, 0.7, 0.9, 1.0]),
         "lookahead_steps": 1,
         "lookahead_backprop": True,
         "solver_lr": 0.01,
