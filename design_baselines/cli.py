@@ -1993,6 +1993,10 @@ def evaluate_stability(dir, iteration, lower_k, upper_k):
             for key in params_of_variation:
                 scores = np.load(os.path.join(os.path.dirname(f), 'scores.npy'))
                 predictions = np.load(os.path.join(os.path.dirname(f), 'predictions.npy'))
+                if len(predictions.shape) > 2:
+                    predictions = predictions[:, :, 0]
+                print(predictions.shape)
+                print(scores.shape)
                 for limit in range(lower_k, upper_k):
                     top_k = np.argsort(predictions[:, iteration])[::-1][:limit]
                     data = data.append({"id": i, "Budget": limit,

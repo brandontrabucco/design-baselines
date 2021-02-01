@@ -61,6 +61,14 @@ def online(config):
         x.shape[0] - config['val_size']) / config['batch_size'])
 
     # make a neural network to predict scores
+    random_network = ForwardModel(
+        task.input_shape,
+        activations=config['activations'],
+        hidden=config['hidden_size'],
+        initial_max_std=config['initial_max_std'],
+        initial_min_std=config['initial_min_std'])
+
+    # make a neural network to predict scores
     forward_model = ForwardModel(
         task.input_shape,
         activations=config['activations'],
@@ -90,26 +98,32 @@ def online(config):
         discrete_smoothing=config.get('discrete_smoothing', 0.6))
 
     # make a neural network to predict scores
-    held_out_models = [ForwardModel(
+    held_out_model = ForwardModel(
         task.input_shape,
-        activations=['relu' if i == j else 'tanh' for j in range(8)],
+        activations=config['activations'],
         hidden=256,
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'])
-        for i in range(8)]
 
-    # create a trainer for a forward model with a conservative objective
+    # create a trainer for a forward model with maximum likelihood
     held_out_trainer = Ensemble(
-        held_out_models,
+        [held_out_model],
         forward_model_optim=tf.keras.optimizers.Adam,
         forward_model_lr=0.001)
 
+    rnd_y = []
+    for rnd_x in tf.data.Dataset.from_tensor_slices(x).batch(32):
+        rnd_x = soft_noise(rnd_x, config.get('discrete_smoothing', 0.6)) \
+                if config['is_discrete'] else rnd_x
+        rnd_y.append(random_network.get_distribution(rnd_x).mean())
+    rnd_y = tf.concat(rnd_y, axis=0).numpy()
+
     # create a bootstrapped data set
     held_out_train_data, held_out_validate_data = task.build(
-        x=x, y=y,
+        x=x, y=rnd_y,
         batch_size=config['batch_size'],
         val_size=config['val_size'],
-        bootstraps=len(held_out_models))
+        bootstraps=1)
 
     # create a data set
     train_data, validate_data = task.build(
@@ -140,10 +154,13 @@ def online(config):
             tape.watch(xt)
             solution = tf.math.softmax(xt) if config['is_discrete'] else xt
             model = forward_model.get_distribution(solution).mean()
-            held_out_m = [m.get_distribution(solution).mean()
-                          for m in held_out_models]
-            held_out_s = [m.get_distribution(solution).stddev()
-                          for m in held_out_models]
+
+        held_out_m = [held_out_model.get_distribution(solution).mean()]
+        held_out_s = [held_out_model.get_distribution(solution).stddev()]
+        rnd_label = random_network.get_distribution(solution).mean()
+        log_probability = held_out_model.get_distribution(solution).log_prob(rnd_label)
+        logger.record(f"rnd/log_probability",
+                      log_probability, evaluations)
 
         # evaluate the predictions and gradient norm
         score = task.score(solution * st_x + mu_x)

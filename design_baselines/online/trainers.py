@@ -408,6 +408,7 @@ class ConservativeMaximumLikelihood(tf.Module):
                 x_neg = tf.stop_gradient(x_neg)
 
             # calculate the prediction error and accuracy of the model
+            x_pos = tf.math.softmax(x_pos) if self.is_discrete else x_pos
             x_neg = tf.math.softmax(x_neg) if self.is_discrete else x_neg
             d_pos = self.forward_model.get_distribution(
                 {"dataset": x, "mix": x_pos, "solution": self.solution[:batch_dim]}

@@ -1250,7 +1250,7 @@ def gfp_particle(local_dir, cpus, gpus, num_parallel, num_samples):
         "solver_interval": 1,
         "solver_warmup": 50,
         "solver_steps": 1,
-        "solver_beta": tune.grid_search([0.0, 0.1, 0.3, 0.7, 0.9, 1.0])},
+        "solver_beta": 0.9},  # tune.grid_search([0.0, 0.1, 0.3, 0.7, 0.9, 1.0])},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
