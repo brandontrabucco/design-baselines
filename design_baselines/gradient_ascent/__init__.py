@@ -146,6 +146,9 @@ def gradient_ascent(config):
         trainer.launch(train_data, validate_data, logger,
                        config['epochs'], header=f'oracle_{i}/')
 
+        fm.save(os.path.join(config['logging_dir'],
+                             f'model_{i}'))
+
     # select the top k initial designs from the dataset
     mean_x = tf.reduce_mean(x, axis=0, keepdims=True)
     indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
@@ -172,6 +175,9 @@ def gradient_ascent(config):
             logger.record(f"rank_corr/0_to_{n}",
                           spearman(preds[0][:, 0], prediction_i[:, 0]), 0)
 
+    all_scores = []
+    all_predictions = []
+
     # perform gradient ascent on the score through the forward model
     for i in range(1, config['solver_steps'] + 1):
         # back propagate through the forward model
@@ -197,6 +203,8 @@ def gradient_ascent(config):
         score = task.score(solution * st_x + mu_x)
         preds = [fm.get_distribution(
             solution).mean() * st_y + mu_y for fm in forward_models]
+        all_scores.append(score)
+        all_predictions.append(preds[0].numpy())
 
         held_out_m = [m.get_distribution(solution).mean()
                       for m in held_out_models]
@@ -238,11 +246,11 @@ def gradient_ascent(config):
                 logger.record(f"grad_corr/0_to_{n}", tfp.stats.correlation(
                     grads[0], grads[n], sample_axis=0, event_axis=None), i)
 
-        # save the best design to the disk
-        np.save(os.path.join(
-            config['logging_dir'], f'score_{i}.npy'), score)
-        np.save(os.path.join(
-            config['logging_dir'], f'solution_{i}.npy'), solution)
+    # save the model predictions and scores to be aggregated later
+    np.save(os.path.join(config['logging_dir'], "scores.npy"),
+            np.concatenate(all_scores, axis=1))
+    np.save(os.path.join(config['logging_dir'], "predictions.npy"),
+            np.stack(all_predictions, axis=1))
 
     # render a video of the best solution found at the end
     render_video(config,

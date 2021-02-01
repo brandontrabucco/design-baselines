@@ -960,8 +960,9 @@ def ablate_architecture(hopper,
 @click.option('--max-iterations', type=int, default=999999)
 @click.option('--lower-limit', type=float, default=-999999.)
 @click.option('--upper-limit', type=float, default=999999.)
+@click.option('--norm', type=str, default='none')
 def plot(dir, tag, xlabel, ylabel, separate_runs,
-         max_iterations, lower_limit, upper_limit):
+         max_iterations, lower_limit, upper_limit, norm):
 
     from collections import defaultdict
     import glob
@@ -1032,6 +1033,11 @@ def plot(dir, tag, xlabel, ylabel, separate_runs,
     if len(params_of_variation) == 0:
         params_of_variation.append('task')
 
+    import design_bench
+    task = design_bench.make(params[0]['task'],
+                             **params[0]['task_kwargs'])
+    dim_x = float(task.x.shape[1])
+
     # read data from tensor board
     data = pd.DataFrame(columns=['id', xlabel, ylabel] + params_of_variation)
     for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
@@ -1041,6 +1047,10 @@ def plot(dir, tag, xlabel, ylabel, separate_runs,
                     if v.tag == tag and e.step < max_iterations:
                         y_vals = tf.make_ndarray(v.tensor)
                         y_vals = np.clip(y_vals, lower_limit, upper_limit)
+                        if norm == 'sqrt':
+                            y_vals /= np.sqrt(dim_x)
+                        if norm == 'full':
+                            y_vals /= dim_x
                         row = {'id': i,
                                ylabel: y_vals.tolist(),
                                xlabel: e.step}
@@ -1058,7 +1068,7 @@ def plot(dir, tag, xlabel, ylabel, separate_runs,
                         kind="line", height=5, aspect=2,
                         facet_kws={"legend_out": True})
         g.set(title=f'Evaluating {pretty(algo_name)} On {task_name}')
-        plt.savefig(f'{algo_name}_{task_name}_{key}_{tag.replace("/", "_")}.png',
+        plt.savefig(f'{algo_name}_{task_name}_{key}_{tag.replace("/", "_")}_{norm}.png',
                     bbox_inches='tight')
 
 
@@ -1542,6 +1552,105 @@ def evaluate_fixed(dir, tag, iteration, confidence):
 @cli.command()
 @click.option('--dir', type=str)
 @click.option('--tag', type=str)
+@click.option('--distance', type=float)
+@click.option('--distance-tag', type=str, default='distance/travelled')
+@click.option('--norm', type=str, default='full')
+@click.option('--confidence', is_flag=True)
+def evaluate_fixed_distance(dir, tag, distance,
+                            distance_tag, norm, confidence):
+
+    import glob
+    import os
+    import re
+    import numpy as np
+    import pickle as pkl
+    import tensorflow as tf
+    import tqdm
+    import seaborn as sns
+    from collections import defaultdict
+
+    sns.set_style("whitegrid")
+    sns.set_context("notebook",
+                    font_scale=3.5,
+                    rc={"lines.linewidth": 3.5,
+                        'grid.linewidth': 2.5})
+
+    # get the experiment ids
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
+    matches = [pattern.search(d) for d in dirs]
+    ids = [int(m.group(2)) for m in matches]
+
+    # sort the files by the experiment ids
+    zipped_lists = zip(ids, dirs)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    ids, dirs = [list(tuple) for tuple in tuples]
+
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
+
+    # get the task and algorithm name
+    task_name = params[0]['task']
+    algo_name = matches[0].group(1)
+
+    import design_bench
+    task = design_bench.make(params[0]['task'],
+                             **params[0]['task_kwargs'])
+    dim_x = float(task.x.shape[1])
+
+    # read data from tensor board
+    it_to_tag = defaultdict(list)
+    it_to_distance = defaultdict(list)
+    for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
+        for f in glob.glob(os.path.join(d, '*/events.out*')):
+            for e in tf.compat.v1.train.summary_iterator(f):
+                for v in e.summary.value:
+                    if v.tag == tag:
+                        it_to_tag[e.step].append(
+                            tf.make_ndarray(v.tensor).tolist())
+                    if v.tag == distance_tag:
+                        y_vals = tf.make_ndarray(v.tensor)
+                        if norm == 'sqrt':
+                            y_vals /= np.sqrt(dim_x)
+                        if norm == 'full':
+                            y_vals /= dim_x
+                        it_to_distance[e.step].append(y_vals.tolist())
+
+    iterations, distances = zip(*list(it_to_distance.items()))
+    distances = np.array([np.mean(dl) for dl in distances])
+    distances = np.where(distances < distance, distances, -999999.)
+    iteration = iterations[np.argmax(distances)]
+
+    import numpy as np
+    import scipy.stats
+
+    def mean_confidence_interval(data, confidence=0.95):
+        a = 1.0 * np.array(data)
+        n = len(a)
+        se = scipy.stats.sem(a)
+        return se * scipy.stats.t.ppf((1 + confidence) / 2., n - 1)
+
+    if iteration in it_to_tag:
+        mean = np.mean(it_to_tag[iteration])
+        std = np.std(it_to_tag[iteration])
+        if confidence:
+            ci90 = mean_confidence_interval(np.array(it_to_tag[iteration]), confidence=0.90)
+            ci95 = mean_confidence_interval(np.array(it_to_tag[iteration]), confidence=0.95)
+            ci99 = mean_confidence_interval(np.array(it_to_tag[iteration]), confidence=0.99)
+            #print(f'Evaluate {task_name} At {iteration}\n\t{mean} : ci90={ci90} ci95={ci95} ci99={ci99}')
+            print(f'{task_name}, {algo_name}, {mean}, {ci90}, {ci95}, {ci99}')
+        else:
+            #print(f'Evaluate {task_name} At {iteration}\n\t{mean} +- {std}')
+            print(f'{task_name}, {algo_name}, {mean}, {std}')
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--tag', type=str)
 @click.option('--label', type=str)
 @click.option('--pone', type=str, default='perturbation_steps')
 @click.option('--ptwo', type=str, default='initial_alpha')
@@ -1713,6 +1822,186 @@ def evaluate(dir, tag, iteration):
     for key in param_to_scores:
         if len(param_to_scores[key]) > 0:
             scores = np.array(param_to_scores[key])
+            mean = np.mean(scores)
+            std = np.std(scores - mean)
+            print(f"key: {key}\n\tmean: {mean}\n\tstd: {std}")
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--tag', type=str)
+@click.option('--distance', type=float)
+@click.option('--distance-tag', type=str, default='distance/travelled')
+@click.option('--norm', type=str, default='full')
+def evaluate_distance(dir, tag, distance, distance_tag, norm):
+
+    from collections import defaultdict
+    import pickle as pkl
+    import glob
+    import os
+    import re
+    import numpy as np
+    import tensorflow as tf
+    import tqdm
+
+    def pretty(s):
+        return s.replace('_', ' ').title()
+
+    # get the experiment ids
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
+    matches = [pattern.search(d) for d in dirs]
+    ids = [int(m.group(2)) for m in matches]
+
+    # sort the files by the experiment ids
+    zipped_lists = zip(ids, dirs)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    ids, dirs = [list(tuple) for tuple in tuples]
+
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
+
+    # concatenate all params along axis 1
+    all_params = defaultdict(list)
+    for p in params:
+        for key, val in p.items():
+            if val not in all_params[key]:
+                all_params[key].append(val)
+
+    # locate the params of variation in this experiment
+    params_of_variation = []
+    for key, val in all_params.items():
+        if len(val) > 1 and (not isinstance(val[0], dict)
+                             or 'seed' not in val[0]):
+            params_of_variation.append(key)
+
+    # get the task and algorithm name
+    if len(params_of_variation) == 0:
+        params_of_variation.append('task')
+
+    import design_bench
+    task = design_bench.make(params[0]['task'],
+                             **params[0]['task_kwargs'])
+    dim_x = float(task.x.shape[1])
+
+    # read data from tensor board
+    param_to_it_scores = defaultdict(lambda: defaultdict(list))
+    param_to_it_distances = defaultdict(lambda: defaultdict(list))
+    for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
+        for f in glob.glob(os.path.join(d, '*/events.out*')):
+            for e in tf.compat.v1.train.summary_iterator(f):
+                for v in e.summary.value:
+                    if v.tag == tag:
+                        for key in params_of_variation:
+                            key = f'{pretty(key)} = {p[key]}'
+                            param_to_it_scores[key][e.step].append(
+                                tf.make_ndarray(v.tensor).tolist())
+                    if v.tag == distance_tag:
+                        for key in params_of_variation:
+                            key = f'{pretty(key)} = {p[key]}'
+                            ds = tf.make_ndarray(v.tensor)
+                            if norm == 'sqrt':
+                                ds /= np.sqrt(dim_x)
+                            if norm == 'full':
+                                ds /= dim_x
+                            param_to_it_distances[key][e.step].append(ds)
+
+    # return the mean score and standard deviation
+    for key in param_to_it_scores:
+        step_0 = list(param_to_it_scores[key].keys())[0]
+        if len(param_to_it_scores[key][step_0]) > 0:
+            iterations, distances = zip(*list(param_to_it_distances[key].items()))
+            distances = np.array([np.mean(dl) for dl in distances])
+            distances = np.where(distances < distance, distances, -999999.)
+            iteration = iterations[np.argmax(distances)]
+            scores = np.array(param_to_it_scores[key][iteration])
+            mean = np.mean(scores)
+            std = np.std(scores - mean)
+            print(f"key: {key}\n\tmean: {mean}\n\tstd: {std}")
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--iteration', type=int)
+@click.option('--upper-k', type=int, default=0)
+@click.option('--lower-k', type=int, default=12)
+def evaluate_stability(dir, iteration, upper_k, lower_k):
+
+    from collections import defaultdict
+    import pickle as pkl
+    import glob
+    import os
+    import re
+    import numpy as np
+    import tensorflow as tf
+    import tqdm
+
+    def pretty(s):
+        return s.replace('_', ' ').title()
+
+    # get the experiment ids
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
+    matches = [pattern.search(d) for d in dirs]
+    ids = [int(m.group(2)) for m in matches]
+
+    # sort the files by the experiment ids
+    zipped_lists = zip(ids, dirs)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    ids, dirs = [list(tuple) for tuple in tuples]
+
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
+
+    # concatenate all params along axis 1
+    all_params = defaultdict(list)
+    for p in params:
+        for key, val in p.items():
+            if val not in all_params[key]:
+                all_params[key].append(val)
+
+    # locate the params of variation in this experiment
+    params_of_variation = []
+    for key, val in all_params.items():
+        if len(val) > 1 and (not isinstance(val[0], dict)
+                             or 'seed' not in val[0]):
+            params_of_variation.append(key)
+
+    # get the task and algorithm name
+    if len(params_of_variation) == 0:
+        params_of_variation.append('task')
+
+    # read data from tensor board
+    param_to_scores = defaultdict(list)
+    param_to_predictions = defaultdict(list)
+    for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
+        for f in glob.glob(os.path.join(d, '*/events.out*')):
+            for key in params_of_variation:
+                key = f'{pretty(key)} = {p[key]}'
+                param_to_scores[key].append(
+                    np.load(os.path.join(os.path.dirname(f),
+                                         'scores.npy')))
+                param_to_predictions[key].append(
+                    np.load(os.path.join(os.path.dirname(f),
+                                         'predictions.npy')))
+
+    # return the mean score and standard deviation
+    for key in param_to_scores:
+        if len(param_to_scores[key]) > 0:
+            scores = []
+            for a, b in zip(param_to_scores[key],
+                            param_to_predictions[key]):
+                top_k = np.argsort(b[:, iteration])[::-1][upper_k:lower_k]
+                scores.append(np.mean(a[:, iteration][top_k]))
+            scores = np.array(scores)
             mean = np.mean(scores)
             std = np.std(scores - mean)
             print(f"key: {key}\n\tmean: {mean}\n\tstd: {std}")
