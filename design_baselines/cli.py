@@ -1927,9 +1927,9 @@ def evaluate_distance(dir, tag, distance, distance_tag, norm):
 @cli.command()
 @click.option('--dir', type=str)
 @click.option('--iteration', type=int)
-@click.option('--upper-k', type=int, default=0)
-@click.option('--lower-k', type=int, default=12)
-def evaluate_stability(dir, iteration, upper_k, lower_k):
+@click.option('--lower-k', type=int, default=1)
+@click.option('--upper-k', type=int, default=128)
+def evaluate_stability(dir, iteration, lower_k, upper_k):
 
     from collections import defaultdict
     import pickle as pkl
@@ -1939,6 +1939,9 @@ def evaluate_stability(dir, iteration, upper_k, lower_k):
     import numpy as np
     import tensorflow as tf
     import tqdm
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
 
     def pretty(s):
         return s.replace('_', ' ').title()
@@ -1961,6 +1964,10 @@ def evaluate_stability(dir, iteration, upper_k, lower_k):
         with open(os.path.join(d, 'params.pkl'), 'rb') as f:
             params.append(pkl.load(f))
 
+    # get the task and algorithm name
+    task_name = params[0]['task']
+    algo_name = matches[0].group(1)
+
     # concatenate all params along axis 1
     all_params = defaultdict(list)
     for p in params:
@@ -1980,28 +1987,24 @@ def evaluate_stability(dir, iteration, upper_k, lower_k):
         params_of_variation.append('task')
 
     # read data from tensor board
-    param_to_scores = defaultdict(list)
-    param_to_predictions = defaultdict(list)
+    data = pd.DataFrame(columns=['id', "Budget", "Score"] + params_of_variation)
     for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
         for f in glob.glob(os.path.join(d, '*/events.out*')):
             for key in params_of_variation:
-                key = f'{pretty(key)} = {p[key]}'
-                param_to_scores[key].append(
-                    np.load(os.path.join(os.path.dirname(f),
-                                         'scores.npy')))
-                param_to_predictions[key].append(
-                    np.load(os.path.join(os.path.dirname(f),
-                                         'predictions.npy')))
+                scores = np.load(os.path.join(os.path.dirname(f), 'scores.npy'))
+                predictions = np.load(os.path.join(os.path.dirname(f), 'predictions.npy'))
+                for limit in range(lower_k, upper_k):
+                    top_k = np.argsort(predictions[:, iteration])[::-1][:limit]
+                    data = data.append({"id": i, "Budget": limit,
+                                        "Score": np.max(scores[:, iteration][top_k]),
+                                        key: f'{pretty(key)} = {p[key]}'}, ignore_index=True)
 
-    # return the mean score and standard deviation
-    for key in param_to_scores:
-        if len(param_to_scores[key]) > 0:
-            scores = []
-            for a, b in zip(param_to_scores[key],
-                            param_to_predictions[key]):
-                top_k = np.argsort(b[:, iteration])[::-1][upper_k:lower_k]
-                scores.append(np.mean(a[:, iteration][top_k]))
-            scores = np.array(scores)
-            mean = np.mean(scores)
-            std = np.std(scores - mean)
-            print(f"key: {key}\n\tmean: {mean}\n\tstd: {std}")
+    # save a separate plot for every hyper parameter
+    for key in params_of_variation:
+        plt.clf()
+        g = sns.relplot(x="Budget", y="Score", hue=key, data=data,
+                        kind="line", height=5, aspect=2,
+                        facet_kws={"legend_out": True})
+        g.set(title=f'Stability Of {pretty(algo_name)} On {task_name}')
+        plt.savefig(f'{algo_name}_{task_name}_{key}_stability.png',
+                    bbox_inches='tight')
