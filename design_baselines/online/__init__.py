@@ -138,6 +138,8 @@ def online(config):
     solution_x = tf.math.log(soft_noise(
         initial_x, config.get('discrete_smoothing', 0.6))) \
         if config['is_discrete'] else initial_x
+    initial_x = tf.math.softmax(solution_x) \
+        if config['is_discrete'] else solution_x
 
     # create the starting point for the optimizer
     evaluations = 0
@@ -163,43 +165,45 @@ def online(config):
                       log_probability, evaluations)
 
         # evaluate the predictions and gradient norm
-        score = task.score(solution * st_x + mu_x)
-        grads = tape.gradient(model, xt)
-        model = model * st_y + mu_y
         evaluations += 1
+        score = (model * 0).numpy()
+        if evaluations % 10 == 0:
+            score = task.score(solution * st_x + mu_x)
+            grads = tape.gradient(model, xt)
+            model = model * st_y + mu_y
 
-        max_of_mean = tf.reduce_max(held_out_m, axis=0)
-        max_of_stddev = tf.reduce_max(held_out_s, axis=0)
-        min_of_mean = tf.reduce_min(held_out_m, axis=0)
-        min_of_stddev = tf.reduce_min(held_out_s, axis=0)
-        mean_of_mean = tf.reduce_mean(held_out_m, axis=0)
-        mean_of_stddev = tf.reduce_mean(held_out_s, axis=0)
-        logger.record(f"oracle/max_of_mean",
-                      max_of_mean, evaluations)
-        logger.record(f"oracle/max_of_stddev",
-                      max_of_stddev, evaluations)
-        logger.record(f"oracle/min_of_mean",
-                      min_of_mean, evaluations)
-        logger.record(f"oracle/min_of_stddev",
-                      min_of_stddev, evaluations)
-        logger.record(f"oracle/mean_of_mean",
-                      mean_of_mean, evaluations)
-        logger.record(f"oracle/mean_of_stddev",
-                      mean_of_stddev, evaluations)
+            max_of_mean = tf.reduce_max(held_out_m, axis=0)
+            max_of_stddev = tf.reduce_max(held_out_s, axis=0)
+            min_of_mean = tf.reduce_min(held_out_m, axis=0)
+            min_of_stddev = tf.reduce_min(held_out_s, axis=0)
+            mean_of_mean = tf.reduce_mean(held_out_m, axis=0)
+            mean_of_stddev = tf.reduce_mean(held_out_s, axis=0)
+            logger.record(f"oracle/max_of_mean",
+                          max_of_mean, evaluations)
+            logger.record(f"oracle/max_of_stddev",
+                          max_of_stddev, evaluations)
+            logger.record(f"oracle/min_of_mean",
+                          min_of_mean, evaluations)
+            logger.record(f"oracle/min_of_stddev",
+                          min_of_stddev, evaluations)
+            logger.record(f"oracle/mean_of_mean",
+                          mean_of_mean, evaluations)
+            logger.record(f"oracle/mean_of_stddev",
+                          mean_of_stddev, evaluations)
 
-        # record the prediction and score to the logger
-        logger.record("score",
-                      score, evaluations, percentile=True)
-        logger.record("distance/travelled",
-                      tf.linalg.norm(solution - initial_x), evaluations)
-        logger.record("distance/from_mean",
-                      tf.linalg.norm(solution - mean_x), evaluations)
-        logger.record(f"oracle/prediction",
-                      model, evaluations)
-        logger.record(f"oracle/grad_norm", tf.linalg.norm(
-            tf.reshape(grads, [-1, task.input_size]), axis=-1), evaluations)
-        logger.record(f"rank_corr/model_to_real",
-                      spearman(model[:, 0], score[:, 0]), evaluations)
+            # record the prediction and score to the logger
+            logger.record("score",
+                          score, evaluations, percentile=True)
+            logger.record("distance/travelled",
+                          tf.linalg.norm(solution - initial_x), evaluations)
+            logger.record("distance/from_mean",
+                          tf.linalg.norm(solution - mean_x), evaluations)
+            logger.record(f"oracle/prediction",
+                          model, evaluations)
+            logger.record(f"oracle/grad_norm", tf.linalg.norm(
+                tf.reshape(grads, [-1, task.input_size]), axis=-1), evaluations)
+            logger.record(f"rank_corr/model_to_real",
+                          spearman(model[:, 0], score[:, 0]), evaluations)
 
         return score
 
