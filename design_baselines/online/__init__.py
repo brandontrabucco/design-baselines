@@ -167,7 +167,8 @@ def online(config):
         # evaluate the predictions and gradient norm
         evaluations += 1
         score = (model * 0).numpy()
-        if evaluations % 10 == 0:
+        if evaluations in config['evaluate_steps'] \
+                or len(config['evaluate_steps']) == 0:
             score = task.score(solution * st_x + mu_x)
             grads = tape.gradient(model, xt)
             model = model * st_y + mu_y
