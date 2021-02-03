@@ -1991,17 +1991,23 @@ def evaluate_stability(dir, iteration, lower_k, upper_k):
     for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
         for f in glob.glob(os.path.join(d, '*/events.out*')):
             for key in params_of_variation:
-                scores = np.load(os.path.join(os.path.dirname(f), 'scores.npy'))
-                predictions = np.load(os.path.join(os.path.dirname(f), 'predictions.npy'))
-                if len(predictions.shape) > 2:
-                    predictions = predictions[:, :, 0]
-                print(predictions.shape)
-                print(scores.shape)
-                for limit in range(lower_k, upper_k):
-                    top_k = np.argsort(predictions[:, iteration])[::-1][:limit]
-                    data = data.append({"id": i, "Budget": limit,
-                                        "Score": np.max(scores[:, iteration][top_k]),
-                                        key: f'{pretty(key)} = {p[key]}'}, ignore_index=True)
+
+                try:
+
+                    scores = np.load(os.path.join(os.path.dirname(f), 'scores.npy'))
+                    predictions = np.load(os.path.join(os.path.dirname(f), 'predictions.npy'))
+                    if len(predictions.shape) > 2:
+                        predictions = predictions[:, :, 0]
+                    print(predictions.shape)
+                    print(scores.shape)
+                    for limit in range(lower_k, upper_k):
+                        top_k = np.argsort(predictions[:, iteration])[::-1][:limit]
+                        data = data.append({"id": i, "Budget": limit,
+                                            "Score": np.max(scores[:, iteration][top_k]),
+                                            key: f'{pretty(key)} = {p[key]}'}, ignore_index=True)
+
+                except FileNotFoundError:
+                    pass
 
     # save a separate plot for every hyper parameter
     for key in params_of_variation:
