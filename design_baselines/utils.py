@@ -72,7 +72,7 @@ def disc_noise(x, keep=0.9, temp=5.0):
 
 
 @tf.function(experimental_relax_shapes=True)
-def soft_noise(x, keep=0.9):
+def soft_noise(x, keep=0.9, temp=5.0):
     """Softens a discrete one-hot distribution so that the maximum entry is
     keep and the minimum entries are (1 - keep)
 

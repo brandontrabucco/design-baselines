@@ -54,23 +54,19 @@ def online(config):
         mu_x = np.zeros_like(x[:1])
         st_x = np.ones_like(x[:1])
 
-    solver_lr = config['solver_lr'] * np.sqrt(np.prod(x.shape[1:]))
+    input_shape = list(task.input_shape)
+    if config['is_discrete']:
+        input_shape[-1] = input_shape[-1] - 1
+
+    solver_lr = config['solver_lr'] * np.sqrt(np.prod(input_shape))
     solver_interval = int(config['solver_interval'] * (
         x.shape[0] - config['val_size']) / config['batch_size'])
     solver_warmup = int(config['solver_warmup'] * (
         x.shape[0] - config['val_size']) / config['batch_size'])
 
     # make a neural network to predict scores
-    random_network = ForwardModel(
-        task.input_shape,
-        activations=config['activations'],
-        hidden=config['hidden_size'],
-        initial_max_std=config['initial_max_std'],
-        initial_min_std=config['initial_min_std'])
-
-    # make a neural network to predict scores
     forward_model = ForwardModel(
-        task.input_shape,
+        input_shape,
         activations=config['activations'],
         hidden=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
@@ -95,35 +91,7 @@ def online(config):
         is_discrete=config['is_discrete'],
         constraint_type=config['constraint_type'],
         continuous_noise_std=config.get('continuous_noise_std', 0.0),
-        discrete_smoothing=config.get('discrete_smoothing', 0.6))
-
-    # make a neural network to predict scores
-    held_out_model = ForwardModel(
-        task.input_shape,
-        activations=config['activations'],
-        hidden=256,
-        initial_max_std=config['initial_max_std'],
-        initial_min_std=config['initial_min_std'])
-
-    # create a trainer for a forward model with maximum likelihood
-    held_out_trainer = Ensemble(
-        [held_out_model],
-        forward_model_optim=tf.keras.optimizers.Adam,
-        forward_model_lr=0.001)
-
-    rnd_y = []
-    for rnd_x in tf.data.Dataset.from_tensor_slices(x).batch(32):
-        rnd_x = soft_noise(rnd_x, config.get('discrete_smoothing', 0.6)) \
-                if config['is_discrete'] else rnd_x
-        rnd_y.append(random_network.get_distribution(rnd_x).mean())
-    rnd_y = tf.concat(rnd_y, axis=0).numpy()
-
-    # create a bootstrapped data set
-    held_out_train_data, held_out_validate_data = task.build(
-        x=x, y=rnd_y,
-        batch_size=config['batch_size'],
-        val_size=config['val_size'],
-        bootstraps=1)
+        discrete_clip=config.get('discrete_clip', 5.0))
 
     # create a data set
     train_data, validate_data = task.build(
@@ -132,20 +100,19 @@ def online(config):
         val_size=config['val_size'])
 
     # select the top k initial designs from the dataset
-    mean_x = tf.reduce_mean(x, axis=0, keepdims=True)
     indices = tf.math.top_k(y[:, 0], k=config['batch_size'])[1]
     initial_x = tf.gather(x, indices, axis=0)
-    solution_x = tf.math.log(soft_noise(
-        initial_x, config.get('discrete_smoothing', 0.6))) \
-        if config['is_discrete'] else initial_x
-    initial_x = tf.math.softmax(solution_x) \
-        if config['is_discrete'] else solution_x
+    if config['is_discrete']:
+        p = tf.fill(tf.shape(initial_x), 1 / tf.cast(tf.shape(initial_x)[-1], tf.float32))
+        initial_x = trainer.discrete_clip * initial_x + (1.0 - trainer.discrete_clip) * p
+        initial_x = tf.math.log(initial_x)
+        initial_x = initial_x[:, :, 1:] - initial_x[:, :, :1]
 
     # create the starting point for the optimizer
     evaluations = 0
     score = None
-    trainer.solution = tf.Variable(solution_x)
-    trainer.previous_solution = tf.Variable(solution_x)
+    trainer.solution = tf.Variable(initial_x)
+    trainer.previous_solution = tf.Variable(initial_x)
     trainer.done = tf.Variable(tf.fill(
         [config['batch_size']] + [1 for _ in x.shape[1:]], False))
 
@@ -155,52 +122,26 @@ def online(config):
         # evaluate the design using the oracle and the forward model
         with tf.GradientTape() as tape:
             tape.watch(xt)
-            solution = tf.math.softmax(xt) if config['is_discrete'] else xt
-            model = forward_model.get_distribution(solution).mean()
-
-        held_out_m = [held_out_model.get_distribution(solution).mean()]
-        held_out_s = [held_out_model.get_distribution(solution).stddev()]
-        rnd_label = random_network.get_distribution(solution).mean()
-        log_probability = held_out_model.get_distribution(solution).log_prob(rnd_label)
-        logger.record(f"rnd/log_probability",
-                      log_probability, evaluations)
+            model = forward_model.get_distribution(xt).mean()
 
         # evaluate the predictions and gradient norm
         evaluations += 1
         grads = tape.gradient(model, xt)
         model = model * st_y + mu_y
 
-        max_of_mean = tf.reduce_max(held_out_m, axis=0)
-        max_of_stddev = tf.reduce_max(held_out_s, axis=0)
-        min_of_mean = tf.reduce_min(held_out_m, axis=0)
-        min_of_stddev = tf.reduce_min(held_out_s, axis=0)
-        mean_of_mean = tf.reduce_mean(held_out_m, axis=0)
-        mean_of_stddev = tf.reduce_mean(held_out_s, axis=0)
-        logger.record(f"oracle/max_of_mean",
-                      max_of_mean, evaluations)
-        logger.record(f"oracle/max_of_stddev",
-                      max_of_stddev, evaluations)
-        logger.record(f"oracle/min_of_mean",
-                      min_of_mean, evaluations)
-        logger.record(f"oracle/min_of_stddev",
-                      min_of_stddev, evaluations)
-        logger.record(f"oracle/mean_of_mean",
-                      mean_of_mean, evaluations)
-        logger.record(f"oracle/mean_of_stddev",
-                      mean_of_stddev, evaluations)
-
         # record the prediction and score to the logger
         logger.record("distance/travelled",
-                      tf.linalg.norm(solution - initial_x), evaluations)
-        logger.record("distance/from_mean",
-                      tf.linalg.norm(solution - mean_x), evaluations)
+                      tf.linalg.norm(xt - initial_x), evaluations)
         logger.record(f"oracle/prediction",
                       model, evaluations)
         logger.record(f"oracle/grad_norm", tf.linalg.norm(
-            tf.reshape(grads, [-1, task.input_size]), axis=-1), evaluations)
+            tf.reshape(grads, [grads.shape[0], -1]), axis=-1), evaluations)
 
         if evaluations in config['evaluate_steps'] \
                 or len(config['evaluate_steps']) == 0 or score is None:
+            solution = xt
+            if config['is_discrete']:
+                solution = tf.math.softmax(tf.pad(xt, [[0, 0], [0, 0], [1, 0]]))
             score = task.score(solution * st_x + mu_x)
             logger.record("score",
                           score, evaluations, percentile=True)
@@ -208,27 +149,6 @@ def online(config):
                           spearman(model[:, 0], score[:, 0]), evaluations)
 
         return score
-
-    # train a held-out model on the validation set
-    for e in range(100):
-
-        statistics = defaultdict(list)
-        for x, y, b in held_out_train_data:
-            for name, tensor in held_out_trainer.train_step(x, y, b).items():
-                statistics["held_out/" + name].append(tensor)
-
-        for name in statistics.keys():
-            logger.record(
-                name, tf.concat(statistics[name], axis=0), e)
-
-        statistics = defaultdict(list)
-        for x, y in held_out_validate_data:
-            for name, tensor in held_out_trainer.validate_step(x, y).items():
-                statistics["held_out/" + name].append(tensor)
-
-        for name in statistics.keys():
-            logger.record(
-                name, tf.concat(statistics[name], axis=0), e)
 
     # keep track of when to record performance
     interval = trainer.solver_interval

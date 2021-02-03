@@ -1,5 +1,6 @@
 from design_baselines.utils import spearman
 from design_baselines.utils import soft_noise
+from design_baselines.utils import disc_noise
 from design_baselines.utils import cont_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
@@ -268,7 +269,7 @@ class ConservativeMaximumLikelihood(tf.Module):
                  is_discrete=False,
                  constraint_type="mix",
                  continuous_noise_std=0.0,
-                 discrete_smoothing=0.6):
+                 discrete_clip=0.6):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -309,7 +310,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         # extra parameters for controlling data noise
         self.is_discrete = is_discrete
         self.continuous_noise_std = continuous_noise_std
-        self.discrete_smoothing = discrete_smoothing
+        self.discrete_clip = discrete_clip
         self.constraint_type = constraint_type
 
         # save the state of the solution found by the model
@@ -349,9 +350,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         def gradient_step(xt):
             with tf.GradientTape() as tape:
                 tape.watch(xt)
-                score = self.forward_model.get_distribution(
-                    tf.math.softmax(xt)
-                    if self.is_discrete else xt, **kwargs).mean()
+                score = self.forward_model.get_distribution(xt, **kwargs).mean()
             return xt + self.solver_lr * tape.gradient(score, xt)
 
         # use a while loop to perform gradient ascent on the score
@@ -383,10 +382,14 @@ class ConservativeMaximumLikelihood(tf.Module):
         statistics = dict()
         batch_dim = tf.shape(y)[0]
 
+        if self.is_discrete:
+            p = tf.fill(tf.shape(x), 1 / tf.cast(tf.shape(x)[-1], tf.float32))
+            x = self.discrete_clip * x + (1.0 - self.discrete_clip) * p
+            x = tf.math.log(x)
+            x = x[:, :, 1:] - x[:, :, :1]
+
         # corrupt the inputs with noise
-        x = soft_noise(x, self.discrete_smoothing) \
-            if self.is_discrete else \
-            cont_noise(x, self.continuous_noise_std)
+        x = cont_noise(x, self.continuous_noise_std)
 
         with tf.GradientTape(persistent=True) as tape:
 
@@ -400,7 +403,7 @@ class ConservativeMaximumLikelihood(tf.Module):
             statistics[f'train/rank_corr'] = rank_corr
 
             # calculate negative samples starting from the dataset
-            x_pos = tf.math.log(x) if self.is_discrete else x
+            x_pos = x
             x_pos = tf.where(tf.random.uniform([batch_dim] + [1 for _ in x.shape[1:]])
                              < self.negatives_fraction, x_pos, self.solution[:batch_dim])
             x_neg = self.lookahead(x_pos, self.lookahead_steps, training=False)
@@ -408,8 +411,6 @@ class ConservativeMaximumLikelihood(tf.Module):
                 x_neg = tf.stop_gradient(x_neg)
 
             # calculate the prediction error and accuracy of the model
-            x_pos = tf.math.softmax(x_pos) if self.is_discrete else x_pos
-            x_neg = tf.math.softmax(x_neg) if self.is_discrete else x_neg
             d_pos = self.forward_model.get_distribution(
                 {"dataset": x, "mix": x_pos, "solution": self.solution[:batch_dim]}
                 [self.constraint_type], training=False)
@@ -450,20 +451,17 @@ class ConservativeMaximumLikelihood(tf.Module):
 
                 # calculate the predicted score of the previous solution
                 previous_score_old_model = self.forward_model.get_distribution(
-                    tf.math.softmax(self.previous_solution) if self.is_discrete
-                    else self.previous_solution, training=False).mean()[:, 0]
+                    self.previous_solution, training=False).mean()[:, 0]
 
                 # calculate the predicted score of the current solution
                 current_score_old_model = self.forward_model.get_distribution(
-                    tf.math.softmax(self.solution) if self.is_discrete
-                    else self.solution, training=False).mean()[:, 0]
+                    self.solution, training=False).mean()[:, 0]
 
                 # look into the future and evaluate future solutions
                 future_old_model = self.lookahead(
                     self.solution, self.solver_steps, training=False)
                 future_score_old_model = self.forward_model.get_distribution(
-                    tf.math.softmax(future_old_model) if self.is_discrete
-                    else future_old_model, training=False).mean()[:, 0]
+                    future_old_model, training=False).mean()[:, 0]
 
                 # take gradient steps on the model
                 self.alpha_opt.apply_gradients([[alpha_grads, self.log_alpha]])
@@ -472,20 +470,17 @@ class ConservativeMaximumLikelihood(tf.Module):
 
                 # calculate the predicted score of the previous solution
                 previous_score_new_model = self.forward_model.get_distribution(
-                    tf.math.softmax(self.previous_solution) if self.is_discrete
-                    else self.previous_solution, training=False).mean()[:, 0]
+                    self.previous_solution, training=False).mean()[:, 0]
 
                 # calculate the predicted score of the current solution
                 current_score_new_model = self.forward_model.get_distribution(
-                    tf.math.softmax(self.solution) if self.is_discrete
-                    else self.solution, training=False).mean()[:, 0]
+                    self.solution, training=False).mean()[:, 0]
 
                 # look into the future and evaluate future solutions
                 future_new_model = self.lookahead(
                     self.solution, self.solver_steps, training=False)
                 future_score_new_model = self.forward_model.get_distribution(
-                    tf.math.softmax(future_new_model) if self.is_discrete
-                    else future_new_model, training=False).mean()[:, 0]
+                    future_new_model, training=False).mean()[:, 0]
 
                 # evaluate the conservatism of the current solution
                 particle_loss = (self.solver_beta * future_score_new_model -
@@ -493,8 +488,7 @@ class ConservativeMaximumLikelihood(tf.Module):
                 update = (self.solution - self.solver_lr *
                           tape.gradient(particle_loss, self.solution))
                 update_score = self.forward_model.get_distribution(
-                    tf.math.softmax(update) if self.is_discrete
-                    else update, training=False).mean()[:, 0]
+                    update, training=False).mean()[:, 0]
 
             # if optimizer conservatism passes threshold stop optimizing
             self.previous_solution.assign(tf.identity(self.solution))
@@ -550,10 +544,14 @@ class ConservativeMaximumLikelihood(tf.Module):
         statistics = dict()
         batch_dim = tf.shape(y)[0]
 
+        if self.is_discrete:
+            p = tf.fill(tf.shape(x), 1 / tf.cast(tf.shape(x)[-1], tf.float32))
+            x = self.discrete_clip * x + (1.0 - self.discrete_clip) * p
+            x = tf.math.log(x)
+            x = x[:, :, 1:] - x[:, :, :1]
+
         # corrupt the inputs with noise
-        x = soft_noise(x, self.discrete_smoothing) \
-            if self.is_discrete else \
-            cont_noise(x, self.continuous_noise_std)
+        x = cont_noise(x, self.continuous_noise_std)
 
         # calculate the prediction error and accuracy of the model
         d = self.forward_model.get_distribution(x, training=False)
@@ -565,7 +563,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         statistics[f'validate/rank_corr'] = rank_corr
 
         # calculate negative samples starting from the dataset
-        x_pos = tf.math.log(x) if self.is_discrete else x
+        x_pos = x
         x_pos = tf.where(tf.random.uniform([batch_dim] + [1 for _ in x.shape[1:]])
                          < self.negatives_fraction, x_pos, self.solution[:batch_dim])
         x_neg = self.lookahead(x_pos, self.lookahead_steps, training=False)
@@ -573,7 +571,6 @@ class ConservativeMaximumLikelihood(tf.Module):
             x_neg = tf.stop_gradient(x_neg)
 
         # calculate the prediction error and accuracy of the model
-        x_neg = tf.math.softmax(x_neg) if self.is_discrete else x_neg
         d_pos = self.forward_model.get_distribution(
             {"dataset": x, "mix": x_pos, "solution": self.solution[:batch_dim]}
             [self.constraint_type], training=False)
