@@ -3,7 +3,7 @@ from design_baselines.logger import Logger
 from design_baselines.utils import spearman
 from design_baselines.utils import soft_noise
 from design_baselines.online.trainers import ConservativeMaximumLikelihood
-from design_baselines.online.trainers import Ensemble
+from design_baselines.online.trainers import TransformedMaximumLikelihood
 from design_baselines.online.nets import ForwardModel
 from collections import defaultdict
 import tensorflow as tf
@@ -34,8 +34,7 @@ def online(config):
         # compute normalization statistics for the score
         mu_y = np.mean(y, axis=0, keepdims=True).astype(np.float32)
         y = y - mu_y
-        st_y = np.std(y, axis=0, keepdims=True).astype(np.float32)
-        st_y = np.where(np.equal(st_y, 0), 1, st_y)
+        st_y = np.std(y, axis=0, keepdims=True).astype(np.float32).clip(1e-6, 1e9)
         y = y / st_y
     else:
         # compute normalization statistics for the score
@@ -46,8 +45,7 @@ def online(config):
         # compute normalization statistics for the data vectors
         mu_x = np.mean(x, axis=0, keepdims=True).astype(np.float32)
         x = x - mu_x
-        st_x = np.std(x, axis=0, keepdims=True).astype(np.float32)
-        st_x = np.where(np.equal(st_x, 0), 1, st_x)
+        st_x = np.std(x, axis=0, keepdims=True).astype(np.float32).clip(1e-6, 1e9)
         x = x / st_x
     else:
         # compute normalization statistics for the score
@@ -69,8 +67,8 @@ def online(config):
         input_shape,
         activations=config['activations'],
         hidden=config['hidden_size'],
-        initial_max_std=config['initial_max_std'],
-        initial_min_std=config['initial_min_std'])
+        max_std=config['initial_max_std'],
+        min_std=config['initial_min_std'])
 
     # create a trainer for a forward model with a conservative objective
     trainer = ConservativeMaximumLikelihood(
@@ -93,11 +91,43 @@ def online(config):
         continuous_noise_std=config.get('continuous_noise_std', 0.0),
         discrete_clip=config.get('discrete_clip', 5.0))
 
+    # create transformations of the data distribution
+    transforms = [tf.identity,
+                  lambda t: tf.pow(t, 5),
+                  lambda t: tf.math.sign(t) * tf.pow(tf.math.abs(t), 1/5),
+                  lambda t: tf.math.tanh(t),
+                  lambda t: tf.math.sin(t)]
+    inverse_transforms = [tf.identity] * 5
+
+    # make a neural network to predict scores
+    validation_models = [ForwardModel(
+        input_shape,
+        activations=config['activations'],
+        hidden=config['hidden_size'],
+        max_std=config['initial_max_std'],
+        min_std=config['initial_min_std']) for transform in transforms]
+
+    # create a trainer for a forward model with a conservative objective
+    validation_trainers = [TransformedMaximumLikelihood(
+        model,
+        forward_model_optim=tf.keras.optimizers.Adam,
+        forward_model_lr=config['forward_model_lr'],
+        transform=transform,
+        is_discrete=config['is_discrete'],
+        continuous_noise_std=config.get('continuous_noise_std', 0.0),
+        discrete_clip=config.get('discrete_clip', 5.0),
+        logger_prefix=f"validation_model_{i}")
+        for i, (model, transform) in enumerate(zip(validation_models, transforms))]
+
     # create a data set
     train_data, validate_data = task.build(
         x=x, y=y,
         batch_size=config['batch_size'],
         val_size=config['val_size'])
+
+    # train the validation models
+    for t in validation_trainers:
+        t.launch(train_data, validate_data, logger, 100)
 
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(y[:, 0], k=config['batch_size'])[1]
@@ -112,7 +142,6 @@ def online(config):
     evaluations = 0
     score = None
     trainer.solution = tf.Variable(initial_x)
-    trainer.previous_solution = tf.Variable(initial_x)
     trainer.done = tf.Variable(tf.fill(
         [config['batch_size']] + [1 for _ in x.shape[1:]], False))
 
@@ -122,19 +151,27 @@ def online(config):
         # evaluate the design using the oracle and the forward model
         with tf.GradientTape() as tape:
             tape.watch(xt)
-            model = forward_model.get_distribution(xt).mean()
+            model = forward_model(xt).mean()
 
         # evaluate the predictions and gradient norm
         evaluations += 1
         grads = tape.gradient(model, xt)
         model = model * st_y + mu_y
 
+        for i, (val, inv) in enumerate(zip(validation_models, inverse_transforms)):
+            prediction = val(xt)
+            logger.record(f"validation_model_{i}/prediction/mean",
+                          inv(prediction.mean()) * st_y + mu_y, evaluations)
+            logger.record(f"validation_model_{i}/prediction/sample",
+                          inv(prediction.sample()) * st_y + mu_y, evaluations)
+            logger.record(f"validation_model_{i}/prediction/stddev",
+                          prediction.stddev() * st_y, evaluations)
+
         # record the prediction and score to the logger
         logger.record("distance/travelled",
                       tf.linalg.norm(xt - initial_x), evaluations)
-        logger.record(f"oracle/prediction",
-                      model, evaluations)
-        logger.record(f"oracle/grad_norm", tf.linalg.norm(
+        logger.record(f"train/prediction", model, evaluations)
+        logger.record(f"train/grad_norm", tf.linalg.norm(
             tf.reshape(grads, [grads.shape[0], -1]), axis=-1), evaluations)
 
         if evaluations in config['evaluate_steps'] \
@@ -143,12 +180,11 @@ def online(config):
             if config['is_discrete']:
                 solution = tf.math.softmax(tf.pad(xt, [[0, 0], [0, 0], [1, 0]]) / 0.001)
             score = task.score(solution * st_x + mu_x)
-            logger.record("score",
-                          score, evaluations, percentile=True)
+            logger.record("score", score, evaluations, percentile=True)
             logger.record(f"rank_corr/model_to_real",
                           spearman(model[:, 0], score[:, 0]), evaluations)
 
-        return score
+        return score, model
 
     # keep track of when to record performance
     interval = trainer.solver_interval
@@ -169,8 +205,9 @@ def online(config):
             if tf.logical_and(
                     tf.equal(tf.math.mod(trainer.step, interval), 0),
                     tf.math.greater_equal(trainer.step, warmup)):
-                scores.append(evaluate_solution(trainer.solution))
-                predictions.append(trainer.particle_prediction.numpy())
+                score, model = evaluate_solution(trainer.solution)
+                scores.append(score)
+                predictions.append(model.numpy())
 
         for name in statistics.keys():
             logger.record(

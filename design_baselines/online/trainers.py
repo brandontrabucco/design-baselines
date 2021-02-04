@@ -9,12 +9,17 @@ import tensorflow as tf
 import numpy as np
 
 
-class Ensemble(tf.Module):
+class TransformedMaximumLikelihood(tf.Module):
 
     def __init__(self,
-                 forward_models,
+                 forward_model,
                  forward_model_optim=tf.keras.optimizers.Adam,
-                 forward_model_lr=0.001):
+                 forward_model_lr=0.001,
+                 transform=tf.identity,
+                 logger_prefix="",
+                 is_discrete=False,
+                 continuous_noise_std=0.0,
+                 discrete_clip=0.6):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -29,51 +34,19 @@ class Ensemble(tf.Module):
         """
 
         super().__init__()
-        self.forward_models = forward_models
-        self.bootstraps = len(forward_models)
-
-        # create optimizers for each model in the ensemble
-        self.forward_model_optims = [
+        self.transform = transform
+        self.logger_prefix = logger_prefix
+        self.is_discrete = is_discrete
+        self.continuous_noise_std = continuous_noise_std
+        self.discrete_clip = discrete_clip
+        self.forward_model = forward_model
+        self.forward_model_optim = \
             forward_model_optim(learning_rate=forward_model_lr)
-            for i in range(self.bootstraps)]
-
-    def get_distribution(self,
-                         x,
-                         **kwargs):
-        """Build the mixture distribution implied by the set of oracles
-        that are trained in this module
-
-        Args:
-
-        x: tf.Tensor
-            a batch of training inputs shaped like [batch_size, channels]
-
-        Returns:
-
-        distribution: tfpd.Distribution
-            the mixture of gaussian distributions implied by the oracles
-        """
-
-        # get the distribution parameters for all models
-        params = defaultdict(list)
-        for fm in self.forward_models:
-            for key, val in fm.get_params(x, **kwargs).items():
-                params[key].append(val)
-
-        # stack the parameters in a new component axis
-        for key, val in params.items():
-            params[key] = tf.stack(val, axis=-1)
-
-        # build the mixture distribution using the family of component one
-        weights = tf.fill([self.bootstraps], 1 / self.bootstraps)
-        return tfpd.MixtureSameFamily(tfpd.Categorical(
-            probs=weights), self.forward_models[0].distribution(**params))
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
                    x,
-                   y,
-                   b):
+                   y):
         """Perform a training step of gradient descent on an ensemble
         using bootstrap weights for each model in the ensemble
 
@@ -92,30 +65,38 @@ class Ensemble(tf.Module):
             a dictionary that contains logging information
         """
 
+        if self.is_discrete:
+            p = tf.fill(tf.shape(x), 1 / tf.cast(tf.shape(x)[-1], tf.float32))
+            x = self.discrete_clip * x + (1.0 - self.discrete_clip) * p
+            x = tf.math.log(x)
+            x = x[:, :, 1:] - x[:, :, :1]
+
+        # corrupt the inputs with noise
+        x = cont_noise(x, self.continuous_noise_std)
+
+        y = self.transform(y)
+
         statistics = dict()
 
-        for i in range(self.bootstraps):
-            fm = self.forward_models[i]
-            fm_optim = self.forward_model_optims[i]
+        with tf.GradientTape() as tape:
 
-            with tf.GradientTape(persistent=True) as tape:
+            # calculate the prediction error and accuracy of the model
+            d = self.forward_model(x, training=True)
+            nll = -d.log_prob(y)[:, 0]
 
-                # calculate the prediction error and accuracy of the model
-                d = fm.get_distribution(x, training=True)
-                nll = -d.log_prob(y)[:, 0]
+            # evaluate how correct the rank fo the model predictions are
+            rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
-                # evaluate how correct the rank fo the model predictions are
-                rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+            # build the total loss and weight by the bootstrap
+            total_loss = tf.reduce_mean(nll)
 
-                # build the total loss and weight by the bootstrap
-                total_loss = tf.math.divide_no_nan(
-                    tf.reduce_sum(b[:, i] * nll), tf.reduce_sum(b[:, i]))
+        grads = tape.gradient(total_loss,
+                              self.forward_model.trainable_variables)
+        self.forward_model_optim.apply_gradients(
+            zip(grads, self.forward_model.trainable_variables))
 
-            grads = tape.gradient(total_loss, fm.trainable_variables)
-            fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
-
-            statistics[f'oracle_{i}/train/nll'] = nll
-            statistics[f'oracle_{i}/train/rank_corr'] = rank_correlation
+        statistics[f'{self.logger_prefix}/train/nll'] = nll
+        statistics[f'{self.logger_prefix}/train/rank_corr'] = rank_correlation
 
         return statistics
 
@@ -139,20 +120,28 @@ class Ensemble(tf.Module):
             a dictionary that contains logging information
         """
 
+        if self.is_discrete:
+            p = tf.fill(tf.shape(x), 1 / tf.cast(tf.shape(x)[-1], tf.float32))
+            x = self.discrete_clip * x + (1.0 - self.discrete_clip) * p
+            x = tf.math.log(x)
+            x = x[:, :, 1:] - x[:, :, :1]
+
+        # corrupt the inputs with noise
+        x = cont_noise(x, self.continuous_noise_std)
+
+        y = self.transform(y)
+
         statistics = dict()
 
-        for i in range(self.bootstraps):
-            fm = self.forward_models[i]
+        # calculate the prediction error and accuracy of the model
+        d = self.forward_model(x, training=False)
+        nll = -d.log_prob(y)[:, 0]
 
-            # calculate the prediction error and accuracy of the model
-            d = fm.get_distribution(x, training=False)
-            nll = -d.log_prob(y)[:, 0]
+        # evaluate how correct the rank fo the model predictions are
+        rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
-            # evaluate how correct the rank fo the model predictions are
-            rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
-
-            statistics[f'oracle_{i}/validate/nll'] = nll
-            statistics[f'oracle_{i}/validate/rank_corr'] = rank_correlation
+        statistics[f'{self.logger_prefix}/validate/nll'] = nll
+        statistics[f'{self.logger_prefix}/validate/rank_corr'] = rank_correlation
 
         return statistics
 
@@ -173,8 +162,8 @@ class Ensemble(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for x, y, b in dataset:
-            for name, tensor in self.train_step(x, y, b).items():
+        for x, y in dataset:
+            for name, tensor in self.train_step(x, y).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
@@ -208,8 +197,7 @@ class Ensemble(tf.Module):
                train_data,
                validate_data,
                logger,
-               epochs,
-               start_epoch=0):
+               epochs):
         """Launch training and validation for the model for the specified
         number of epochs, and log statistics
 
@@ -225,27 +213,11 @@ class Ensemble(tf.Module):
             the number of epochs through the data sets to take
         """
 
-        for e in range(start_epoch, start_epoch + epochs):
+        for e in range(epochs):
             for name, loss in self.train(train_data).items():
                 logger.record(name, loss, e)
             for name, loss in self.validate(validate_data).items():
                 logger.record(name, loss, e)
-
-    def get_saveables(self):
-        """Collects and returns stateful objects that are serializeable
-        using the tensorflow checkpoint format
-
-        Returns:
-
-        saveables: dict
-            a dict containing stateful objects compatible with checkpoints
-        """
-
-        saveables = dict()
-        for i in range(self.bootstraps):
-            saveables[f'forward_model_{i}'] = self.forward_models[i]
-            saveables[f'forward_model_optim_{i}'] = self.forward_model_optims[i]
-        return saveables
 
 
 class ConservativeMaximumLikelihood(tf.Module):
@@ -315,14 +287,9 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         # save the state of the solution found by the model
         self.step = tf.Variable(tf.constant(0, dtype=tf.int32))
-        self.previous_solution = None
         self.solution = None
         self.particle_loss = None
-        self.particle_prediction = None
-        self.particle_constraint0 = None
-        self.particle_constraint1 = None
-        self.particle_constraint2 = None
-        self.particle_constraint3 = None
+        self.particle_constraint = None
         self.done = None
 
     @tf.function(experimental_relax_shapes=True)
@@ -350,7 +317,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         def gradient_step(xt):
             with tf.GradientTape() as tape:
                 tape.watch(xt)
-                score = self.forward_model.get_distribution(xt, **kwargs).mean()
+                score = self.forward_model(xt, **kwargs).mean()
             return xt + self.solver_lr * tape.gradient(score, xt)
 
         # use a while loop to perform gradient ascent on the score
@@ -394,7 +361,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         with tf.GradientTape(persistent=True) as tape:
 
             # calculate the prediction error and accuracy of the model
-            d = self.forward_model.get_distribution(x, training=True)
+            d = self.forward_model(x, training=True)
             nll = -d.log_prob(y)
             statistics[f'train/nll'] = nll
 
@@ -411,10 +378,10 @@ class ConservativeMaximumLikelihood(tf.Module):
                 x_neg = tf.stop_gradient(x_neg)
 
             # calculate the prediction error and accuracy of the model
-            d_pos = self.forward_model.get_distribution(
+            d_pos = self.forward_model(
                 {"dataset": x, "mix": x_pos, "solution": self.solution[:batch_dim]}
                 [self.constraint_type], training=False)
-            d_neg = self.forward_model.get_distribution(x_neg, training=False)
+            d_neg = self.forward_model(x_neg, training=False)
             conservatism = d_neg.mean()[:, 0] - d_pos.mean()[:, 0]
             statistics[f'train/conservatism'] = conservatism
 
@@ -432,11 +399,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         if self.particle_loss is None:
             initialization = tf.zeros_like(conservatism)
             self.particle_loss = tf.Variable(initialization)
-            self.particle_prediction = tf.Variable(initialization)
-            self.particle_constraint0 = tf.Variable(initialization)
-            self.particle_constraint1 = tf.Variable(initialization)
-            self.particle_constraint2 = tf.Variable(initialization)
-            self.particle_constraint3 = tf.Variable(initialization)
+            self.particle_constraint = tf.Variable(initialization)
 
         # calculate gradients using the model
         alpha_grads = tape.gradient(alpha_loss, self.log_alpha)
@@ -449,37 +412,19 @@ class ConservativeMaximumLikelihood(tf.Module):
                 tf.math.greater_equal(self.step, self.solver_warmup)):
             with tf.GradientTape() as tape:
 
-                # calculate the predicted score of the previous solution
-                previous_score_old_model = self.forward_model.get_distribution(
-                    self.previous_solution, training=False).mean()[:, 0]
-
-                # calculate the predicted score of the current solution
-                current_score_old_model = self.forward_model.get_distribution(
-                    self.solution, training=False).mean()[:, 0]
-
-                # look into the future and evaluate future solutions
-                future_old_model = self.lookahead(
-                    self.solution, self.solver_steps, training=False)
-                future_score_old_model = self.forward_model.get_distribution(
-                    future_old_model, training=False).mean()[:, 0]
-
                 # take gradient steps on the model
                 self.alpha_opt.apply_gradients([[alpha_grads, self.log_alpha]])
                 self.forward_model_opt.apply_gradients(
                     zip(model_grads, self.forward_model.trainable_variables))
 
-                # calculate the predicted score of the previous solution
-                previous_score_new_model = self.forward_model.get_distribution(
-                    self.previous_solution, training=False).mean()[:, 0]
-
                 # calculate the predicted score of the current solution
-                current_score_new_model = self.forward_model.get_distribution(
+                current_score_new_model = self.forward_model(
                     self.solution, training=False).mean()[:, 0]
 
                 # look into the future and evaluate future solutions
                 future_new_model = self.lookahead(
                     self.solution, self.solver_steps, training=False)
-                future_score_new_model = self.forward_model.get_distribution(
+                future_score_new_model = self.forward_model(
                     future_new_model, training=False).mean()[:, 0]
 
                 # evaluate the conservatism of the current solution
@@ -487,22 +432,12 @@ class ConservativeMaximumLikelihood(tf.Module):
                                  current_score_new_model)
                 update = (self.solution - self.solver_lr *
                           tape.gradient(particle_loss, self.solution))
-                update_score = self.forward_model.get_distribution(
-                    update, training=False).mean()[:, 0]
 
             # if optimizer conservatism passes threshold stop optimizing
-            self.previous_solution.assign(tf.identity(self.solution))
             self.solution.assign(tf.where(self.done, self.solution, update))
             self.particle_loss.assign(particle_loss)
-            self.particle_prediction.assign(update_score)
-            self.particle_constraint0.assign(
+            self.particle_constraint.assign(
                 future_score_new_model - current_score_new_model)
-            self.particle_constraint1.assign(
-                current_score_new_model - previous_score_new_model)
-            self.particle_constraint2.assign(
-                current_score_new_model - current_score_old_model)
-            self.particle_constraint3.assign(
-                future_score_new_model - current_score_old_model)
 
         else:
 
@@ -513,11 +448,7 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         statistics[f'train/done'] = tf.cast(self.done, tf.float32)
         statistics[f'train/particle_loss'] = self.particle_loss
-        statistics[f'train/particle_prediction'] = self.particle_prediction
-        statistics[f'train/particle_constraint0'] = self.particle_constraint0
-        statistics[f'train/particle_constraint1'] = self.particle_constraint1
-        statistics[f'train/particle_constraint2'] = self.particle_constraint2
-        statistics[f'train/particle_constraint3'] = self.particle_constraint3
+        statistics[f'train/particle_constraint'] = self.particle_constraint
 
         return statistics
 
@@ -554,7 +485,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         x = cont_noise(x, self.continuous_noise_std)
 
         # calculate the prediction error and accuracy of the model
-        d = self.forward_model.get_distribution(x, training=False)
+        d = self.forward_model(x, training=False)
         nll = -d.log_prob(y)
         statistics[f'validate/nll'] = nll
 
@@ -571,10 +502,10 @@ class ConservativeMaximumLikelihood(tf.Module):
             x_neg = tf.stop_gradient(x_neg)
 
         # calculate the prediction error and accuracy of the model
-        d_pos = self.forward_model.get_distribution(
+        d_pos = self.forward_model(
             {"dataset": x, "mix": x_pos, "solution": self.solution[:batch_dim]}
             [self.constraint_type], training=False)
-        d_neg = self.forward_model.get_distribution(x_neg, training=False)
+        d_neg = self.forward_model(x_neg, training=False)
         conservatism = d_neg.mean()[:, 0] - d_pos.mean()[:, 0]
         statistics[f'validate/conservatism'] = conservatism
         return statistics

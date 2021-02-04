@@ -1034,6 +1034,7 @@ def plot(dir, tag, xlabel, ylabel, separate_runs,
         params_of_variation.append('task')
 
     import design_bench
+    params[0]['task_kwargs'].pop('for_validation', None)
     task = design_bench.make(params[0]['task'],
                              **params[0]['task_kwargs'])
     dim_x = float(task.x.shape[1])

@@ -1,86 +1,48 @@
 from tensorflow_probability import distributions as tfpd
+from tensorflow_probability import layers as tfpl
 import tensorflow.keras.layers as tfkl
 import tensorflow as tf
 import numpy as np
 
 
-class ForwardModel(tf.keras.Sequential):
-    """A Fully Connected Network with 2 trainable layers"""
-
-    distribution = tfpd.Normal
-
-    def __init__(self,
-                 input_shape,
+def ForwardModel(input_shape,
                  activations=('relu', 'relu'),
                  hidden=2048,
-                 initial_max_std=0.2,
-                 initial_min_std=0.1):
-        """Create a fully connected architecture using keras that can process
-        several parallel streams of weights and biases
+                 max_std=0.2,
+                 min_std=0.1):
+    """Creates a tensorflow model that outputs a probability distribution
+    specifying the score corresponding to an input x.
 
-        Args:
+    Args:
 
-        inp_size: int
-            the size of the input vector of this network
-        out_size: int
-            the size of the output vector of this network
-        hidden: int
-            the global hidden size of the network
-        act: function
-            a function that returns an activation function such as tfkl.ReLU
-        """
+    input_shape: tuple[int]
+        the shape of input tensors to the model
+    activations: tuple[str]
+        the name of activation functions for every hidden layer
+    hidden: int
+        the global hidden size of the network
+    max_std: float
+        the upper bound of the learned standard deviation
+    min_std: float
+        the lower bound of the learned standard deviation
+    """
 
-        self.max_logstd = tf.Variable(tf.fill([1, 1], np.log(
-            initial_max_std).astype(np.float32)), trainable=True)
-        self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
-            initial_min_std).astype(np.float32)), trainable=True)
+    max_log_std = np.log(max_std).astype(np.float32)
+    min_log_std = np.log(min_std).astype(np.float32)
 
-        activations = [tfkl.LeakyReLU if act == 'leaky_relu' else
-                       tfkl.Activation(tf.math.cos) if act == 'cos' else
-                       act for act in activations]
+    def create_d(prediction):
+        mean, log_std = tf.split(prediction, 2, axis=-1)
+        log_std = max_log_std - tf.nn.softplus(max_log_std - log_std)
+        log_std = min_log_std + tf.nn.softplus(log_std - min_log_std)
+        return tfpd.Normal(loc=mean, scale=tf.math.exp(log_std))
 
-        layers = [tfkl.Flatten(input_shape=input_shape)]
-        for act in activations:
-            layers.extend([tfkl.Dense(hidden),
-                           tfkl.Activation(act)
-                           if isinstance(act, str) else act()])
-        layers.append(tfkl.Dense(2))
-        super(ForwardModel, self).__init__(layers)
+    activations = [tfkl.LeakyReLU if act == 'leaky_relu' else
+                   tfkl.Activation(tf.math.cos) if act == 'cos' else
+                   act for act in activations]
 
-    def get_params(self, inputs, **kwargs):
-        """Return a dictionary of parameters for a particular distribution
-        family such as the mean and variance of a gaussian
-
-        Args:
-
-        inputs: tf.Tensor
-            a batch of training inputs shaped like [batch_size, channels]
-
-        Returns:
-
-        parameters: dict
-            a dictionary that contains 'loc' and 'scale_diag' keys
-        """
-
-        prediction = super(ForwardModel, self).__call__(inputs, **kwargs)
-        mean, logstd = tf.split(prediction, 2, axis=-1)
-        logstd = self.max_logstd - tf.nn.softplus(self.max_logstd - logstd)
-        logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
-        return {"loc": mean, "scale": tf.math.exp(logstd)}
-
-    def get_distribution(self, inputs, **kwargs):
-        """Return a distribution over the outputs of this model, for example
-        a Multivariate Gaussian Distribution
-
-        Args:
-
-        inputs: tf.Tensor
-            a batch of training inputs shaped like [batch_size, channels]
-
-        Returns:
-
-        distribution: tfp.distribution.Distribution
-            a tensorflow probability distribution over outputs of the model
-        """
-
-        return self.distribution(**self.get_params(inputs, **kwargs))
+    layers = [tfkl.Flatten(input_shape=input_shape)]
+    for act in activations:
+        layers.extend([tfkl.Dense(hidden), tfkl.Activation(act)
+                       if isinstance(act, str) else act()])
+    layers.extend([tfkl.Dense(2), tfpl.DistributionLambda(create_d)])
+    return tf.keras.Sequential(layers)
