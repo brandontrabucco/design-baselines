@@ -141,7 +141,7 @@ def online(config):
                 or len(config['evaluate_steps']) == 0 or score is None:
             solution = xt
             if config['is_discrete']:
-                solution = tf.math.softmax(tf.pad(xt, [[0, 0], [0, 0], [1, 0]]))
+                solution = tf.math.softmax(tf.pad(xt, [[0, 0], [0, 0], [1, 0]]) / 0.001)
             score = task.score(solution * st_x + mu_x)
             logger.record("score",
                           score, evaluations, percentile=True)

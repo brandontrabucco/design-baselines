@@ -8,6 +8,7 @@ class StaticGraphTask(Task):
 
     def __init__(self,
                  task_name,
+                 for_validation=False,
                  **task_kwargs):
         """An interface to a static-graph task which includes a validation
         set and a non differentiable score function
@@ -24,6 +25,35 @@ class StaticGraphTask(Task):
 
         # use the design_bench registry to make a task
         self.wrapped_task = make(task_name, **task_kwargs)
+        self.for_validation = for_validation
+        self.random = tf.keras.Sequential([
+            tf.keras.layers.Flatten(input_shape=self.input_shape),
+            tf.keras.layers.Dense(512),
+            tf.keras.layers.Activation("tanh"),
+            tf.keras.layers.Dense(512),
+            tf.keras.layers.Activation("tanh"),
+            tf.keras.layers.Dense(512),
+            tf.keras.layers.Activation("tanh"),
+            tf.keras.layers.Dense(1)])
+
+        # calculate dataset statistics
+        self.mean_x = self.x.mean(axis=0, keepdims=True)
+        self.stdv_x = (self.x - self.mean_x).std(
+            axis=0, keepdims=True).clip(1e-6, 1e9)
+        self.mean_y = self.y.mean(axis=0, keepdims=True)
+        self.stdv_y = (self.y - self.mean_y).std(
+            axis=0, keepdims=True).clip(1e-6, 1e9)
+
+        self.mean_x = tf.constant(self.mean_x)
+        self.stdv_x = tf.constant(self.stdv_x)
+        self.mean_y = tf.constant(self.mean_y)
+        self.stdv_y = tf.constant(self.stdv_y)
+
+        # relabel scored using a random neural network
+        if for_validation:
+            ys = [self.score(xi) for xi in
+                  tf.data.Dataset.from_tensor_slices(self.x).batch(32)]
+            self.y = tf.concat(ys, axis=0).numpy()
 
     @property
     def x(self):
@@ -175,4 +205,7 @@ class StaticGraphTask(Task):
             in the function argument
         """
 
+        if self.for_validation:
+            return self.mean_y + self.random(
+                (x - self.mean_x) / self.stdv_x) * self.stdv_y
         return tf.numpy_function(self.score_np, [x], tf.float32)

@@ -243,7 +243,7 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(online, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
-        "task_kwargs": {'split_percentile': 80},
+        "task_kwargs": {'split_percentile': 80, 'for_validation': True},
         "is_discrete": True,
         "constraint_type": "mix",
         "normalize_ys": True,
@@ -296,7 +296,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(online, config={
         "logging_dir": "data",
         "task": "GFP-v0",
-        "task_kwargs": {'seed': tune.randint(1000)},
+        "task_kwargs": {'seed': tune.randint(1000), 'for_validation': True},
         "is_discrete": True,
         "constraint_type": "mix",
         "normalize_ys": True,
