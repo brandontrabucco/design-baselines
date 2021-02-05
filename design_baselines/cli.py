@@ -1302,13 +1302,12 @@ def plot_one(dir, tag, xlabel, ylabel, pkey, pval, iteration, legend):
 
 
 @cli.command()
-@click.option('--superconductor', type=str)
-@click.option('--molecule', type=str)
+@click.option('--hopper', type=str)
 @click.option('--tag', type=str)
 @click.option('--param', type=str)
 @click.option('--xlabel', type=str)
 @click.option('--iteration', type=int)
-def plot_comparison(superconductor, molecule, tag, param, xlabel, iteration):
+def plot_comparison(hopper, tag, param, xlabel, iteration):
 
     from collections import defaultdict
     import glob
@@ -1342,31 +1341,24 @@ def plot_comparison(superconductor, molecule, tag, param, xlabel, iteration):
         r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
         r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
 
-    superconductor_dir = [d for d in glob.glob(
-        os.path.join(superconductor, '*'))
-        if pattern.search(d) is not None]
-    molecule_dir = [d for d in glob.glob(
-        os.path.join(molecule, '*'))
+    hopper_dir = [d for d in glob.glob(
+        os.path.join(hopper, '*'))
         if pattern.search(d) is not None]
 
     task_to_dir = {
-        'Superconductor-v0': superconductor_dir,
-        'MoleculeActivity-v0': molecule_dir}
+        'HopperController-v0': hopper_dir}
 
     task_to_ylabel = {
-        'Superconductor-v0': "Critical temperature",
-        'MoleculeActivity-v0': "Drug activity"}
+        'HopperController-v0': "Critical temperature"}
 
     fig, axes = plt.subplots(
-        nrows=1, ncols=2, figsize=(12.5, 5.0))
+        nrows=1, ncols=1, figsize=(7, 5.0))
 
     task_to_axis = {
-        'Superconductor-v0': axes[0],
-        'MoleculeActivity-v0': axes[1]}
+        'HopperController-v0': axes[0]}
 
     for task in [
-            'Superconductor-v0',
-            'MoleculeActivity-v0']:
+            'HopperController-v0']:
 
         ylabel = task_to_ylabel[task]
         dirs = task_to_dir[task]
@@ -1418,7 +1410,7 @@ def plot_comparison(superconductor, molecule, tag, param, xlabel, iteration):
 
     fig.subplots_adjust(bottom=0.3)
     plt.tight_layout()
-    fig.savefig('plot_comparison.pdf')
+    fig.savefig('ablate_tau.pdf')
 
 
 @cli.command()
