@@ -531,20 +531,15 @@ design-baselines ablate-architecture \
 @cli.command()
 @click.option('--hopper', multiple=True)
 @click.option('--superconductor', multiple=True)
-@click.option('--gfp', multiple=True)
-@click.option('--molecule', multiple=True)
 @click.option('--names', multiple=True)
 @click.option('--tag', type=str)
-@click.option('--dashed-tag', type=str)
 @click.option('--max-iterations', type=int)
+@click.option('--beta', type=float, default=0.9)
 def compare_runs(hopper,
                  superconductor,
-                 gfp,
-                 molecule,
                  names,
                  tag,
-                 dashed_tag,
-                 max_iterations):
+                 max_iterations, beta):
 
     from collections import defaultdict
     import seaborn as sns
@@ -557,6 +552,7 @@ def compare_runs(hopper,
     import numpy as np
     import tensorflow as tf
     import tqdm
+    import json
 
     plt.rcParams['text.usetex'] = True
     matplotlib.rc('font', family='serif', serif='cm10')
@@ -581,13 +577,9 @@ def compare_runs(hopper,
 
     for (hopper_i,
          superconductor_i,
-         gfp_i,
-         molecule_i,
          names_i) in zip(
             hopper,
             superconductor,
-            gfp,
-            molecule,
             names):
 
         hopper_dir = [d for d in glob.glob(
@@ -596,39 +588,25 @@ def compare_runs(hopper,
         superconductor_dir = [d for d in glob.glob(
             os.path.join(superconductor_i, '*'))
             if pattern.search(d) is not None]
-        gfp_dir = [d for d in glob.glob(
-            os.path.join(gfp_i, '*'))
-            if pattern.search(d) is not None]
-        molecule_dir = [d for d in glob.glob(
-            os.path.join(molecule_i, '*'))
-            if pattern.search(d) is not None]
 
         name_to_dir[names_i] = {
             'HopperController-v0': hopper_dir,
-            'Superconductor-v0': superconductor_dir,
-            'GFP-v0': gfp_dir,
-            'MoleculeActivity-v0': molecule_dir}
+            'Superconductor-v0': superconductor_dir}
 
     task_to_ylabel = {
         'HopperController-v0': "Average return",
-        'Superconductor-v0': "Critical temperature",
-        'GFP-v0': "Protein fluorescence",
-        'MoleculeActivity-v0': "Drug activity"}
+        'Superconductor-v0': "Critical temperature"}
 
     fig, axes = plt.subplots(
-        nrows=1, ncols=4, figsize=(25.0, 5.0))
+        nrows=1, ncols=2, figsize=(12.5, 5.0))
 
     task_to_axis = {
         'HopperController-v0': axes[0],
-        'Superconductor-v0': axes[1],
-        'GFP-v0': axes[2],
-        'MoleculeActivity-v0': axes[3]}
+        'Superconductor-v0': axes[1]}
 
     for task in [
             'HopperController-v0',
-            'Superconductor-v0',
-            'GFP-v0',
-            'MoleculeActivity-v0']:
+            'Superconductor-v0']:
 
         # read data from tensor board
         ylabel = task_to_ylabel[task]
@@ -637,28 +615,23 @@ def compare_runs(hopper,
             'Gradient ascent steps',
             ylabel])
 
-        name_to_eval = dict()
-
         for name, task_to_dir_i in name_to_dir.items():
-            it_to_eval_tag = defaultdict(list)
-
             for d in tqdm.tqdm(task_to_dir_i[task]):
                 for f in glob.glob(os.path.join(d, '*/events.out*')):
+                    params = os.path.join(d, 'params.json')
+                    with open(params, "r") as pf:
+                        params = json.load(pf)
                     for e in tf.compat.v1.train.summary_iterator(f):
                         for v in e.summary.value:
                             if v.tag == tag and e.step < max_iterations:
-
+                                if "solver_beta" in params \
+                                        and params["solver_beta"] != beta:
+                                    continue
                                 data = data.append({
                                     'Algorithm': name,
                                     'Gradient ascent steps': e.step,
                                     ylabel: tf.make_ndarray(v.tensor).tolist(),
                                     }, ignore_index=True)
-
-                            if v.tag == dashed_tag and e.step < max_iterations:
-                                it_to_eval_tag[e.step].append(
-                                    tf.make_ndarray(v.tensor).tolist())
-
-            name_to_eval[name] = it_to_eval_tag
 
         axis = task_to_axis[task]
 
@@ -670,31 +643,6 @@ def compare_runs(hopper,
             ax=axis,
             linewidth=4,
             legend=False)
-
-        iteration = -1
-        for name, it_to_eval_tag in name_to_eval.items():
-            iteration += 1
-            original_data = data.loc[data['Algorithm']
-                                     == name][ylabel].to_numpy()
-            y_min = original_data.min()
-            y_max = original_data.max()
-
-            xs, ys = zip(*it_to_eval_tag.items())
-            xs = np.array(xs)
-            ys = np.array([np.mean(yi) for yi in ys])
-
-            ys = (ys - ys.min()) / (ys.max() - ys.min())
-            ys = ys * (y_max - y_min) + y_min
-
-            indices = np.argsort(xs)
-            xs = xs[indices]
-            ys = ys[indices]
-
-            axis.plot(xs,
-                      ys,
-                      linestyle='--',
-                      linewidth=4,
-                      color=color_palette[iteration])
 
         axis.spines['right'].set_visible(False)
         axis.spines['top'].set_visible(False)
@@ -710,16 +658,169 @@ def compare_runs(hopper,
                   linestyle='dotted',
                   linewidth=2)
 
-    plt.legend([r'\textbf{' + x.capitalize() + '}' for x in name_to_dir.keys()] +
-               [r'\textbf{Prediction ' + x.lower() + '}' for x in name_to_eval.keys()],
-               ncol=len(name_to_dir.keys()) + len(name_to_eval.keys()),
-               loc='lower center',
-               bbox_to_anchor=(-1.4, -0.5),
-               fontsize=20,
-               fancybox=True)
+    new_axes = fig.add_axes([0.0, 0.0, 1.0, 1.0])
+    for x in name_to_dir.keys():
+        new_axes.plot([0], [0], color=(1.0, 1.0, 1.0, 0.0), label=x)
+    leg = new_axes.legend([r'\textbf{ ' + x.lower() + '}' for x in name_to_dir.keys()],
+                          ncol=len(name_to_dir.keys()),
+                          loc='lower center',
+                          bbox_to_anchor=(0.5, 0.0, 0.0, 0.0),
+                          fontsize=20,
+                          fancybox=True)
+    leg.legendHandles[0].set_color(color_palette[0])
+    leg.legendHandles[0].set_linewidth(4.0)
+    leg.legendHandles[1].set_color(color_palette[1])
+    leg.legendHandles[1].set_linewidth(4.0)
+    new_axes.patch.set_alpha(0.0)
     fig.subplots_adjust(bottom=0.3)
-    plt.tight_layout()
     fig.savefig('compare_runs.pdf')
+
+
+
+
+
+@cli.command()
+@click.option('--hopper')
+@click.option('--superconductor')
+@click.option('--tag', type=str)
+@click.option('--max-iterations', type=int)
+def ablate_beta(hopper,
+                superconductor,
+                tag,
+                max_iterations):
+
+    from collections import defaultdict
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import glob
+    import os
+    import re
+    import pandas as pd
+    import numpy as np
+    import tensorflow as tf
+    import tqdm
+    import json
+
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.palplot(palette)
+    sns.set_palette(palette)
+
+    pattern = re.compile(
+        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
+        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+
+    hopper_dir = [d for d in glob.glob(
+        os.path.join(hopper, '*'))
+        if pattern.search(d) is not None]
+    superconductor_dir = [d for d in glob.glob(
+        os.path.join(superconductor, '*'))
+        if pattern.search(d) is not None]
+
+    name_to_dir = {
+        'HopperController-v0': hopper_dir,
+        'Superconductor-v0': superconductor_dir}
+
+    task_to_ylabel = {
+        'HopperController-v0': "Average return",
+        'Superconductor-v0': "Critical temperature"}
+
+    fig, axes = plt.subplots(
+        nrows=1, ncols=2, figsize=(12.5, 5.0))
+
+    task_to_axis = {
+        'HopperController-v0': axes[0],
+        'Superconductor-v0': axes[1]}
+
+    for task in [
+            'HopperController-v0',
+            'Superconductor-v0']:
+
+        # read data from tensor board
+        ylabel = task_to_ylabel[task]
+        data = pd.DataFrame(columns=[
+            'Beta',
+            'Gradient ascent steps',
+            ylabel])
+
+        for d in tqdm.tqdm(name_to_dir[task]):
+            for f in glob.glob(os.path.join(d, '*/events.out*')):
+                params = os.path.join(d, 'params.json')
+                with open(params, "r") as pf:
+                    params = json.load(pf)
+                for e in tf.compat.v1.train.summary_iterator(f):
+                    for v in e.summary.value:
+                        if v.tag == tag and e.step < max_iterations:
+                            data = data.append({
+                                'Beta': f'{params["solver_beta"]}',
+                                'Gradient ascent steps': e.step,
+                                ylabel: tf.make_ndarray(v.tensor).tolist(),
+                                }, ignore_index=True)
+
+        axis = task_to_axis[task]
+
+        palette = {"0.0": "C0", "0.1": "C1", "0.3": "C2",
+                   "0.7": "C3", "0.9": "C4", "1.0": "C5"}
+
+        axis = sns.lineplot(
+            x='Gradient ascent steps',
+            y=ylabel,
+            hue='Beta',
+            data=data,
+            ax=axis,
+            linewidth=4,
+            legend=False,
+            palette=palette)
+
+        axis.spines['right'].set_visible(False)
+        axis.spines['top'].set_visible(False)
+        axis.yaxis.set_ticks_position('left')
+        axis.xaxis.set_ticks_position('bottom')
+        axis.yaxis.set_tick_params(labelsize=16)
+        axis.xaxis.set_tick_params(labelsize=16)
+
+        axis.set_xlabel(r'\textbf{Gradient ascent steps}', fontsize=24)
+        axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
+        axis.grid(color='grey',
+                  linestyle='dotted',
+                  linewidth=2)
+
+    new_axes = fig.add_axes([0.0, 0.0, 1.0, 1.0])
+    for x in [0.0, 0.1, 0.3, 0.7, 0.9, 1.0]:
+        new_axes.plot([0], [0], color=(1.0, 1.0, 1.0, 0.0), label=r"$\beta$" + f" = {x}")
+    leg = new_axes.legend([r"$\beta$" + f" = {x}" for x in [0.0, 0.1, 0.3, 0.7, 0.9, 1.0]],
+                          ncol=6,
+                          loc='lower center',
+                          bbox_to_anchor=(0.5, 0.0, 0.0, 0.0),
+                          fontsize=16,
+                          fancybox=True)
+    leg.legendHandles[0].set_color(color_palette[0])
+    leg.legendHandles[0].set_linewidth(4.0)
+    leg.legendHandles[1].set_color(color_palette[1])
+    leg.legendHandles[1].set_linewidth(4.0)
+    leg.legendHandles[2].set_color(color_palette[2])
+    leg.legendHandles[2].set_linewidth(4.0)
+    leg.legendHandles[3].set_color(color_palette[3])
+    leg.legendHandles[3].set_linewidth(4.0)
+    leg.legendHandles[4].set_color(color_palette[4])
+    leg.legendHandles[4].set_linewidth(4.0)
+    leg.legendHandles[5].set_color(color_palette[5])
+    leg.legendHandles[5].set_linewidth(4.0)
+    new_axes.patch.set_alpha(0.0)
+    fig.subplots_adjust(bottom=0.3)
+    fig.savefig('ablate_beta.pdf')
 
 
 """
