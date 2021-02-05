@@ -1307,8 +1307,8 @@ def plot_one(dir, tag, xlabel, ylabel, pkey, pval, iteration, legend):
 @click.option('--tag', type=str)
 @click.option('--param', type=str)
 @click.option('--xlabel', type=str)
-@click.option('--eval-tag', type=str)
-def plot_comparison(superconductor, molecule, tag, param, xlabel, eval_tag):
+@click.option('--iteration', type=int)
+def plot_comparison(superconductor, molecule, tag, param, xlabel, iteration):
 
     from collections import defaultdict
     import glob
@@ -1380,7 +1380,6 @@ def plot_comparison(superconductor, molecule, tag, param, xlabel, eval_tag):
         # read data from tensor board
         data = pd.DataFrame(columns=[xlabel, ylabel])
         it_to_tag = defaultdict(list)
-        it_to_eval_tag = defaultdict(list)
         it_to_p = defaultdict(list)
         for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
             for f in glob.glob(os.path.join(d, '*/events.out*')):
@@ -1390,18 +1389,11 @@ def plot_comparison(superconductor, molecule, tag, param, xlabel, eval_tag):
                             it_to_tag[e.step].append(
                                 tf.make_ndarray(v.tensor).tolist())
                             it_to_p[e.step].append(p[param])
-                        if v.tag == eval_tag:
-                            it_to_eval_tag[e.step].append(
-                                tf.make_ndarray(v.tensor).tolist())
 
-        if len(it_to_eval_tag) > 0:
-            eval_position = int(np.argmax(
-                [np.mean(vals) for vals in it_to_eval_tag.values()]))
-            iteration = list(it_to_eval_tag.keys())[eval_position]
-            for score, p in zip(it_to_tag[iteration], it_to_p[iteration]):
-                data = data.append({
-                    ylabel: score,
-                    xlabel: p}, ignore_index=True)
+        for score, p in zip(it_to_tag[iteration], it_to_p[iteration]):
+            data = data.append({
+                ylabel: score,
+                xlabel: p}, ignore_index=True)
 
         axis = task_to_axis[task]
         axis.spines['right'].set_visible(False)
