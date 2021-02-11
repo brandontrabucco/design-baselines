@@ -661,7 +661,7 @@ def compare_runs(hopper,
     new_axes = fig.add_axes([0.0, 0.0, 1.0, 1.0])
     for x in name_to_dir.keys():
         new_axes.plot([0], [0], color=(1.0, 1.0, 1.0, 0.0), label=x)
-    leg = new_axes.legend([r'\textbf{ ' + x.lower() + '}' for x in name_to_dir.keys()],
+    leg = new_axes.legend([r'\textbf{ ' + x + '}' for x in name_to_dir.keys()],
                           ncol=len(name_to_dir.keys()),
                           loc='lower center',
                           bbox_to_anchor=(0.5, 0.0, 0.0, 0.0),
@@ -674,9 +674,6 @@ def compare_runs(hopper,
     new_axes.patch.set_alpha(0.0)
     fig.subplots_adjust(bottom=0.3)
     fig.savefig('compare_runs.pdf')
-
-
-
 
 
 @cli.command()
@@ -801,10 +798,10 @@ def ablate_beta(hopper,
     for x in [0.0, 0.1, 0.3, 0.7, 0.9, 1.0]:
         new_axes.plot([0], [0], color=(1.0, 1.0, 1.0, 0.0), label=r"$\beta$" + f" = {x}")
     leg = new_axes.legend([r"$\beta$" + f" = {x}" for x in [0.0, 0.1, 0.3, 0.7, 0.9, 1.0]],
-                          ncol=6,
+                          ncol=3,
                           loc='lower center',
                           bbox_to_anchor=(0.5, 0.0, 0.0, 0.0),
-                          fontsize=16,
+                          fontsize=20,
                           fancybox=True)
     leg.legendHandles[0].set_color(color_palette[0])
     leg.legendHandles[0].set_linewidth(4.0)
@@ -819,7 +816,7 @@ def ablate_beta(hopper,
     leg.legendHandles[5].set_color(color_palette[5])
     leg.legendHandles[5].set_linewidth(4.0)
     new_axes.patch.set_alpha(0.0)
-    fig.subplots_adjust(bottom=0.3)
+    fig.subplots_adjust(bottom=0.4)
     fig.savefig('ablate_beta.pdf')
 
 
@@ -1349,13 +1346,13 @@ def plot_comparison(hopper, tag, param, xlabel, iteration):
         'HopperController-v0': hopper_dir}
 
     task_to_ylabel = {
-        'HopperController-v0': "Critical temperature"}
+        'HopperController-v0': "Average return"}
 
     fig, axes = plt.subplots(
         nrows=1, ncols=1, figsize=(7, 5.0))
 
     task_to_axis = {
-        'HopperController-v0': axes[0]}
+        'HopperController-v0': axes}
 
     for task in [
             'HopperController-v0']:
@@ -1403,6 +1400,7 @@ def plot_comparison(hopper, tag, param, xlabel, iteration):
                      legend=False)
         axis.set_xlabel(r'\textbf{' + xlabel + '}', fontsize=24)
         axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
+        axis.set_xscale('log')
         axis.set_title(r'\textbf{' + task + '}', fontsize=24)
         axis.grid(color='grey',
                   linestyle='dotted',
@@ -2015,7 +2013,7 @@ def evaluate_distance(dir, tag, distance, distance_tag, norm):
 @click.option('--iteration', type=int)
 @click.option('--lower-k', type=int, default=1)
 @click.option('--upper-k', type=int, default=128)
-def evaluate_stability(dir, iteration, lower_k, upper_k):
+def evaluate_budget(dir, iteration, lower_k, upper_k):
 
     from collections import defaultdict
     import pickle as pkl
@@ -2104,3 +2102,168 @@ def evaluate_stability(dir, iteration, lower_k, upper_k):
         g.set(title=f'Stability Of {pretty(algo_name)} On {task_name}')
         plt.savefig(f'{algo_name}_{task_name}_{key}_stability.png',
                     bbox_inches='tight')
+
+"""
+
+design-baselines compare-budget --hopper ~/grad-kun-final/hopper/gradient_ascent/ --hopper ~/coms-kun-icml/online-hopper-particle/online/ --superconductor ~/grad-kun-final/superconductor/gradient_ascent/ --superconductor ~/coms-kun-icml/online-superconductor-particle/online/ --names 'naive gradient ascent' --names 'coms (ours)' --iteration 450
+
+"""
+
+
+@cli.command()
+@click.option('--hopper', multiple=True)
+@click.option('--superconductor', multiple=True)
+@click.option('--names', multiple=True)
+@click.option('--iteration', type=int)
+@click.option('--upper-k', type=int, default=128)
+@click.option('--beta', type=float, default=0.9)
+def compare_budget(hopper,
+                   superconductor,
+                   names,
+                   iteration,
+                   upper_k,
+                   beta):
+
+    from collections import defaultdict
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import glob
+    import os
+    import re
+    import pandas as pd
+    import numpy as np
+    import tensorflow as tf
+    import tqdm
+    import json
+
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.palplot(palette)
+    sns.set_palette(palette)
+
+    pattern = re.compile(
+        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
+        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+
+    name_to_dir = {}
+
+    for (hopper_i,
+         superconductor_i,
+         names_i) in zip(
+            hopper,
+            superconductor,
+            names):
+
+        hopper_dir = [d for d in glob.glob(
+            os.path.join(hopper_i, '*'))
+            if pattern.search(d) is not None]
+        superconductor_dir = [d for d in glob.glob(
+            os.path.join(superconductor_i, '*'))
+            if pattern.search(d) is not None]
+
+        name_to_dir[names_i] = {
+            'HopperController-v0': hopper_dir,
+            'Superconductor-v0': superconductor_dir}
+
+    task_to_ylabel = {
+        'HopperController-v0': "Average return",
+        'Superconductor-v0': "Critical temperature"}
+
+    fig, axes = plt.subplots(
+        nrows=1, ncols=2, figsize=(12.5, 5.0))
+
+    task_to_axis = {
+        'HopperController-v0': axes[0],
+        'Superconductor-v0': axes[1]}
+
+    for task in [
+            'HopperController-v0',
+            'Superconductor-v0']:
+
+        # read data from tensor board
+        ylabel = task_to_ylabel[task]
+        data = pd.DataFrame(columns=[
+            'Algorithm',
+            'Budget',
+            ylabel])
+
+        for name, task_to_dir_i in name_to_dir.items():
+            for d in tqdm.tqdm(task_to_dir_i[task]):
+                for f in glob.glob(os.path.join(d, '*/events.out*')):
+                    params = os.path.join(d, 'params.json')
+                    with open(params, "r") as pf:
+                        params = json.load(pf)
+
+                    if "solver_beta" in params \
+                            and params["solver_beta"] != beta:
+                        continue
+
+                    try:
+
+                        scores = np.load(os.path.join(os.path.dirname(f), 'scores.npy'))
+                        predictions = np.load(os.path.join(os.path.dirname(f), 'predictions.npy'))
+                        if len(predictions.shape) > 2:
+                            predictions = predictions[:, :, 0]
+                        print(predictions.shape)
+                        print(scores.shape)
+                        for limit in range(1, upper_k):
+                            top_k = np.argsort(predictions[:, iteration])[::-1][:limit]
+                            data = data.append({"Budget": limit,
+                                                ylabel: np.max(scores[:, iteration][top_k]),
+                                                'Algorithm': name}, ignore_index=True)
+
+                    except FileNotFoundError:
+                        pass
+
+        axis = task_to_axis[task]
+
+        axis = sns.lineplot(
+            x='Budget',
+            y=ylabel,
+            hue='Algorithm',
+            data=data,
+            ax=axis,
+            linewidth=4,
+            legend=False)
+
+        axis.spines['right'].set_visible(False)
+        axis.spines['top'].set_visible(False)
+        axis.yaxis.set_ticks_position('left')
+        axis.xaxis.set_ticks_position('bottom')
+        axis.yaxis.set_tick_params(labelsize=16)
+        axis.xaxis.set_tick_params(labelsize=16)
+
+        axis.set_xlabel(r'\textbf{Evaluation budget}', fontsize=24)
+        axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
+        axis.grid(color='grey',
+                  linestyle='dotted',
+                  linewidth=2)
+
+    new_axes = fig.add_axes([0.0, 0.0, 1.0, 1.0])
+    for x in name_to_dir.keys():
+        new_axes.plot([0], [0], color=(1.0, 1.0, 1.0, 0.0), label=x)
+    leg = new_axes.legend([r'\textbf{ ' + x + '}' for x in name_to_dir.keys()],
+                          ncol=len(name_to_dir.keys()),
+                          loc='lower center',
+                          bbox_to_anchor=(0.5, 0.0, 0.0, 0.0),
+                          fontsize=20,
+                          fancybox=True)
+    leg.legendHandles[0].set_color(color_palette[0])
+    leg.legendHandles[0].set_linewidth(4.0)
+    leg.legendHandles[1].set_color(color_palette[1])
+    leg.legendHandles[1].set_linewidth(4.0)
+    new_axes.patch.set_alpha(0.0)
+    fig.subplots_adjust(bottom=0.3)
+    fig.savefig('compare_budget.pdf')

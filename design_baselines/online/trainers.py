@@ -15,11 +15,8 @@ class TransformedMaximumLikelihood(tf.Module):
                  forward_model,
                  forward_model_optim=tf.keras.optimizers.Adam,
                  forward_model_lr=0.001,
-                 transform=tf.identity,
                  logger_prefix="",
-                 is_discrete=False,
-                 continuous_noise_std=0.0,
-                 discrete_clip=0.6):
+                 continuous_noise_std=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -34,11 +31,8 @@ class TransformedMaximumLikelihood(tf.Module):
         """
 
         super().__init__()
-        self.transform = transform
         self.logger_prefix = logger_prefix
-        self.is_discrete = is_discrete
         self.continuous_noise_std = continuous_noise_std
-        self.discrete_clip = discrete_clip
         self.forward_model = forward_model
         self.forward_model_optim = \
             forward_model_optim(learning_rate=forward_model_lr)
@@ -65,17 +59,8 @@ class TransformedMaximumLikelihood(tf.Module):
             a dictionary that contains logging information
         """
 
-        if self.is_discrete:
-            p = tf.fill(tf.shape(x), 1 / tf.cast(tf.shape(x)[-1], tf.float32))
-            x = self.discrete_clip * x + (1.0 - self.discrete_clip) * p
-            x = tf.math.log(x)
-            x = x[:, :, 1:] - x[:, :, :1]
-
         # corrupt the inputs with noise
         x = cont_noise(x, self.continuous_noise_std)
-
-        y = self.transform(y)
-
         statistics = dict()
 
         with tf.GradientTape() as tape:
@@ -120,17 +105,8 @@ class TransformedMaximumLikelihood(tf.Module):
             a dictionary that contains logging information
         """
 
-        if self.is_discrete:
-            p = tf.fill(tf.shape(x), 1 / tf.cast(tf.shape(x)[-1], tf.float32))
-            x = self.discrete_clip * x + (1.0 - self.discrete_clip) * p
-            x = tf.math.log(x)
-            x = x[:, :, 1:] - x[:, :, :1]
-
         # corrupt the inputs with noise
         x = cont_noise(x, self.continuous_noise_std)
-
-        y = self.transform(y)
-
         statistics = dict()
 
         # calculate the prediction error and accuracy of the model
@@ -238,10 +214,8 @@ class ConservativeMaximumLikelihood(tf.Module):
                  solver_interval=10,
                  solver_warmup=500,
                  solver_steps=1,
-                 is_discrete=False,
                  constraint_type="mix",
-                 continuous_noise_std=0.0,
-                 discrete_clip=0.6):
+                 continuous_noise_std=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -280,9 +254,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         self.solver_beta = solver_beta
 
         # extra parameters for controlling data noise
-        self.is_discrete = is_discrete
         self.continuous_noise_std = continuous_noise_std
-        self.discrete_clip = discrete_clip
         self.constraint_type = constraint_type
 
         # save the state of the solution found by the model
@@ -348,12 +320,6 @@ class ConservativeMaximumLikelihood(tf.Module):
         self.step.assign_add(1)
         statistics = dict()
         batch_dim = tf.shape(y)[0]
-
-        if self.is_discrete:
-            p = tf.fill(tf.shape(x), 1 / tf.cast(tf.shape(x)[-1], tf.float32))
-            x = self.discrete_clip * x + (1.0 - self.discrete_clip) * p
-            x = tf.math.log(x)
-            x = x[:, :, 1:] - x[:, :, :1]
 
         # corrupt the inputs with noise
         x = cont_noise(x, self.continuous_noise_std)
@@ -474,12 +440,6 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         statistics = dict()
         batch_dim = tf.shape(y)[0]
-
-        if self.is_discrete:
-            p = tf.fill(tf.shape(x), 1 / tf.cast(tf.shape(x)[-1], tf.float32))
-            x = self.discrete_clip * x + (1.0 - self.discrete_clip) * p
-            x = tf.math.log(x)
-            x = x[:, :, 1:] - x[:, :, :1]
 
         # corrupt the inputs with noise
         x = cont_noise(x, self.continuous_noise_std)

@@ -30,6 +30,14 @@ def online(config):
     x = task.x
     y = task.y
 
+    # if the task is discrete then use a continuous relaxation
+    if config['is_discrete']:
+        p = np.full_like(x, 1 / float(x.shape[-1]))
+        x = config.get('discrete_clip', 5.0) * x + (
+                1.0 - config.get('discrete_clip', 5.0)) * p
+        x = np.log(x)
+        x = x[:, :, 1:] - x[:, :, :1]
+
     if config['normalize_ys']:
         # compute normalization statistics for the score
         mu_y = np.mean(y, axis=0, keepdims=True).astype(np.float32)
@@ -41,7 +49,7 @@ def online(config):
         mu_y = np.zeros_like(y[:1])
         st_y = np.ones_like(y[:1])
 
-    if config['normalize_xs'] and not config['is_discrete']:
+    if config['normalize_xs']:
         # compute normalization statistics for the data vectors
         mu_x = np.mean(x, axis=0, keepdims=True).astype(np.float32)
         x = x - mu_x
@@ -86,18 +94,8 @@ def online(config):
         solver_interval=solver_interval,
         solver_warmup=solver_warmup,
         solver_steps=config['solver_steps'],
-        is_discrete=config['is_discrete'],
         constraint_type=config['constraint_type'],
-        continuous_noise_std=config.get('continuous_noise_std', 0.0),
-        discrete_clip=config.get('discrete_clip', 5.0))
-
-    # create transformations of the data distribution
-    transforms = [tf.identity,
-                  lambda t: tf.pow(t, 5),
-                  lambda t: tf.math.sign(t) * tf.pow(tf.math.abs(t), 1/5),
-                  lambda t: tf.math.tanh(t),
-                  lambda t: tf.math.sin(t)]
-    inverse_transforms = [tf.identity] * 5
+        continuous_noise_std=config.get('continuous_noise_std', 0.0))
 
     # make a neural network to predict scores
     validation_models = [ForwardModel(
@@ -105,19 +103,16 @@ def online(config):
         activations=config['activations'],
         hidden=config['hidden_size'],
         max_std=config['initial_max_std'],
-        min_std=config['initial_min_std']) for transform in transforms]
+        min_std=config['initial_min_std'])]
 
     # create a trainer for a forward model with a conservative objective
     validation_trainers = [TransformedMaximumLikelihood(
         model,
         forward_model_optim=tf.keras.optimizers.Adam,
         forward_model_lr=config['forward_model_lr'],
-        transform=transform,
-        is_discrete=config['is_discrete'],
         continuous_noise_std=config.get('continuous_noise_std', 0.0),
-        discrete_clip=config.get('discrete_clip', 5.0),
         logger_prefix=f"validation_model_{i}")
-        for i, (model, transform) in enumerate(zip(validation_models, transforms))]
+        for i, model in enumerate(validation_models)]
 
     # create a data set
     train_data, validate_data = task.build(
@@ -132,11 +127,6 @@ def online(config):
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(y[:, 0], k=config['batch_size'])[1]
     initial_x = tf.gather(x, indices, axis=0)
-    if config['is_discrete']:
-        p = tf.fill(tf.shape(initial_x), 1 / tf.cast(tf.shape(initial_x)[-1], tf.float32))
-        initial_x = trainer.discrete_clip * initial_x + (1.0 - trainer.discrete_clip) * p
-        initial_x = tf.math.log(initial_x)
-        initial_x = initial_x[:, :, 1:] - initial_x[:, :, :1]
 
     # create the starting point for the optimizer
     evaluations = 0
@@ -158,12 +148,12 @@ def online(config):
         grads = tape.gradient(model, xt)
         model = model * st_y + mu_y
 
-        for i, (val, inv) in enumerate(zip(validation_models, inverse_transforms)):
+        for i, val in enumerate(validation_models):
             prediction = val(xt)
             logger.record(f"validation_model_{i}/prediction/mean",
-                          inv(prediction.mean()) * st_y + mu_y, evaluations)
+                          prediction.mean() * st_y + mu_y, evaluations)
             logger.record(f"validation_model_{i}/prediction/sample",
-                          inv(prediction.sample()) * st_y + mu_y, evaluations)
+                          prediction.sample() * st_y + mu_y, evaluations)
             logger.record(f"validation_model_{i}/prediction/stddev",
                           prediction.stddev() * st_y, evaluations)
 
@@ -176,10 +166,11 @@ def online(config):
 
         if evaluations in config['evaluate_steps'] \
                 or len(config['evaluate_steps']) == 0 or score is None:
-            solution = xt
+            solution = xt * st_x + mu_x
             if config['is_discrete']:
-                solution = tf.math.softmax(tf.pad(xt, [[0, 0], [0, 0], [1, 0]]) / 0.001)
-            score = task.score(solution * st_x + mu_x)
+                solution = tf.math.softmax(
+                    tf.pad(solution, [[0, 0], [0, 0], [1, 0]]) / 0.001)
+            score = task.score(solution)
             logger.record("score", score, evaluations, percentile=True)
             logger.record(f"rank_corr/model_to_real",
                           spearman(model[:, 0], score[:, 0]), evaluations)
