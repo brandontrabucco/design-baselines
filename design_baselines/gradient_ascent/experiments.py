@@ -13,6 +13,47 @@ def cli():
 
 #############
 
+@cli.command()
+@click.option('--local-dir', type=str, default='gradient-ascent-material-design')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def materialdesign(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate Conservative Score Models on AntMorphology-v0
+    """
+    # Final Version
+    from design_baselines.gradient_ascent import gradient_ascent
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             # include_dashboard=False,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(gradient_ascent, config={
+        "logging_dir": "data",
+        "task": "MaterialDesign-v0",
+        "task_kwargs": {'seed': tune.randint(1000),
+                        'split_percentile': 50, },
+        "is_discrete": True,
+        "normalize_ys": True,
+        "normalize_xs": False,
+        "discrete_smoothing": 0.6,
+        "val_size": 200,
+        "batch_size": 128,
+        "epochs": 100,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "forward_model_lr": 0.001,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": 0.01,
+        "solver_steps": 500},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
 
 @cli.command()
 @click.option('--local-dir', type=str, default='gradient-ascent-molecule')

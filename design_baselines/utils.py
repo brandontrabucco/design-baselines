@@ -96,6 +96,10 @@ def soft_noise(x, keep=0.9, temp=5.0):
     p = p / tf.reduce_sum(p, axis=-1, keepdims=True)
     return keep * x + (1.0 - keep) * p
 
+@tf.function(experimental_relax_shapes=True)
+def discrete_noise(x, keep=0.99, temp=5.0):
+    one_minus_x = 1.0 - x
+    return keep * x + (1.0 - keep) * one_minus_x
 
 @tf.function(experimental_relax_shapes=True)
 def cont_noise(x, noise_std=1.0):

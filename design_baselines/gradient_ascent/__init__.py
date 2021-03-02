@@ -1,11 +1,11 @@
 from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
-from design_baselines.utils import soft_noise
+from design_baselines.utils import soft_noise, discrete_noise
 from design_baselines.utils import render_video
 from design_baselines.gradient_ascent.trainers import MaximumLikelihood
 from design_baselines.gradient_ascent.trainers import Ensemble
-from design_baselines.gradient_ascent.nets import ForwardModel
+from design_baselines.gradient_ascent.nets import ForwardModel, ConvnetModel
 from collections import defaultdict
 import tensorflow_probability as tfp
 import tensorflow as tf
@@ -29,7 +29,7 @@ def gradient_ascent(config):
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
 
     # make several keras neural networks with different architectures
-    forward_models = [ForwardModel(
+    forward_models = [ConvnetModel(
         task.input_shape,
         activations=activations,
         hidden=config['hidden_size'],
@@ -38,11 +38,13 @@ def gradient_ascent(config):
         for activations in config['activations']]
 
     # save the initial dataset statistics for safe keeping
-    x = task.x
-    y = task.y
+    # x = task.x
+    # y = task.y
+    x, y = task.wrapped_task.get_training_data()
+    x = x.astype(np.float32)
+    y = y.astype(np.float32)
 
     if config['normalize_ys']:
-
         # compute normalization statistics for the score
         mu_y = np.mean(y, axis=0, keepdims=True)
         mu_y = mu_y.astype(np.float32)
@@ -51,15 +53,12 @@ def gradient_ascent(config):
         st_y = np.where(np.equal(st_y, 0), 1, st_y)
         st_y = st_y.astype(np.float32)
         y = y / st_y
-
     else:
-
         # compute normalization statistics for the score
         mu_y = np.zeros_like(y[:1])
         st_y = np.ones_like(y[:1])
 
     if config['normalize_xs'] and not config['is_discrete']:
-
         # compute normalization statistics for the data vectors
         mu_x = np.mean(x, axis=0, keepdims=True)
         mu_x = mu_x.astype(np.float32)
@@ -68,9 +67,7 @@ def gradient_ascent(config):
         st_x = np.where(np.equal(st_x, 0), 1, st_x)
         st_x = st_x.astype(np.float32)
         x = x / st_x
-
     else:
-
         # compute normalization statistics for the score
         mu_x = np.zeros_like(x[:1])
         st_x = np.ones_like(x[:1])
@@ -153,12 +150,11 @@ def gradient_ascent(config):
     mean_x = tf.reduce_mean(x, axis=0, keepdims=True)
     indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
     initial_x = tf.gather(x, indices, axis=0)
-    x = tf.math.log(soft_noise(initial_x,
-                               config.get('discrete_smoothing', 0.6))) \
+    x = tf.math.log(discrete_noise(initial_x, keep=0.99)) \
         if config['is_discrete'] else initial_x
 
     # evaluate the starting point
-    solution = tf.math.softmax(x) if config['is_discrete'] else x
+    solution = tf.math.sigmoid(x) if config['is_discrete'] else x
     score = task.score(solution * st_x + mu_x)
     preds = [fm.get_distribution(
         solution).mean() * st_y + mu_y for fm in forward_models]
@@ -197,7 +193,7 @@ def gradient_ascent(config):
 
         # use the conservative optimizer to update the solution
         x = x + config['solver_lr'] * grads
-        solution = tf.math.softmax(x) if config['is_discrete'] else x
+        solution = tf.math.sigmoid(x) if config['is_discrete'] else x
 
         # evaluate the design using the oracle and the forward model
         score = task.score(solution * st_x + mu_x)
@@ -273,8 +269,9 @@ def ablate_architecture(config):
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
 
     # save the initial dataset statistics for safe keeping
-    x = task.x
-    y = task.y
+    # x = task.x
+    # y = task.y
+    x, y = task.get_training_data()
 
     if config['normalize_ys']:
         # compute normalization statistics for the score
@@ -301,7 +298,7 @@ def ablate_architecture(config):
         st_x = np.ones_like(x[:1])
 
     # make a neural network to predict scores
-    held_out_models = [ForwardModel(
+    held_out_models = [ConvnetModel(
         task.input_shape,
         activations=config['activations'][0],
         hidden=256,
