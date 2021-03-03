@@ -1,5 +1,5 @@
 from design_baselines.utils import spearman
-from design_baselines.utils import soft_noise
+from design_baselines.utils import soft_noise, discrete_noise
 from design_baselines.utils import cont_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
@@ -100,7 +100,7 @@ class Ensemble(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        x0 = soft_noise(x, self.keep) \
+        x0 = discrete_noise(x, 0.99) \
             if self.is_discrete else cont_noise(x, self.noise_std)
 
         for i in range(self.bootstraps):
@@ -151,7 +151,7 @@ class Ensemble(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        x0 = soft_noise(x, self.keep) \
+        x0 = discrete_noise(x, 0.99) \
             if self.is_discrete else cont_noise(x, self.noise_std)
 
         for i in range(self.bootstraps):
@@ -317,7 +317,7 @@ class MaximumLikelihood(tf.Module):
         """
 
         # corrupt the inputs with noise
-        x0 = soft_noise(x, self.keep) \
+        x0 = discrete_noise(x, 0.99) \
             if self.is_discrete else cont_noise(x, self.noise_std)
 
         statistics = dict()
@@ -367,7 +367,7 @@ class MaximumLikelihood(tf.Module):
         """
 
         # corrupt the inputs with noise
-        x0 = soft_noise(x, self.keep) \
+        x0 = discrete_noise(x, 0.99) \
             if self.is_discrete else cont_noise(x, self.noise_std)
 
         statistics = dict()

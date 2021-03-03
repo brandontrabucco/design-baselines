@@ -181,7 +181,7 @@ def gradient_ascent(config):
             tape.watch(x)
             predictions = []
             for fm in forward_models:
-                solution = tf.math.softmax(x) if config['is_discrete'] else x
+                solution = tf.math.sigmoid(x) if config['is_discrete'] else x
                 predictions.append(fm.get_distribution(solution).mean())
             if config['aggregation_method'] == 'mean':
                 score = tf.reduce_min(predictions, axis=0)

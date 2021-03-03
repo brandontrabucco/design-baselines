@@ -66,13 +66,13 @@ class ConvnetModel(tf.keras.Sequential):
             a dictionary that contains 'loc' and 'scale_diag' keys
         """
 
-        print ('inputs: ', inputs)
+        # print ('inputs: ', inputs)
         prediction = super(ConvnetModel, self).__call__(inputs, **kwargs)
-        print ('prediction: ', prediction)
+        # print ('prediction: ', prediction)
         mean, logstd = tf.split(prediction, 2, axis=-1)
         logstd = self.max_logstd - tf.nn.softplus(self.max_logstd - logstd)
         logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
-        print ('Mean/logstd: ', mean.shape, logstd.shape)
+        # print ('Mean/logstd: ', mean.shape, logstd.shape)
         return {"loc": mean, "scale": tf.math.exp(logstd)}
 
     def get_distribution(self, inputs, **kwargs):
