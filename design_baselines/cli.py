@@ -820,6 +820,157 @@ def ablate_beta(hopper,
     fig.savefig('ablate_beta.pdf')
 
 
+
+
+
+@cli.command()
+@click.option('--hopper')
+@click.option('--superconductor')
+@click.option('--tag', type=str)
+@click.option('--max-iterations', type=int)
+def ablate_tau(hopper,
+               superconductor,
+               tag,
+               max_iterations):
+
+    from collections import defaultdict
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import glob
+    import os
+    import re
+    import pandas as pd
+    import numpy as np
+    import tensorflow as tf
+    import tqdm
+    import json
+
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.palplot(palette)
+    sns.set_palette(palette)
+
+    pattern = re.compile(
+        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
+        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+
+    hopper_dir = [d for d in glob.glob(
+        os.path.join(hopper, '*'))
+        if pattern.search(d) is not None]
+    superconductor_dir = [d for d in glob.glob(
+        os.path.join(superconductor, '*'))
+        if pattern.search(d) is not None]
+
+    name_to_dir = {
+        'HopperController-v0': hopper_dir,
+        'Superconductor-v0': superconductor_dir}
+
+    task_to_ylabel = {
+        'HopperController-v0': "Average return",
+        'Superconductor-v0': "Critical temperature"}
+
+    fig, axes = plt.subplots(
+        nrows=1, ncols=2, figsize=(12.5, 5.0))
+
+    task_to_axis = {
+        'HopperController-v0': axes[0],
+        'Superconductor-v0': axes[1]}
+
+    for task in [
+            'HopperController-v0',
+            'Superconductor-v0']:
+
+        # read data from tensor board
+        ylabel = task_to_ylabel[task]
+        data = pd.DataFrame(columns=[
+            'Tau',
+            'Gradient ascent steps',
+            ylabel])
+
+        for d in tqdm.tqdm(name_to_dir[task]):
+            for f in glob.glob(os.path.join(d, '*/events.out*')):
+                params = os.path.join(d, 'params.json')
+                with open(params, "r") as pf:
+                    params = json.load(pf)
+                for e in tf.compat.v1.train.summary_iterator(f):
+                    for v in e.summary.value:
+                        if v.tag == tag and e.step < max_iterations:
+                            data = data.append({
+                                'Tau': f'{params["target_conservatism"]}',
+                                'Gradient ascent steps': e.step,
+                                ylabel: tf.make_ndarray(v.tensor).tolist(),
+                                }, ignore_index=True)
+
+        axis = task_to_axis[task]
+
+        palette = {"0.5": "C0", "0.4": "C1", "0.2": "C2", "0.1": "C3",
+                   "0.05": "C4", "0.01": "C5", "0.005": "C6", "0.001": "C7"}
+
+        axis = sns.lineplot(
+            x='Gradient ascent steps',
+            y=ylabel,
+            hue='Tau',
+            data=data,
+            ax=axis,
+            linewidth=2,
+            legend=False,
+            palette=palette)
+
+        axis.spines['right'].set_visible(False)
+        axis.spines['top'].set_visible(False)
+        axis.yaxis.set_ticks_position('left')
+        axis.xaxis.set_ticks_position('bottom')
+        axis.yaxis.set_tick_params(labelsize=16)
+        axis.xaxis.set_tick_params(labelsize=16)
+
+        axis.set_xlabel(r'\textbf{Gradient ascent steps}', fontsize=24)
+        axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
+        axis.grid(color='grey',
+                  linestyle='dotted',
+                  linewidth=2)
+
+    new_axes = fig.add_axes([0.0, 0.0, 1.0, 1.0])
+    for x in [0.5, 0.4, 0.2, 0.1, 0.05, 0.01, 0.005, 0.001]:
+        new_axes.plot([0], [0], color=(1.0, 1.0, 1.0, 0.0), label=r"$\tau$" + f" = {x}")
+    leg = new_axes.legend([r"$\tau$" + f" = {x}" for x in [0.5, 0.4, 0.2, 0.1, 0.05, 0.01, 0.005, 0.001]],
+                          ncol=4,
+                          loc='lower center',
+                          bbox_to_anchor=(0.5, 0.0, 0.0, 0.0),
+                          fontsize=20,
+                          fancybox=True)
+    leg.legendHandles[0].set_color(color_palette[0])
+    leg.legendHandles[0].set_linewidth(2.0)
+    leg.legendHandles[1].set_color(color_palette[1])
+    leg.legendHandles[1].set_linewidth(2.0)
+    leg.legendHandles[2].set_color(color_palette[2])
+    leg.legendHandles[2].set_linewidth(2.0)
+    leg.legendHandles[3].set_color(color_palette[3])
+    leg.legendHandles[3].set_linewidth(2.0)
+    leg.legendHandles[4].set_color(color_palette[4])
+    leg.legendHandles[4].set_linewidth(2.0)
+    leg.legendHandles[5].set_color(color_palette[5])
+    leg.legendHandles[5].set_linewidth(2.0)
+    leg.legendHandles[6].set_color(color_palette[6])
+    leg.legendHandles[6].set_linewidth(2.0)
+    leg.legendHandles[7].set_color(color_palette[7])
+    leg.legendHandles[7].set_linewidth(2.0)
+    new_axes.patch.set_alpha(0.0)
+    fig.subplots_adjust(bottom=0.4)
+    fig.savefig('ablate_tau.pdf')
+
+
 """
 
 design-baselines compare-runs \

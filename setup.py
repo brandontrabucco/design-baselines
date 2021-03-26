@@ -12,7 +12,7 @@ setup(
     packages=find_packages(),
     entry_points={'console_scripts': (
         'design-baselines=design_baselines.cli:cli',
-        'csm=design_baselines.csm.experiments:cli',
+        'coms=design_baselines.coms.experiments:cli',
         'online=design_baselines.online.experiments:cli',
         'gradient-ascent=design_baselines.gradient_ascent.experiments:cli',
         'gan=design_baselines.gan.experiments:cli',
