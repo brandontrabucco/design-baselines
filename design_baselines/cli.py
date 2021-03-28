@@ -1324,20 +1324,20 @@ def plot(dir, tag, xlabel, ylabel, separate_runs,
 
 @cli.command()
 @click.option('--dir', type=str)
+@click.option('--tag', type=str)
 @click.option('--xlabel', type=str)
 @click.option('--ylabel', type=str)
-@click.option('--max-iterations', type=int, default=999999)
+@click.option('--iteration', type=int, default=999999)
 @click.option('--lower-limit', type=float, default=-999999.)
 @click.option('--upper-limit', type=float, default=999999.)
-def plot_overestimate(dir, xlabel, ylabel,
-                      max_iterations, lower_limit, upper_limit):
+def plot_heatmap(dir, tag, xlabel, ylabel,
+                 iteration, lower_limit, upper_limit):
 
     from collections import defaultdict
     import glob
     import os
     import re
     import pickle as pkl
-    import pandas as pd
     import tensorflow as tf
     import tqdm
     import seaborn as sns
@@ -1401,44 +1401,46 @@ def plot_overestimate(dir, xlabel, ylabel,
     if len(params_of_variation) == 0:
         params_of_variation.append('task')
 
-    import design_bench
-    params[0]['task_kwargs'].pop('for_validation', None)
-    task = design_bench.make(params[0]['task'],
-                             **params[0]['task_kwargs'])
-    dim_x = float(task.x.shape[1])
+    assert len(params_of_variation) == 2, "only two parameters can vary"
 
     # read data from tensor board
-    data = pd.DataFrame(columns=['id', xlabel, ylabel] + params_of_variation)
+    data_dict = defaultdict(list)
+    p0_keys = set()
+    p1_keys = set()
     for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
         for f in glob.glob(os.path.join(d, '*/events.out*')):
             for e in tf.compat.v1.train.summary_iterator(f):
                 for v in e.summary.value:
-                    if v.tag == tag and e.step < max_iterations:
+                    if v.tag == tag and e.step == iteration:
                         y_vals = tf.make_ndarray(v.tensor)
                         y_vals = np.clip(y_vals, lower_limit, upper_limit)
-                        if norm == 'sqrt':
-                            y_vals /= np.sqrt(dim_x)
-                        if norm == 'full':
-                            y_vals /= dim_x
-                        row = {'id': i,
-                               ylabel: y_vals.tolist(),
-                               xlabel: e.step}
-                        for key in params_of_variation:
-                            row[key] = f'{pretty(key)} = {p[key]}'
-                        data = data.append(row, ignore_index=True)
+                        p0_keys.add(p[params_of_variation[0]])
+                        p1_keys.add(p[params_of_variation[1]])
+                        data_dict[(
+                            p[params_of_variation[0]],
+                            p[params_of_variation[1]])].append(y_vals)
 
-    if separate_runs:
-        params_of_variation.append('id')
+    p0_keys = sorted(list(p0_keys))
+    p0_map = {p0: i for i, p0 in enumerate(p0_keys)}
+    p1_keys = sorted(list(p1_keys))
+    p1_map = {p1: i for i, p1 in enumerate(p1_keys)}
+    print(p0_keys, p1_keys)
+
+    data = np.zeros([len(p0_keys), len(p1_keys)])
+    for p0 in p0_keys:
+        for p1 in p1_keys:
+            data[p0_map[p0], p1_map[p1]] = np.mean(data_dict[(p0, p1)])
 
     # save a separate plot for every hyper parameter
-    for key in params_of_variation:
-        plt.clf()
-        g = sns.relplot(x=xlabel, y=ylabel, hue=key, data=data,
-                        kind="line", height=5, aspect=2,
-                        facet_kws={"legend_out": True})
-        g.set(title=f'Evaluating {pretty(algo_name)} On {task_name}')
-        plt.savefig(f'{algo_name}_{task_name}_{key}_{tag.replace("/", "_")}_{norm}.png',
-                    bbox_inches='tight')
+    plt.clf()
+    g = sns.heatmap(data,
+                    xticklabels=[f"{x}" for x in p0_keys],
+                    yticklabels=[f"{x}" for x in p1_keys])
+    g.set(title=f'Heatmap of {task_name}')
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.savefig(f'{algo_name}_{task_name}_{tag.replace("/", "_")}_heatmap.png',
+                bbox_inches='tight')
 
 
 #############

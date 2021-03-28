@@ -122,20 +122,20 @@ def coms(config):
     predictions = []
     eval_beta = config['eval_beta']
 
-    for step in range(4 * config['outer_gradient_steps']):
+    for step in range(config['outer_gradient_steps']):
 
         xt = trainer.outer_optimize(xt, eval_beta, 1, training=False)
         prediction = forward_model(
-            xt, training=False).mean().numpy()
+            xt, training=False).mean().numpy() * st_y + mu_y
 
         next_xt = trainer.inner_optimize(xt, training=False)
         next_prediction = forward_model(
-            next_xt, training=False).mean().numpy()
+            next_xt, training=False).mean().numpy() * st_y + mu_y
 
         final_xt = trainer.outer_optimize(
             xt, eval_beta, config['outer_gradient_steps'], training=False)
         final_prediction = forward_model(
-            final_xt, training=False).mean().numpy()
+            final_xt, training=False).mean().numpy() * st_y + mu_y
 
         solution = xt * st_x + mu_x
         if config['is_discrete']:

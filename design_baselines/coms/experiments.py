@@ -97,14 +97,11 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "max_std": 0.2,
         "min_std": 0.1,
         "forward_model_lr": 0.0003,
-        "train_beta": 0.0,
-        "eval_beta": tune.grid_search([0.0, 0.4]),
-        "initial_alpha": tune.sample_from(
-            lambda c: 0.0 if c['config']["eval_beta"] == 0.0 else 1.0),
-        "alpha_lr": tune.sample_from(
-            lambda c: 0.0 if c['config']["eval_beta"] == 0.0 else 0.01),
-        "target_conservatism": tune.sample_from(
-            lambda c: 0.0 if c['config']["eval_beta"] == 0.0 else -2.0),
+        "train_beta": 0.4,
+        "eval_beta": 0.4,
+        "initial_alpha": 1.0,
+        "alpha_lr": 0.01,
+        "target_conservatism": -2.0,
         "inner_lr": 0.05,
         "outer_lr": 0.05,
         "inner_gradient_steps": 1,
@@ -149,14 +146,11 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "max_std": 0.2,
         "min_std": 0.1,
         "forward_model_lr": 0.0003,
-        "train_beta": 0.0,
-        "eval_beta": tune.grid_search([0.0, 0.4]),
-        "initial_alpha": tune.sample_from(
-            lambda c: 0.0 if c['config']["eval_beta"] == 0.0 else 1.0),
-        "alpha_lr": tune.sample_from(
-            lambda c: 0.0 if c['config']["eval_beta"] == 0.0 else 0.01),
-        "target_conservatism": tune.sample_from(
-            lambda c: 0.0 if c['config']["eval_beta"] == 0.0 else -2.0),
+        "train_beta": 0.4,
+        "eval_beta": 0.4,
+        "initial_alpha": 1.0,
+        "alpha_lr": 0.01,
+        "target_conservatism": -2.0,
         "inner_lr": 0.05,
         "outer_lr": 0.05,
         "inner_gradient_steps": 1,
