@@ -137,7 +137,17 @@ def coms(config):
         final_prediction = forward_model(
             final_xt, training=False).mean().numpy()
 
+        solution = xt * st_x + mu_x
+        if config['is_discrete']:
+            solution = tf.math.softmax(tf.pad(
+                solution, [[0, 0], [0, 0], [1, 0]]) / 0.001)
+
+        score = task.score(solution)
+
         # record the prediction and score to the logger
+        logger.record(f"score", score, step, percentile=True)
+        logger.record(f"solver/model_to_real",
+                      spearman(prediction[:, 0], score[:, 0]), step)
         logger.record(f"solver/distance",
                       tf.linalg.norm(xt - initial_x), step)
         logger.record(f"solver/prediction",
@@ -146,22 +156,14 @@ def coms(config):
                       prediction - eval_beta * next_prediction, step)
         logger.record(f"solver/conservatism",
                       prediction - final_prediction, step)
-
-        solution = xt * st_x + mu_x
-        if config['is_discrete']:
-            solution = tf.math.softmax(tf.pad(
-                solution, [[0, 0], [0, 0], [1, 0]]) / 0.001)
-
-        score = task.score(solution)
-        logger.record("score", score, step, percentile=True)
-        logger.record(f"solver/model_to_real",
-                      spearman(prediction[:, 0], score[:, 0]), step)
+        logger.record(f"solver/overestimation",
+                      prediction - score, step)
 
         scores.append(score)
         predictions.append(prediction)
 
-    # save the model predictions and scores to be aggregated later
-    np.save(os.path.join(config['logging_dir'], "scores.npy"),
-            np.concatenate(scores, axis=1))
-    np.save(os.path.join(config['logging_dir'], "predictions.npy"),
-            np.stack(predictions, axis=1))
+        # save the model predictions and scores to be aggregated later
+        np.save(os.path.join(config['logging_dir'], "scores.npy"),
+                np.concatenate(scores, axis=1))
+        np.save(os.path.join(config['logging_dir'], "predictions.npy"),
+                np.stack(predictions, axis=1))

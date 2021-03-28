@@ -1322,6 +1322,125 @@ def plot(dir, tag, xlabel, ylabel, separate_runs,
                     bbox_inches='tight')
 
 
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--xlabel', type=str)
+@click.option('--ylabel', type=str)
+@click.option('--max-iterations', type=int, default=999999)
+@click.option('--lower-limit', type=float, default=-999999.)
+@click.option('--upper-limit', type=float, default=999999.)
+def plot_overestimate(dir, xlabel, ylabel,
+                      max_iterations, lower_limit, upper_limit):
+
+    from collections import defaultdict
+    import glob
+    import os
+    import re
+    import pickle as pkl
+    import pandas as pd
+    import tensorflow as tf
+    import tqdm
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    plt.rcParams['text.usetex'] = False
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.palplot(palette)
+    sns.set_palette(palette)
+
+    def pretty(s):
+        return s.replace('_', ' ').title()
+
+    # get the experiment ids
+    pattern = re.compile(r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
+    dirs = [d for d in glob.glob(os.path.join(dir, '*')) if pattern.search(d) is not None]
+    matches = [pattern.search(d) for d in dirs]
+    ids = [int(m.group(2)) for m in matches]
+
+    # sort the files by the experiment ids
+    zipped_lists = zip(ids, dirs)
+    sorted_pairs = sorted(zipped_lists)
+    tuples = zip(*sorted_pairs)
+    ids, dirs = [list(tuple) for tuple in tuples]
+
+    # get the hyper parameters for each experiment
+    params = []
+    for d in dirs:
+        with open(os.path.join(d, 'params.pkl'), 'rb') as f:
+            params.append(pkl.load(f))
+
+    # concatenate all params along axis 1
+    all_params = defaultdict(list)
+    for p in params:
+        for key, val in p.items():
+            if val not in all_params[key]:
+                all_params[key].append(val)
+
+    # locate the params of variation in this experiment
+    params_of_variation = []
+    for key, val in all_params.items():
+        if len(val) > 1 and (not isinstance(val[0], dict)
+                             or 'seed' not in val[0]):
+            params_of_variation.append(key)
+
+    # get the task and algorithm name
+    task_name = params[0]['task']
+    algo_name = matches[0].group(1)
+    if len(params_of_variation) == 0:
+        params_of_variation.append('task')
+
+    import design_bench
+    params[0]['task_kwargs'].pop('for_validation', None)
+    task = design_bench.make(params[0]['task'],
+                             **params[0]['task_kwargs'])
+    dim_x = float(task.x.shape[1])
+
+    # read data from tensor board
+    data = pd.DataFrame(columns=['id', xlabel, ylabel] + params_of_variation)
+    for i, (d, p) in enumerate(tqdm.tqdm(zip(dirs, params))):
+        for f in glob.glob(os.path.join(d, '*/events.out*')):
+            for e in tf.compat.v1.train.summary_iterator(f):
+                for v in e.summary.value:
+                    if v.tag == tag and e.step < max_iterations:
+                        y_vals = tf.make_ndarray(v.tensor)
+                        y_vals = np.clip(y_vals, lower_limit, upper_limit)
+                        if norm == 'sqrt':
+                            y_vals /= np.sqrt(dim_x)
+                        if norm == 'full':
+                            y_vals /= dim_x
+                        row = {'id': i,
+                               ylabel: y_vals.tolist(),
+                               xlabel: e.step}
+                        for key in params_of_variation:
+                            row[key] = f'{pretty(key)} = {p[key]}'
+                        data = data.append(row, ignore_index=True)
+
+    if separate_runs:
+        params_of_variation.append('id')
+
+    # save a separate plot for every hyper parameter
+    for key in params_of_variation:
+        plt.clf()
+        g = sns.relplot(x=xlabel, y=ylabel, hue=key, data=data,
+                        kind="line", height=5, aspect=2,
+                        facet_kws={"legend_out": True})
+        g.set(title=f'Evaluating {pretty(algo_name)} On {task_name}')
+        plt.savefig(f'{algo_name}_{task_name}_{key}_{tag.replace("/", "_")}_{norm}.png',
+                    bbox_inches='tight')
+
+
 #############
 
 
