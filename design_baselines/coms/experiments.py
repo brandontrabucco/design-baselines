@@ -53,9 +53,10 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
         "target_conservatism": -0.5,
         "inner_lr": 0.05,
         "outer_lr": 0.05,
-        "inner_gradient_steps": 10,
+        "inner_gradient_steps": 1,
         "outer_gradient_steps": 50,
-        "beta": tune.grid_search([0.0, 0.2, 0.3, 0.6])
+        "train_beta": 0.4,
+        "eval_beta": 0.4
         },
         num_samples=num_samples,
         local_dir=local_dir,
@@ -103,7 +104,8 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "outer_lr": 0.05,
         "inner_gradient_steps": 1,
         "outer_gradient_steps": 50,
-        "beta": 0.4
+        "train_beta": tune.grid_search([0.0, 0.4]),
+        "eval_beta": 0.4
         },
         num_samples=num_samples,
         local_dir=local_dir,
@@ -146,12 +148,13 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "forward_model_lr": 0.0003,
         "initial_alpha": 1.0,
         "alpha_lr": 0.01,
-        "target_conservatism": -0.5,
+        "target_conservatism": -2.0,
         "inner_lr": 0.05,
         "outer_lr": 0.05,
         "inner_gradient_steps": 1,
         "outer_gradient_steps": 50,
-        "beta": 0.4
+        "train_beta": tune.grid_search([0.0, 0.4]),
+        "eval_beta": 0.4
         },
         num_samples=num_samples,
         local_dir=local_dir,
@@ -197,9 +200,10 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
         "target_conservatism": -0.5,
         "inner_lr": 0.05,
         "outer_lr": 0.05,
-        "inner_gradient_steps": 10,
+        "inner_gradient_steps": 1,
         "outer_gradient_steps": 50,
-        "beta": tune.grid_search([0.0, 0.2, 0.3, 0.6])
+        "train_beta": 0.4,
+        "eval_beta": 0.4
         },
         num_samples=num_samples,
         local_dir=local_dir,
@@ -246,9 +250,10 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
         "target_conservatism": -0.5,
         "inner_lr": 0.05,
         "outer_lr": 0.05,
-        "inner_gradient_steps": 10,
+        "inner_gradient_steps": 1,
         "outer_gradient_steps": 50,
-        "beta": tune.grid_search([0.0, 0.2, 0.3, 0.6])
+        "train_beta": 0.4,
+        "eval_beta": 0.4
         },
         num_samples=num_samples,
         local_dir=local_dir,
@@ -295,9 +300,10 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "target_conservatism": -0.5,
         "inner_lr": 0.05,
         "outer_lr": 0.05,
-        "inner_gradient_steps": 10,
+        "inner_gradient_steps": 1,
         "outer_gradient_steps": 50,
-        "beta": tune.grid_search([0.0, 0.2, 0.3, 0.6])
+        "train_beta": 0.4,
+        "eval_beta": 0.4
         },
         num_samples=num_samples,
         local_dir=local_dir,
@@ -344,9 +350,10 @@ def tfbind8(local_dir, cpus, gpus, num_parallel, num_samples):
         "target_conservatism": -0.5,
         "inner_lr": 0.05,
         "outer_lr": 0.05,
-        "inner_gradient_steps": 10,
+        "inner_gradient_steps": 1,
         "outer_gradient_steps": 50,
-        "beta": tune.grid_search([0.0, 0.2, 0.3, 0.6])
+        "train_beta": 0.4,
+        "eval_beta": 0.4
         },
         num_samples=num_samples,
         local_dir=local_dir,
@@ -393,9 +400,10 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
         "target_conservatism": -1000.0,
         "inner_lr": 0.05,
         "outer_lr": 0.05,
-        "inner_gradient_steps": 10,
+        "inner_gradient_steps": 1,
         "outer_gradient_steps": 50,
-        "beta": tune.grid_search([0.0, 0.2, 0.3, 0.6])
+        "train_beta": 0.4,
+        "eval_beta": 0.4
         },
         num_samples=num_samples,
         local_dir=local_dir,

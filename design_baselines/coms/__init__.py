@@ -99,7 +99,7 @@ def coms(config):
         inner_lr=inner_lr, outer_lr=outer_lr,
         inner_gradient_steps=config['inner_gradient_steps'],
         outer_gradient_steps=config['outer_gradient_steps'],
-        beta=config['beta'],
+        beta=config['train_beta'],
         continuous_noise_std=config['continuous_noise_std'])
 
     # create a data set
@@ -120,10 +120,11 @@ def coms(config):
 
     scores = []
     predictions = []
+    eval_beta = config['eval_beta']
 
     for step in range(4 * config['outer_gradient_steps']):
 
-        xt = trainer.outer_optimize(xt, 1, training=False)
+        xt = trainer.outer_optimize(xt, eval_beta, 1, training=False)
         prediction = forward_model(
             xt, training=False).mean().numpy()
 
@@ -132,17 +133,17 @@ def coms(config):
             next_xt, training=False).mean().numpy()
 
         final_xt = trainer.outer_optimize(
-            xt, config['outer_gradient_steps'], training=False)
+            xt, eval_beta, config['outer_gradient_steps'], training=False)
         final_prediction = forward_model(
             final_xt, training=False).mean().numpy()
 
         # record the prediction and score to the logger
-        logger.record("solver/distance",
+        logger.record(f"solver/distance",
                       tf.linalg.norm(xt - initial_x), step)
         logger.record(f"solver/prediction",
                       prediction, step)
         logger.record(f"solver/beta_conservatism",
-                      prediction - config["beta"] * next_prediction, step)
+                      prediction - eval_beta * next_prediction, step)
         logger.record(f"solver/conservatism",
                       prediction - final_prediction, step)
 

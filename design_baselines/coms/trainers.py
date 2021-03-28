@@ -132,6 +132,7 @@ class ConservativeObjectiveModel(tf.Module):
     @tf.function(experimental_relax_shapes=True)
     def outer_optimize(self,
                        x,
+                       beta,
                        steps,
                        **kwargs):
         """Using gradient descent find adversarial versions of x
@@ -168,7 +169,7 @@ class ConservativeObjectiveModel(tf.Module):
                 next_score = self.forward_model(next_xt, **kwargs).mean()
 
                 # the conservatism of the current set of particles
-                conservatism = score - self.beta * next_score
+                conservatism = score - beta * next_score
 
             # update the particles to maximize the conservatism
             return tf.stop_gradient(xt + self.outer_lr * tape.gradient(conservatism, xt)),
@@ -215,7 +216,7 @@ class ConservativeObjectiveModel(tf.Module):
 
             # calculate negative samples starting from the dataset
             x_neg = self.outer_optimize(
-                x, self.outer_gradient_steps, training=False)
+                x, self.beta, self.outer_gradient_steps, training=False)
             x_neg = tf.stop_gradient(x_neg)
 
             # calculate the prediction error and accuracy of the model
@@ -278,7 +279,7 @@ class ConservativeObjectiveModel(tf.Module):
 
         # calculate negative samples starting from the dataset
         x_neg = self.outer_optimize(
-            x, self.outer_gradient_steps, training=False)
+            x, self.beta, self.outer_gradient_steps, training=False)
 
         # calculate the prediction error and accuracy of the model
         d_neg = self.forward_model(x_neg, training=False)
