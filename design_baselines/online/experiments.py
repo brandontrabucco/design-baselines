@@ -354,7 +354,7 @@ def tfbind8(local_dir, cpus, gpus, num_parallel, num_samples):
              temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
     tune.run(online, config={
         "logging_dir": "data",
-        "task": "TFBind8-v0",
+        "task": "TfBind8-v0",
         "task_kwargs": {'split_percentile': 40},
         "is_discrete": True,
         "constraint_type": "mix",
