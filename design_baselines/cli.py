@@ -1345,7 +1345,7 @@ def plot_heatmap(dir, tag, xlabel, ylabel,
     import matplotlib.pyplot as plt
     import numpy as np
 
-    plt.rcParams['text.usetex'] = False
+    plt.rcParams['text.usetex'] = True
     matplotlib.rc('font', family='serif', serif='cm10')
     matplotlib.rc('mathtext', fontset='cm')
     color_palette = ['#EE7733',
@@ -1426,19 +1426,23 @@ def plot_heatmap(dir, tag, xlabel, ylabel,
     p1_map = {p1: i for i, p1 in enumerate(p1_keys)}
     print(p0_keys, p1_keys)
 
-    data = np.zeros([len(p0_keys), len(p1_keys)])
+    data = np.zeros([len(p1_keys), len(p0_keys)])
     for p0 in p0_keys:
         for p1 in p1_keys:
-            data[p0_map[p0], p1_map[p1]] = np.mean(data_dict[(p0, p1)])
+            data[p1_map[p1], p0_map[p0]] = np.mean(data_dict[(p0, p1)])
+            print(f"{(p0, p1)} = {np.mean(data_dict[(p0, p1)])}")
 
     # save a separate plot for every hyper parameter
     plt.clf()
+
     g = sns.heatmap(data,
-                    xticklabels=[f"{x}" for x in p0_keys],
-                    yticklabels=[f"{x}" for x in p1_keys])
-    g.set(title=f'Heatmap of {task_name}')
+                    xticklabels=[r"$\infty$" if x == 10.0 else f"{x}" for x in p0_keys],
+                    yticklabels=[r"$\infty$" if x == 10.0 else f"{x}" for x in p1_keys],
+                    square=True)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
+    plt.xticks(rotation=90)
+    plt.yticks(rotation=0)
     plt.savefig(f'{algo_name}_{task_name}_{tag.replace("/", "_")}_heatmap.png',
                 bbox_inches='tight')
 

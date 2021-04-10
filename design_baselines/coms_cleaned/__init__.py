@@ -1,15 +1,14 @@
 from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
-from design_baselines.coms.trainers import ConservativeObjectiveModel
-from design_baselines.coms.nets import ForwardModel
-from collections import defaultdict
+from design_baselines.coms_cleaned.trainers import ConservativeObjectiveModel
+from design_baselines.coms_cleaned.nets import ForwardModel
 import tensorflow as tf
 import numpy as np
 import os
 
 
-def coms(config):
+def coms_cleaned(config):
     """Train a forward model and perform model based optimization
     using a conservative objective function
 

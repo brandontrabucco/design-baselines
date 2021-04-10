@@ -1,20 +1,18 @@
 from design_baselines.data import StaticGraphTask
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
-from design_baselines.utils import soft_noise
-from design_baselines.online.trainers import ConservativeMaximumLikelihood
-from design_baselines.online.trainers import TransformedMaximumLikelihood
-from design_baselines.online.nets import ForwardModel
+from design_baselines.coms_original.trainers import ConservativeMaximumLikelihood
+from design_baselines.coms_original.trainers import TransformedMaximumLikelihood
+from design_baselines.coms_original.nets import ForwardModel
 from collections import defaultdict
 import tensorflow as tf
 import numpy as np
-import glob
 import os
 
 
-def online(config):
-    """Train a forward model and perform model based optimization
-    using a conservative objective function
+def coms_original(config):
+    """Train a forward model and perform offline model-based
+    optimization using a conservative objective model
 
     Args:
 

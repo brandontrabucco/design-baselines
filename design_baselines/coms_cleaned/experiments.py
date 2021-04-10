@@ -7,60 +7,55 @@ from random import randint
 
 @click.group()
 def cli():
-    """A group of experiments for training Conservative Score Models
-    and reproducing our ICLR 2021 results.
+    """A cleaned up implementation of Conservative Objective Models
+    for reproducing some of our ICML 2021 rebuttal results.
     """
 
 
-#############
+# CLEANED UP VERSION OF COMS - INTENDED FOR RELEASE POST-ICML 2021
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='online-dkitty')
+@click.option('--local-dir', type=str, default='coms-cleaned-dkitty')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on DKittyMorphology-v0
+    """Evaluate Conservative Objective Models on DKittyMorphology-v0
     """
 
-    # Final Version
-
-    from design_baselines.online import online
+    from design_baselines.coms_cleaned import coms_cleaned
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
-    tune.run(online, config={
+    tune.run(coms_cleaned, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
         "task_kwargs": {"split_percentile": 40, 'num_parallel': 2},
         "is_discrete": False,
-        "constraint_type": "dataset",
         "normalize_ys": True,
         "normalize_xs": True,
-        "continuous_noise_std": 0.0,
+        "continuous_noise_std": 0.2,
         "val_size": 500,
         "batch_size": 128,
-        "epochs": 500,
+        "epochs": 50,
         "activations": ['leaky_relu', 'leaky_relu'],
-        "hidden_size": 2048,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
+        "hidden": 2048,
+        "max_std": 0.2,
+        "min_std": 0.1,
         "forward_model_lr": 0.0003,
         "initial_alpha": 1.0,
-        "alpha_lr": 0.05,
-        "target_conservatism": 0.05,
-        "negatives_fraction": 1.0,
-        "lookahead_steps": 1,
-        "lookahead_backprop": True,
-        "evaluate_steps": [450],
-        "solver_lr": 0.01,
-        "solver_interval": 1,
-        "solver_warmup": 50,
-        "solver_steps": 1,
-        "solver_beta": tune.grid_search([0.0, 0.1, 0.3, 0.7, 0.9, 1.0])},
+        "alpha_lr": 0.01,
+        "target_conservatism": -2.0,
+        "inner_lr": 0.05,
+        "outer_lr": 0.05,
+        "inner_gradient_steps": 1,
+        "outer_gradient_steps": 50,
+        "train_beta": 0.4,
+        "eval_beta": 0.4
+        },
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -68,51 +63,46 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='online-ant')
+@click.option('--local-dir', type=str, default='coms-cleaned-ant')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def ant(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on AntMorphology-v0
+    """Evaluate Conservative Objective Models on AntMorphology-v0
     """
 
-    # Final Version
-
-    from design_baselines.online import online
+    from design_baselines.coms_cleaned import coms_cleaned
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
-    tune.run(online, config={
+    tune.run(coms_cleaned, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
         "task_kwargs": {"split_percentile": 20, 'num_parallel': 2},
         "is_discrete": False,
-        "constraint_type": "dataset",
         "normalize_ys": True,
         "normalize_xs": True,
-        "continuous_noise_std": 0.0,
+        "continuous_noise_std": 0.2,
         "val_size": 500,
         "batch_size": 128,
-        "epochs": 500,
+        "epochs": 20,
         "activations": ['leaky_relu', 'leaky_relu'],
-        "hidden_size": 2048,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
+        "hidden": 2048,
+        "max_std": 0.2,
+        "min_std": 0.1,
         "forward_model_lr": 0.0003,
+        "train_beta": 0.4,
+        "eval_beta": 0.4,
         "initial_alpha": 1.0,
-        "alpha_lr": 0.05,
-        "target_conservatism": 0.05,
-        "negatives_fraction": 1.0,
-        "lookahead_steps": 1,
-        "lookahead_backprop": True,
-        "evaluate_steps": [450],
-        "solver_lr": 0.01,
-        "solver_interval": 1,
-        "solver_warmup": 50,
-        "solver_steps": 1,
-        "solver_beta": tune.grid_search([0.0, 0.1, 0.3, 0.7, 0.9, 1.0])},
+        "alpha_lr": 0.01,
+        "target_conservatism": -2.0,
+        "inner_lr": 0.05,
+        "outer_lr": 0.05,
+        "inner_gradient_steps": 1,
+        "outer_gradient_steps": 50,
+        },
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -120,51 +110,46 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='online-hopper')
+@click.option('--local-dir', type=str, default='coms-cleaned-hopper')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on HopperController-v0
+    """Evaluate Conservative Objective Models on HopperController-v0
     """
 
-    # Final Version
-
-    from design_baselines.online import online
+    from design_baselines.coms_cleaned import coms_cleaned
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
-    tune.run(online, config={
+    tune.run(coms_cleaned, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
         "task_kwargs": {},
         "is_discrete": False,
-        "constraint_type": "mix",
         "normalize_ys": True,
         "normalize_xs": True,
-        "continuous_noise_std": 0.0,
+        "continuous_noise_std": 0.2,
         "val_size": 500,
         "batch_size": 128,
-        "epochs": 500,
+        "epochs": 20,
         "activations": ['leaky_relu', 'leaky_relu'],
-        "hidden_size": 512,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
+        "hidden": 2048,
+        "max_std": 0.2,
+        "min_std": 0.1,
         "forward_model_lr": 0.0003,
+        "train_beta": 0.4,
+        "eval_beta": 0.4,
         "initial_alpha": 1.0,
-        "alpha_lr": 0.5,
-        "target_conservatism": tune.grid_search([10.0]),
-        "negatives_fraction": 1.0,
-        "lookahead_steps": 20,
-        "lookahead_backprop": True,
-        "evaluate_steps": [i for i in range(0, 500, 1)],
-        "solver_lr": 0.01,
-        "solver_interval": 1,
-        "solver_warmup": 50,
-        "solver_steps": 20,
-        "solver_beta": tune.grid_search([0.0, 0.2, 0.4, 0.6])},
+        "alpha_lr": 0.01,
+        "target_conservatism": -2.0,
+        "inner_lr": 0.05,
+        "outer_lr": 0.05,
+        "inner_gradient_steps": 1,
+        "outer_gradient_steps": 50,
+        },
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -172,107 +157,94 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='online-superconductor')
+@click.option('--local-dir', type=str, default='coms-cleaned-superconductor')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on Superconductor-v0
+    """Evaluate Conservative Objective Models on Superconductor-v0
     """
 
-    # Final Version
-
-    from design_baselines.online import online
+    from design_baselines.coms_cleaned import coms_cleaned
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
-    tune.run(online, config={
+    tune.run(coms_cleaned, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
         "task_kwargs": {},
         "is_discrete": False,
-        "constraint_type": "mix",
         "normalize_ys": True,
         "normalize_xs": True,
-        "continuous_noise_std": 0.0,
+        "continuous_noise_std": 0.2,
         "val_size": 500,
         "batch_size": 128,
-        "epochs": 500,
+        "epochs": 50,
         "activations": ['leaky_relu', 'leaky_relu'],
-        "hidden_size": 512,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
+        "hidden": 2048,
+        "max_std": 0.2,
+        "min_std": 0.1,
         "forward_model_lr": 0.0003,
         "initial_alpha": 1.0,
-        "alpha_lr": 0.5,
-        "target_conservatism": tune.grid_search([10.0]),
-        "negatives_fraction": 1.0,
-        "lookahead_steps": 20,
-        "lookahead_backprop": True,
-        "evaluate_steps": [i for i in range(0, 500, 1)],
-        "solver_lr": 0.01,
-        "solver_interval": 1,
-        "solver_warmup": 50,
-        "solver_steps": 20,
-        "solver_beta": tune.grid_search([0.0, 0.2, 0.4, 0.6])},
+        "alpha_lr": 0.01,
+        "target_conservatism": -2.0,
+        "inner_lr": 0.05,
+        "outer_lr": 0.05,
+        "inner_gradient_steps": 1,
+        "outer_gradient_steps": 50,
+        "train_beta": 0.4,
+        "eval_beta": 0.4
+        },
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
-########
-
-
 @cli.command()
-@click.option('--local-dir', type=str, default='online-molecule')
+@click.option('--local-dir', type=str, default='coms-cleaned-molecule')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on MoleculeActivity-v0
+    """Evaluate Conservative Objective Models on MoleculeActivity-v0
     """
 
-    # Final Version
-
-    from design_baselines.online import online
+    from design_baselines.coms_cleaned import coms_cleaned
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
-    tune.run(online, config={
+    tune.run(coms_cleaned, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
         "task_kwargs": {'split_percentile': 80},
         "is_discrete": True,
-        "constraint_type": "mix",
         "normalize_ys": True,
         "normalize_xs": True,
         "continuous_noise_std": 0.2,
         "discrete_clip": 0.6,
         "val_size": 500,
         "batch_size": 128,
-        "epochs": 2000,
+        "epochs": 50,
         "activations": ['leaky_relu', 'leaky_relu'],
-        "hidden_size": 512,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
-        "forward_model_lr": 0.0001,
+        "hidden": 2048,
+        "max_std": 0.2,
+        "min_std": 0.1,
+        "forward_model_lr": 0.0003,
         "initial_alpha": 1.0,
-        "alpha_lr": 0.05,
-        "target_conservatism": 0.05,
-        "negatives_fraction": 1.0,
-        "lookahead_steps": 1,
-        "lookahead_backprop": True,
-        "evaluate_steps": [i for i in range(0, 500, 10)],
-        "solver_lr": 0.01,
-        "solver_interval": 1,
-        "solver_warmup": 50,
-        "solver_steps": 1,
-        "solver_beta": tune.grid_search([0.0, 0.1, 0.3, 0.7, 0.9, 1.0])},
+        "alpha_lr": 0.01,
+        "target_conservatism": -2.0,
+        "inner_lr": 0.05,
+        "outer_lr": 0.05,
+        "inner_gradient_steps": 1,
+        "outer_gradient_steps": 50,
+        "train_beta": 0.4,
+        "eval_beta": 0.4
+        },
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -280,108 +252,95 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='online-gfp')
+@click.option('--local-dir', type=str, default='coms-cleaned-gfp')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on GFP-v0
+    """Evaluate Conservative Objective Models on GFP-v0
     """
 
-    # Final Version
-
-    from design_baselines.online import online
+    from design_baselines.coms_cleaned import coms_cleaned
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
-    tune.run(online, config={
+    tune.run(coms_cleaned, config={
         "logging_dir": "data",
         "task": "GFP-v0",
         "task_kwargs": {'seed': tune.randint(1000)},
         "is_discrete": True,
-        "constraint_type": "mix",
         "normalize_ys": True,
         "normalize_xs": True,
         "continuous_noise_std": 0.2,
         "discrete_clip": 0.6,
         "val_size": 500,
         "batch_size": 128,
-        "epochs": 2000,
+        "epochs": 50,
         "activations": ['leaky_relu', 'leaky_relu'],
-        "hidden_size": 512,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
-        "forward_model_lr": 0.0001,
+        "hidden": 2048,
+        "max_std": 0.2,
+        "min_std": 0.1,
+        "forward_model_lr": 0.0003,
         "initial_alpha": 1.0,
-        "alpha_lr": 0.05,
-        "target_conservatism": 0.05,
-        "negatives_fraction": 1.0,
-        "lookahead_steps": 1,
-        "lookahead_backprop": True,
-        "evaluate_steps": [i for i in range(0, 500, 10)],
-        "solver_lr": 0.01,
-        "solver_interval": 1,
-        "solver_warmup": 50,
-        "solver_steps": 1,
-        "solver_beta": tune.grid_search([0.0, 0.1, 0.3, 0.7, 0.9, 1.0])},
+        "alpha_lr": 0.01,
+        "target_conservatism": -2.0,
+        "inner_lr": 0.05,
+        "outer_lr": 0.05,
+        "inner_gradient_steps": 1,
+        "outer_gradient_steps": 50,
+        "train_beta": 0.4,
+        "eval_beta": 0.4
+        },
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
 
 
-
-
-
 @cli.command()
-@click.option('--local-dir', type=str, default='online-tfbind8')
+@click.option('--local-dir', type=str, default='coms-cleaned-tfbind8')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def tfbind8(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Conservative Score Models on GFP-v0
+    """Evaluate Conservative Objective Models on TfBind8-v0
     """
 
-    # Final Version
-
-    from design_baselines.online import online
+    from design_baselines.coms_cleaned import coms_cleaned
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
-    tune.run(online, config={
+    tune.run(coms_cleaned, config={
         "logging_dir": "data",
         "task": "TfBind8-v0",
-        "task_kwargs": {'split_percentile': 40},
+        "task_kwargs": {'split_percentile': 20},
         "is_discrete": True,
-        "constraint_type": "mix",
         "normalize_ys": True,
         "normalize_xs": True,
         "continuous_noise_std": 0.2,
         "discrete_clip": 0.6,
         "val_size": 500,
         "batch_size": 128,
-        "epochs": 500,
+        "epochs": 50,
         "activations": ['leaky_relu', 'leaky_relu'],
-        "hidden_size": 512,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
-        "forward_model_lr": 0.0001,
+        "hidden": 2048,
+        "max_std": 0.2,
+        "min_std": 0.1,
+        "forward_model_lr": 0.0003,
         "initial_alpha": 1.0,
-        "alpha_lr": 0.05,
-        "target_conservatism": 0.05,
-        "negatives_fraction": 1.0,
-        "lookahead_steps": 1,
-        "lookahead_backprop": True,
-        "evaluate_steps": [i for i in range(0, 500, 10)],
-        "solver_lr": 0.01,
-        "solver_interval": 1,
-        "solver_warmup": 50,
-        "solver_steps": 1,
-        "solver_beta": 0.0},
+        "alpha_lr": 0.01,
+        "target_conservatism": -2.0,
+        "inner_lr": 0.05,
+        "outer_lr": 0.05,
+        "inner_gradient_steps": 1,
+        "outer_gradient_steps": 50,
+        "train_beta": 0.4,
+        "eval_beta": 0.4
+        },
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
