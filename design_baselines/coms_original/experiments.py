@@ -421,6 +421,109 @@ def superconductor_heatmap(local_dir, cpus, gpus, num_parallel, num_samples):
                              'gpu': gpus / num_parallel - 0.01})
 
 
+# ABLATION EXPERIMENT FOR BETA & TAU V2.0
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='coms-original-hopper-heatmap')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def hopper_heatmap_v2(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Heatmap for Conservative Objective Models on HopperController-v0
+    """
+
+    from design_baselines.coms_original import coms_original
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             include_dashboard=False,
+             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+    tune.run(coms_original, config={
+        "logging_dir": "data",
+        "task": "HopperController-v0",
+        "task_kwargs": {},
+        "is_discrete": False,
+        "constraint_type": "mix",
+        "normalize_ys": True,
+        "normalize_xs": True,
+        "continuous_noise_std": 0.2,
+        "val_size": 500,
+        "batch_size": 128,
+        "epochs": 500,
+        "activations": ['leaky_relu', 'leaky_relu'],
+        "hidden_size": 512,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "forward_model_lr": 0.0003,
+        "initial_alpha": 1.0,
+        "alpha_lr": 0.5,
+        "target_conservatism": tune.grid_search([0.001, 0.05, 0.2, 0.5, 10.0]),
+        "negatives_fraction": 1.0,
+        "lookahead_steps": 20,
+        "lookahead_backprop": True,
+        "evaluate_steps": [450],
+        "solver_lr": 0.01,
+        "solver_interval": 1,
+        "solver_warmup": 50,
+        "solver_steps": 20,
+        "solver_beta": tune.grid_search([0.9])},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='coms-original-superconductor-heatmap')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def superconductor_heatmap_v2(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Heatmap for Conservative Objective Models on Superconductor-v0
+    """
+
+    from design_baselines.coms_original import coms_original
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             include_dashboard=False,
+             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+    tune.run(coms_original, config={
+        "logging_dir": "data",
+        "task": "Superconductor-v0",
+        "task_kwargs": {},
+        "is_discrete": False,
+        "constraint_type": "mix",
+        "normalize_ys": True,
+        "normalize_xs": True,
+        "continuous_noise_std": 0.2,
+        "val_size": 500,
+        "batch_size": 128,
+        "epochs": 500,
+        "activations": ['leaky_relu', 'leaky_relu'],
+        "hidden_size": 512,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "forward_model_lr": 0.0003,
+        "initial_alpha": 1.0,
+        "alpha_lr": 0.5,
+        "target_conservatism": tune.grid_search([0.001, 0.05, 0.2, 0.5, 10.0]),
+        "negatives_fraction": 1.0,
+        "lookahead_steps": 20,
+        "lookahead_backprop": True,
+        "evaluate_steps": [450],
+        "solver_lr": 0.01,
+        "solver_interval": 1,
+        "solver_warmup": 50,
+        "solver_steps": 20,
+        "solver_beta": tune.grid_search([0.9])},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
 # DISCRETE MBO Tasks
 
 
