@@ -1312,6 +1312,7 @@ def plot(dir, tag, xlabel, ylabel, separate_runs,
         params_of_variation.append('id')
 
     # save a separate plot for every hyper parameter
+    print(data)
     for key in params_of_variation:
         plt.clf()
         g = sns.relplot(x=xlabel, y=ylabel, hue=key, data=data,
@@ -1400,8 +1401,13 @@ def plot_heatmap(dir, tag, xlabel, ylabel,
     algo_name = matches[0].group(1)
     if len(params_of_variation) == 0:
         params_of_variation.append('task')
+    while "continuous_noise_std" in params_of_variation:
+        params_of_variation.remove("continuous_noise_std")
+    while "evaluate_steps" in params_of_variation:
+        params_of_variation.remove("evaluate_steps")
 
-    assert len(params_of_variation) == 2, "only two parameters can vary"
+    assert len(params_of_variation) == 2, \
+        f"only two parameters can vary: {params_of_variation}"
 
     # read data from tensor board
     data_dict = defaultdict(list)
