@@ -21,6 +21,7 @@ class ConservativeObjectiveModel(tf.Module):
                  inner_gradient_steps=1,
                  outer_gradient_steps=20,
                  beta=0.9,
+                 entropy_coefficient=0.9,
                  continuous_noise_std=0.0):
         """A trainer class for building a conservative objective model
         by optimizing a model to make conservative predictions
@@ -86,6 +87,7 @@ class ConservativeObjectiveModel(tf.Module):
         self.inner_gradient_steps = inner_gradient_steps
         self.outer_gradient_steps = outer_gradient_steps
         self.beta = beta
+        self.entropy_coefficient = entropy_coefficient
         self.continuous_noise_std = continuous_noise_std
 
     @tf.function(experimental_relax_shapes=True)
@@ -113,8 +115,13 @@ class ConservativeObjectiveModel(tf.Module):
             with tf.GradientTape() as tape:
                 tape.watch(xt)
 
+                # entropy using the gaussian kernel
+                entropy = tf.reduce_mean(
+                    (xt[tf.newaxis] - xt[:, tf.newaxis]) ** 2)
+
                 # the predicted score according to the forward model
-                score = self.forward_model(xt, **kwargs).mean()
+                score = (self.entropy_coefficient * entropy +
+                         self.forward_model(xt, **kwargs))
 
             # update the particles to maximize the predicted score
             return xt + self.inner_lr * tape.gradient(score, xt),
@@ -159,20 +166,26 @@ class ConservativeObjectiveModel(tf.Module):
             with tf.GradientTape() as tape:
                 tape.watch(xt)
 
+                # entropy using the gaussian kernel
+                entropy = tf.reduce_mean(
+                    (xt[tf.newaxis] - xt[:, tf.newaxis]) ** 2)
+
                 # the predicted score according to the forward model
-                score = self.forward_model(xt, **kwargs).mean()
+                score = self.forward_model(xt, **kwargs)
 
                 # particles found after optimizing the predicted score
                 next_xt = self.inner_optimize(xt, **kwargs)
 
                 # the predicted score of optimized candidate solutions
-                next_score = self.forward_model(next_xt, **kwargs).mean()
+                next_score = self.forward_model(next_xt, **kwargs)
 
                 # the conservatism of the current set of particles
-                conservatism = score - beta * next_score
+                loss = (self.entropy_coefficient * entropy +
+                        score - beta * next_score)
 
             # update the particles to maximize the conservatism
-            return tf.stop_gradient(xt + self.outer_lr * tape.gradient(conservatism, xt)),
+            return tf.stop_gradient(
+                xt + self.outer_lr * tape.gradient(loss, xt)),
 
         # use a while loop to perform gradient ascent on the score
         return tf.while_loop(
@@ -207,11 +220,11 @@ class ConservativeObjectiveModel(tf.Module):
 
             # calculate the prediction error and accuracy of the model
             d_pos = self.forward_model(x, training=True)
-            nll = -d_pos.log_prob(y)
-            statistics[f'train/nll'] = nll
+            mse = tf.keras.losses.mean_squared_error(y, d_pos)
+            statistics[f'train/mse'] = mse
 
             # evaluate how correct the rank fo the model predictions are
-            rank_corr = spearman(y[:, 0], d_pos.mean()[:, 0])
+            rank_corr = spearman(y[:, 0], d_pos[:, 0])
             statistics[f'train/rank_corr'] = rank_corr
 
             # calculate negative samples starting from the dataset
@@ -221,7 +234,7 @@ class ConservativeObjectiveModel(tf.Module):
 
             # calculate the prediction error and accuracy of the model
             d_neg = self.forward_model(x_neg, training=False)
-            conservatism = d_pos.mean()[:, 0] - d_neg.mean()[:, 0]
+            conservatism = d_pos[:, 0] - d_neg[:, 0]
             statistics[f'train/conservatism'] = conservatism
 
             # build a lagrangian for dual descent
@@ -230,7 +243,7 @@ class ConservativeObjectiveModel(tf.Module):
             statistics[f'train/alpha'] = self.alpha
 
             # loss that combines maximum likelihood with a constraint
-            model_loss = nll - self.alpha * conservatism
+            model_loss = mse - self.alpha * conservatism
             total_loss = tf.reduce_mean(model_loss)
             alpha_loss = tf.reduce_mean(alpha_loss)
 
@@ -270,11 +283,11 @@ class ConservativeObjectiveModel(tf.Module):
 
         # calculate the prediction error and accuracy of the model
         d_pos = self.forward_model(x, training=False)
-        nll = -d_pos.log_prob(y)
-        statistics[f'validate/nll'] = nll
+        mse = tf.keras.losses.mean_squared_error(y, d_pos)
+        statistics[f'validate/mse'] = mse
 
         # evaluate how correct the rank fo the model predictions are
-        rank_corr = spearman(y[:, 0], d_pos.mean()[:, 0])
+        rank_corr = spearman(y[:, 0], d_pos[:, 0])
         statistics[f'validate/rank_corr'] = rank_corr
 
         # calculate negative samples starting from the dataset
@@ -283,7 +296,7 @@ class ConservativeObjectiveModel(tf.Module):
 
         # calculate the prediction error and accuracy of the model
         d_neg = self.forward_model(x_neg, training=False)
-        conservatism = d_pos.mean()[:, 0] - d_neg.mean()[:, 0]
+        conservatism = d_pos.mean()[:, 0] - d_neg[:, 0]
         statistics[f'validate/conservatism'] = conservatism
         return statistics
 

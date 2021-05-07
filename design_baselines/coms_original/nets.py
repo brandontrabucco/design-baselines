@@ -1,15 +1,24 @@
-from tensorflow_probability import distributions as tfpd
-from tensorflow_probability import layers as tfpl
 import tensorflow.keras.layers as tfkl
 import tensorflow as tf
-import numpy as np
+
+
+class TanhMultiplier(tf.keras.layers.Layer):
+
+    def __init__(self, **kwargs):
+        super(TanhMultiplier, self).__init__(**kwargs)
+        w_init = tf.constant_initializer(1.0)
+        self.multiplier = tf.Variable(initial_value=w_init(
+            shape=(1,), dtype="float32"), trainable=True)
+
+    def call(self, inputs, **kwargs):
+        exp_multiplier = tf.math.exp(self.multiplier)
+        return tf.math.tanh(inputs / exp_multiplier) * exp_multiplier
 
 
 def ForwardModel(input_shape,
                  activations=('relu', 'relu'),
                  hidden=2048,
-                 max_std=0.2,
-                 min_std=0.1):
+                 final_tanh=False):
     """Creates a tensorflow model that outputs a probability distribution
     specifying the score corresponding to an input x.
 
@@ -27,15 +36,6 @@ def ForwardModel(input_shape,
         the lower bound of the learned standard deviation
     """
 
-    max_log_std = np.log(max_std).astype(np.float32)
-    min_log_std = np.log(min_std).astype(np.float32)
-
-    def create_d(prediction):
-        mean, log_std = tf.split(prediction, 2, axis=-1)
-        log_std = max_log_std - tf.nn.softplus(max_log_std - log_std)
-        log_std = min_log_std + tf.nn.softplus(log_std - min_log_std)
-        return tfpd.Normal(loc=mean, scale=tf.math.exp(log_std))
-
     activations = [tfkl.LeakyReLU if act == 'leaky_relu' else
                    tfkl.Activation(tf.math.cos) if act == 'cos' else
                    act for act in activations]
@@ -44,5 +44,7 @@ def ForwardModel(input_shape,
     for act in activations:
         layers.extend([tfkl.Dense(hidden), tfkl.Activation(act)
                        if isinstance(act, str) else act()])
-    layers.extend([tfkl.Dense(2), tfpl.DistributionLambda(create_d)])
+    layers.extend([tfkl.Dense(1)])
+    if final_tanh:
+        layers.extend([TanhMultiplier()])
     return tf.keras.Sequential(layers)

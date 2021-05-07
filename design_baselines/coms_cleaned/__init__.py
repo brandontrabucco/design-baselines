@@ -85,8 +85,7 @@ def coms_cleaned(config):
     # make a neural network to predict scores
     forward_model = ForwardModel(
         input_shape, activations=config['activations'],
-        hidden=config['hidden'],
-        max_std=config['max_std'], min_std=config['min_std'])
+        hidden=config['hidden'], final_tanh=config['final_tanh'])
 
     # make a trainer for the forward model
     trainer = ConservativeObjectiveModel(
@@ -99,6 +98,7 @@ def coms_cleaned(config):
         inner_gradient_steps=config['inner_gradient_steps'],
         outer_gradient_steps=config['outer_gradient_steps'],
         beta=config['train_beta'],
+        entropy_coefficient=config['entropy_coefficient'],
         continuous_noise_std=config['continuous_noise_std'])
 
     # create a data set
@@ -125,16 +125,16 @@ def coms_cleaned(config):
 
         xt = trainer.outer_optimize(xt, eval_beta, 1, training=False)
         prediction = forward_model(
-            xt, training=False).mean().numpy() * st_y + mu_y
+            xt, training=False).numpy() * st_y + mu_y
 
         next_xt = trainer.inner_optimize(xt, training=False)
         next_prediction = forward_model(
-            next_xt, training=False).mean().numpy() * st_y + mu_y
+            next_xt, training=False).numpy() * st_y + mu_y
 
         final_xt = trainer.outer_optimize(
             xt, eval_beta, config['outer_gradient_steps'], training=False)
         final_prediction = forward_model(
-            final_xt, training=False).mean().numpy() * st_y + mu_y
+            final_xt, training=False).numpy() * st_y + mu_y
 
         solution = xt * st_x + mu_x
         if config['is_discrete']:

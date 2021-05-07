@@ -1401,8 +1401,6 @@ def plot_heatmap(dir, tag, xlabel, ylabel,
     algo_name = matches[0].group(1)
     if len(params_of_variation) == 0:
         params_of_variation.append('task')
-    while "continuous_noise_std" in params_of_variation:
-        params_of_variation.remove("continuous_noise_std")
     while "evaluate_steps" in params_of_variation:
         params_of_variation.remove("evaluate_steps")
 

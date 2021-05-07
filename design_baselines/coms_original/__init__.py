@@ -73,8 +73,7 @@ def coms_original(config):
         input_shape,
         activations=config['activations'],
         hidden=config['hidden_size'],
-        max_std=config['initial_max_std'],
-        min_std=config['initial_min_std'])
+        final_tanh=config['final_tanh'])
 
     # create a trainer for a forward model with a conservative objective
     trainer = ConservativeMaximumLikelihood(
@@ -93,6 +92,7 @@ def coms_original(config):
         solver_warmup=solver_warmup,
         solver_steps=config['solver_steps'],
         constraint_type=config['constraint_type'],
+        entropy_coefficient=config['entropy_coefficient'],
         continuous_noise_std=config.get('continuous_noise_std', 0.0))
 
     # make a neural network to predict scores
@@ -100,8 +100,7 @@ def coms_original(config):
         input_shape,
         activations=config['activations'],
         hidden=config['hidden_size'],
-        max_std=config['initial_max_std'],
-        min_std=config['initial_min_std'])]
+        final_tanh=config['final_tanh'])]
 
     # create a trainer for a forward model with a conservative objective
     validation_trainers = [TransformedMaximumLikelihood(
@@ -139,7 +138,7 @@ def coms_original(config):
         # evaluate the design using the oracle and the forward model
         with tf.GradientTape() as tape:
             tape.watch(xt)
-            model = forward_model(xt).mean()
+            model = forward_model(xt)
 
         # evaluate the predictions and gradient norm
         evaluations += 1
@@ -148,12 +147,8 @@ def coms_original(config):
 
         for i, val in enumerate(validation_models):
             prediction = val(xt)
-            logger.record(f"validation_model_{i}/prediction/mean",
-                          prediction.mean() * st_y + mu_y, evaluations)
-            logger.record(f"validation_model_{i}/prediction/sample",
-                          prediction.sample() * st_y + mu_y, evaluations)
-            logger.record(f"validation_model_{i}/prediction/stddev",
-                          prediction.stddev() * st_y, evaluations)
+            logger.record(f"validation_model_{i}/prediction",
+                          prediction * st_y + mu_y, evaluations)
 
         # record the prediction and score to the logger
         logger.record("distance/travelled",

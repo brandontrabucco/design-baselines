@@ -25,6 +25,7 @@ class ConservativeMaximumLikelihood(tf.Module):
                  solver_warmup=500,
                  solver_steps=1,
                  constraint_type="mix",
+                 entropy_coefficient=0.9,
                  continuous_noise_std=0.0):
         """Build a trainer for an conservative forward model trained using
         an adversarial negative sampling procedure.
@@ -107,6 +108,7 @@ class ConservativeMaximumLikelihood(tf.Module):
         self.solver_warmup = solver_warmup
         self.solver_steps = solver_steps
         self.solver_beta = solver_beta
+        self.entropy_coefficient = entropy_coefficient
 
         # extra parameters for controlling data noise
         self.continuous_noise_std = continuous_noise_std
@@ -144,7 +146,10 @@ class ConservativeMaximumLikelihood(tf.Module):
         def gradient_step(xt):
             with tf.GradientTape() as tape:
                 tape.watch(xt)
-                score = self.forward_model(xt, **kwargs).mean()
+                entropy = tf.reduce_mean(
+                    (xt[tf.newaxis] - xt[:, tf.newaxis]) ** 2)
+                score = (self.entropy_coefficient * entropy +
+                         self.forward_model(xt, **kwargs))
             return xt + self.solver_lr * tape.gradient(score, xt)
 
         # use a while loop to perform gradient ascent on the score
@@ -183,11 +188,11 @@ class ConservativeMaximumLikelihood(tf.Module):
 
             # calculate the prediction error and accuracy of the model
             d = self.forward_model(x, training=True)
-            nll = -d.log_prob(y)
-            statistics[f'train/nll'] = nll
+            mse = tf.keras.losses.mean_squared_error(y, d)
+            statistics[f'train/mse'] = mse
 
             # evaluate how correct the rank fo the model predictions are
-            rank_corr = spearman(y[:, 0], d.mean()[:, 0])
+            rank_corr = spearman(y[:, 0], d[:, 0])
             statistics[f'train/rank_corr'] = rank_corr
 
             # calculate negative samples starting from the dataset
@@ -203,7 +208,7 @@ class ConservativeMaximumLikelihood(tf.Module):
                 {"dataset": x, "mix": x_pos, "solution": self.solution[:batch_dim]}
                 [self.constraint_type], training=False)
             d_neg = self.forward_model(x_neg, training=False)
-            conservatism = d_neg.mean()[:, 0] - d_pos.mean()[:, 0]
+            conservatism = d_neg[:, 0] - d_pos[:, 0]
             statistics[f'train/conservatism'] = conservatism
 
             # build a lagrangian for dual descent
@@ -211,8 +216,14 @@ class ConservativeMaximumLikelihood(tf.Module):
                           self.alpha * conservatism)
             statistics[f'train/alpha'] = self.alpha
 
+            multiplier_loss = 0.0
+            last_weight = self.forward_model.trainable_variables[-1]
+            if tf.shape(tf.reshape(last_weight, [-1]))[0] == 1:
+                statistics[f'train/tanh_multipier'] = \
+                    self.forward_model.trainable_variables[-1]
+
             # loss that combines maximum likelihood with a constraint
-            model_loss = nll + self.alpha * conservatism
+            model_loss = mse + self.alpha * conservatism + multiplier_loss
             total_loss = tf.reduce_mean(model_loss)
             alpha_loss = tf.reduce_mean(alpha_loss)
 
@@ -240,13 +251,13 @@ class ConservativeMaximumLikelihood(tf.Module):
 
                 # calculate the predicted score of the current solution
                 current_score_new_model = self.forward_model(
-                    self.solution, training=False).mean()[:, 0]
+                    self.solution, training=False)[:, 0]
 
                 # look into the future and evaluate future solutions
                 future_new_model = self.lookahead(
                     self.solution, self.solver_steps, training=False)
                 future_score_new_model = self.forward_model(
-                    future_new_model, training=False).mean()[:, 0]
+                    future_new_model, training=False)[:, 0]
 
                 # evaluate the conservatism of the current solution
                 particle_loss = (self.solver_beta * future_score_new_model -
@@ -301,11 +312,11 @@ class ConservativeMaximumLikelihood(tf.Module):
 
         # calculate the prediction error and accuracy of the model
         d = self.forward_model(x, training=False)
-        nll = -d.log_prob(y)
-        statistics[f'validate/nll'] = nll
+        mse = tf.keras.losses.mean_squared_error(y, d)
+        statistics[f'validate/mse'] = mse
 
         # evaluate how correct the rank fo the model predictions are
-        rank_corr = spearman(y[:, 0], d.mean()[:, 0])
+        rank_corr = spearman(y[:, 0], d[:, 0])
         statistics[f'validate/rank_corr'] = rank_corr
 
         # calculate negative samples starting from the dataset
@@ -321,7 +332,7 @@ class ConservativeMaximumLikelihood(tf.Module):
             {"dataset": x, "mix": x_pos, "solution": self.solution[:batch_dim]}
             [self.constraint_type], training=False)
         d_neg = self.forward_model(x_neg, training=False)
-        conservatism = d_neg.mean()[:, 0] - d_pos.mean()[:, 0]
+        conservatism = d_neg[:, 0] - d_pos[:, 0]
         statistics[f'validate/conservatism'] = conservatism
         return statistics
 
@@ -384,13 +395,19 @@ class TransformedMaximumLikelihood(tf.Module):
 
             # calculate the prediction error and accuracy of the model
             d = self.forward_model(x, training=True)
-            nll = -d.log_prob(y)[:, 0]
+            nll = tf.keras.losses.mean_squared_error(y, d)
 
             # evaluate how correct the rank fo the model predictions are
-            rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+            rank_correlation = spearman(y[:, 0], d[:, 0])
+
+            multiplier_loss = 0.0
+            last_weight = self.forward_model.trainable_variables[-1]
+            if tf.shape(tf.reshape(last_weight, [-1]))[0] == 1:
+                statistics[f'{self.logger_prefix}/train/tanh_multipier'] = \
+                    self.forward_model.trainable_variables[-1]
 
             # build the total loss and weight by the bootstrap
-            total_loss = tf.reduce_mean(nll)
+            total_loss = tf.reduce_mean(nll) + multiplier_loss
 
         grads = tape.gradient(total_loss,
                               self.forward_model.trainable_variables)
@@ -428,10 +445,10 @@ class TransformedMaximumLikelihood(tf.Module):
 
         # calculate the prediction error and accuracy of the model
         d = self.forward_model(x, training=False)
-        nll = -d.log_prob(y)[:, 0]
+        nll = tf.keras.losses.mean_squared_error(y, d)
 
         # evaluate how correct the rank fo the model predictions are
-        rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
+        rank_correlation = spearman(y[:, 0], d[:, 0])
 
         statistics[f'{self.logger_prefix}/validate/nll'] = nll
         statistics[f'{self.logger_prefix}/validate/rank_corr'] = rank_correlation
