@@ -296,7 +296,7 @@ class ConservativeObjectiveModel(tf.Module):
 
         # calculate the prediction error and accuracy of the model
         d_neg = self.forward_model(x_neg, training=False)
-        conservatism = d_pos.mean()[:, 0] - d_neg[:, 0]
+        conservatism = d_pos[:, 0] - d_neg[:, 0]
         statistics[f'validate/conservatism'] = conservatism
         return statistics
 
