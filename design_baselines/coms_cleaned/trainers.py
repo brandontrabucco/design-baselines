@@ -116,8 +116,8 @@ class ConservativeObjectiveModel(tf.Module):
                 tape.watch(xt)
 
                 # entropy using the gaussian kernel
-                entropy = tf.reduce_mean(
-                    (xt[tf.newaxis] - xt[:, tf.newaxis]) ** 2)
+                entropy = tf.reduce_mean((xt - tf.gather(
+                    xt, tf.random.shuffle(tf.range(tf.shape(xt)[0])))) ** 2)
 
                 # the predicted score according to the forward model
                 score = (self.entropy_coefficient * entropy +
@@ -167,8 +167,8 @@ class ConservativeObjectiveModel(tf.Module):
                 tape.watch(xt)
 
                 # entropy using the gaussian kernel
-                entropy = tf.reduce_mean(
-                    (xt[tf.newaxis] - xt[:, tf.newaxis]) ** 2)
+                entropy = tf.reduce_mean((xt - tf.gather(
+                    xt, tf.random.shuffle(tf.range(tf.shape(xt)[0])))) ** 2)
 
                 # the predicted score according to the forward model
                 score = self.forward_model(xt, **kwargs)
