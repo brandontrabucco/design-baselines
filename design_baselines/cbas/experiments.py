@@ -245,6 +245,52 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
+@click.option('--local-dir', type=str, default='cbas-gfp')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate AutoFocusing on GFP-Transformer-v0
+    """
+
+    # Final Version
+
+    from design_baselines.cbas import cbas
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(cbas, config={
+        "logging_dir": "data",
+        "normalize_ys": True,
+        "normalize_xs": False,
+        "task": "GFP-GP-v0",
+        "task_kwargs": {'relabel': False, 'oracle_kwargs': {'noise_std': 0.0}},
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "vae_batch_size": 100,
+        "hidden_size": 256,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.0003,
+        "ensemble_epochs": 100,
+        "latent_size": 32,
+        "vae_lr": 0.0003,
+        "vae_beta": 1.0,
+        "offline_epochs": 200,
+        "online_batches": 10,
+        "online_epochs": 10,
+        "iterations": 50,
+        "percentile": 80.0,
+        "solver_samples": 128},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
 @click.option('--local-dir', type=str, default='cbas-gfp-gp')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
