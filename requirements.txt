@@ -26,7 +26,7 @@ cycler==0.10.0
 Cython==0.29.21
 decorator==4.4.2
 defusedxml==0.6.0
-design-bench==2.0.2
+design-bench==2.0.3
 dm-tree==0.1.5
 docker==4.3.0
 entrypoints==0.3
@@ -117,7 +117,7 @@ robel==0.1.2
 rsa==4.6
 ruamel-yaml==0.15.87
 s3transfer==0.3.3
-scikit-learn==0.24.0
+scikit-learn==0.23.1
 scikit-video==1.1.11
 scipy==1.6.0
 seaborn==0.11.0

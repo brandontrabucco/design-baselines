@@ -9,24 +9,26 @@ class ForwardModel(tf.keras.Sequential):
 
     distribution = tfpd.Normal
 
-    def __init__(self,
-                 input_shape,
-                 hidden=50,
-                 initial_max_std=1.5,
-                 initial_min_std=0.5):
+    def __init__(self, task, embedding_size=50, hidden_size=50,
+                 num_layers=1, initial_max_std=1.5, initial_min_std=0.5):
         """Create a fully connected architecture using keras that can process
         designs and predict a gaussian distribution over scores
 
         Args:
 
-        input_shape: List[int]
-            the shape of a single tensor input
-        hidden: int
+        task: StaticGraphTask
+            a model-based optimization task
+        embedding_size: int
+            the size of the embedding matrix for discrete tasks
+        hidden_size: int
             the global hidden size of the neural network
+        num_layers: int
+            the number of hidden layers
         initial_max_std: float
             the starting upper bound of the standard deviation
         initial_min_std: float
             the starting lower bound of the standard deviation
+
         """
 
         self.max_logstd = tf.Variable(tf.fill([1, 1], np.log(
@@ -34,11 +36,17 @@ class ForwardModel(tf.keras.Sequential):
         self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_min_std).astype(np.float32)), trainable=True)
 
-        super(ForwardModel, self).__init__([
-            tfkl.Flatten(input_shape=input_shape),
-            tfkl.Dense(hidden),
-            tfkl.LeakyReLU(),
-            tfkl.Dense(2)])
+        layers = []
+        if task.is_discrete:
+            layers.append(tfkl.Embedding(task.num_classes, embedding_size,
+                                         input_shape=task.input_shape))
+        layers.append(tfkl.Flatten(input_shape=task.input_shape)
+                      if len(layers) == 0 else tfkl.Flatten())
+        for i in range(num_layers):
+            layers.extend([tfkl.Dense(hidden_size), tfkl.LeakyReLU()])
+
+        layers.append(tfkl.Dense(2))
+        super(ForwardModel, self).__init__(layers)
 
     def get_params(self, inputs, **kwargs):
         """Return a dictionary of parameters for a particular distribution
@@ -84,23 +92,27 @@ class Encoder(tf.keras.Sequential):
 
     distribution = tfpd.MultivariateNormalDiag
 
-    def __init__(self,
-                 input_shape,
-                 latent_size,
-                 hidden=50,
-                 initial_max_std=1.5,
-                 initial_min_std=0.5):
+    def __init__(self, task, latent_size, embedding_size=50, hidden_size=50,
+                 num_layers=1, initial_max_std=1.5, initial_min_std=0.5):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
         Args:
 
-        inp_size: int
-            the size of the input vector of this network
-        out_size: int
-            the size of the output vector of this network
-        hidden: int
-            the global hidden size of the network
+        task: StaticGraphTask
+            a model-based optimization task
+        latent_size: int
+            the cardinality of the latent variable
+        embedding_size: int
+            the size of the embedding matrix for discrete tasks
+        hidden_size: int
+            the global hidden size of the neural network
+        num_layers: int
+            the number of hidden layers
+        initial_max_std: float
+            the starting upper bound of the standard deviation
+        initial_min_std: float
+            the starting lower bound of the standard deviation
         """
 
         self.max_logstd = tf.Variable(tf.fill([1, 1], np.log(
@@ -108,11 +120,17 @@ class Encoder(tf.keras.Sequential):
         self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_min_std).astype(np.float32)), trainable=True)
 
-        super(Encoder, self).__init__([
-            tfkl.Flatten(input_shape=input_shape),
-            tfkl.Dense(hidden),
-            tfkl.LeakyReLU(),
-            tfkl.Dense(latent_size * 2)])
+        layers = []
+        if task.is_discrete:
+            layers.append(tfkl.Embedding(task.num_classes, embedding_size,
+                                         input_shape=task.input_shape))
+        layers.append(tfkl.Flatten(input_shape=task.input_shape)
+                      if len(layers) == 0 else tfkl.Flatten())
+        for i in range(num_layers):
+            layers.extend([tfkl.Dense(hidden_size), tfkl.LeakyReLU()])
+
+        layers.append(tfkl.Dense(latent_size * 2))
+        super(Encoder, self).__init__(layers)
 
     def get_params(self, inputs, **kwargs):
         """Return a dictionary of parameters for a particular distribution
@@ -156,30 +174,27 @@ class Encoder(tf.keras.Sequential):
 class DiscreteDecoder(tf.keras.Sequential):
     """A Fully Connected Network with 2 trainable layers"""
 
-    distribution = tfpd.OneHotCategorical
+    distribution = tfpd.Categorical
 
-    def __init__(self,
-                 input_shape,
-                 latent_size,
-                 hidden=50):
+    def __init__(self, task, latent_size, hidden_size=50):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
         Args:
 
-        inp_size: int
-            the size of the input vector of this network
-        out_size: int
-            the size of the output vector of this network
-        hidden: int
-            the global hidden size of the network
+        task: StaticGraphTask
+            a model-based optimization task
+        latent_size: int
+            the cardinality of the latent variable
+        hidden_size: int
+            the global hidden size of the neural network
         """
 
         super(DiscreteDecoder, self).__init__([
-            tfkl.Dense(hidden, input_shape=(latent_size,)),
+            tfkl.Dense(hidden_size, input_shape=(latent_size,)),
             tfkl.LeakyReLU(),
-            tfkl.Dense(np.prod(input_shape)),
-            tfkl.Reshape(input_shape)])
+            tfkl.Dense(np.prod(task.input_shape) * task.num_classes),
+            tfkl.Reshape(list(task.input_shape) + [task.num_classes])])
 
     def get_params(self, inputs, **kwargs):
         """Return a dictionary of parameters for a particular distribution
@@ -216,7 +231,7 @@ class DiscreteDecoder(tf.keras.Sequential):
         """
 
         return self.distribution(
-            **self.get_params(inputs, **kwargs), dtype=tf.float32)
+            **self.get_params(inputs, **kwargs), dtype=tf.int32)
 
 
 class ContinuousDecoder(tf.keras.Sequential):
@@ -224,23 +239,23 @@ class ContinuousDecoder(tf.keras.Sequential):
 
     distribution = tfpd.MultivariateNormalDiag
 
-    def __init__(self,
-                 input_shape,
-                 latent_size,
-                 hidden=50,
-                 initial_max_std=1.5,
-                 initial_min_std=0.5):
+    def __init__(self, task, latent_size, hidden=50,
+                 initial_max_std=1.5, initial_min_std=0.5):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
         Args:
 
-        inp_size: int
-            the size of the input vector of this network
-        out_size: int
-            the size of the output vector of this network
-        hidden: int
-            the global hidden size of the network
+        task: StaticGraphTask
+            a model-based optimization task
+        latent_size: int
+            the cardinality of the latent variable
+        hidden_size: int
+            the global hidden size of the neural network
+        initial_max_std: float
+            the starting upper bound of the standard deviation
+        initial_min_std: float
+            the starting lower bound of the standard deviation
         """
 
         self.max_logstd = tf.Variable(tf.fill([1, 1], np.log(
@@ -251,8 +266,8 @@ class ContinuousDecoder(tf.keras.Sequential):
         super(ContinuousDecoder, self).__init__([
             tfkl.Dense(hidden, input_shape=(latent_size,)),
             tfkl.LeakyReLU(),
-            tfkl.Dense(np.prod(input_shape) * 2),
-            tfkl.Reshape(list(input_shape) + [2])])
+            tfkl.Dense(np.prod(task.input_shape) * 2),
+            tfkl.Reshape(list(task.input_shape) + [2])])
 
     def get_params(self, inputs, **kwargs):
         """Return a dictionary of parameters for a particular distribution

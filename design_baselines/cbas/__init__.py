@@ -1,4 +1,4 @@
-from design_baselines.data import StaticGraphTask
+from design_baselines.data import StaticGraphTask, build_pipeline
 from design_baselines.logger import Logger
 from design_baselines.cbas.trainers import Ensemble
 from design_baselines.cbas.trainers import WeightedVAE
@@ -24,53 +24,28 @@ def cbas(config):
 
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    if task.is_discrete:
+        task.map_to_integers()
+
+    if config['normalize_ys']:
+        task.map_normalize_y()
+    if config['normalize_xs']:
+        task.map_normalize_x()
+
     x = task.x
     y = task.y
 
-    if config['normalize_ys']:
-
-        # compute normalization statistics for the score
-        mu_y = np.mean(y, axis=0, keepdims=True)
-        mu_y = mu_y.astype(np.float32)
-        y = y - mu_y
-        st_y = np.std(y, axis=0, keepdims=True)
-        st_y = np.where(np.equal(st_y, 0), 1, st_y)
-        st_y = st_y.astype(np.float32)
-        y = y / st_y
-
-    else:
-
-        # compute normalization statistics for the data vectors
-        mu_y = np.zeros_like(y[:1])
-        st_y = np.ones_like(y[:1])
-
-    if config['normalize_xs'] and not config['is_discrete']:
-
-        # compute normalization statistics for the data vectors
-        mu_x = np.mean(x, axis=0, keepdims=True)
-        mu_x = mu_x.astype(np.float32)
-        x = x - mu_x
-        st_x = np.std(x, axis=0, keepdims=True)
-        st_x = np.where(np.equal(st_x, 0), 1, st_x)
-        st_x = st_x.astype(np.float32)
-        x = x / st_x
-
-    else:
-
-        # compute normalization statistics for the data vectors
-        mu_x = np.zeros_like(x[:1])
-        st_x = np.ones_like(x[:1])
-
     # create the training task and logger
-    train_data, val_data = task.build(
-        x=x, y=y, bootstraps=config['bootstraps'],
+    train_data, val_data = build_pipeline(
+        x=x, y=y, w=np.ones_like(y),
+        val_size=config['val_size'],
         batch_size=config['ensemble_batch_size'],
-        val_size=config['val_size'])
+        bootstraps=config['bootstraps'])
 
     # make several keras neural networks with two hidden layers
     forward_models = [ForwardModel(
-        task.input_shape,
-        hidden=config['hidden_size'],
+        task,
+        hidden_size=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'])
         for b in range(config['bootstraps'])]
@@ -92,17 +67,18 @@ def cbas(config):
                     val_data,
                     logger,
                     config['ensemble_epochs'])
+
     # determine which arcitecture for the decoder to use
     decoder = DiscreteDecoder \
-        if config['is_discrete'] else ContinuousDecoder
+        if task.is_discrete else ContinuousDecoder
 
     # build the encoder and decoder distribution and the p model
-    p_encoder = Encoder(task.input_shape,
+    p_encoder = Encoder(task,
                         config['latent_size'],
-                        hidden=config['hidden_size'])
-    p_decoder = decoder(task.input_shape,
+                        hidden_size=config['hidden_size'])
+    p_decoder = decoder(task,
                         config['latent_size'],
-                        hidden=config['hidden_size'])
+                        hidden_size=config['hidden_size'])
     p_vae = WeightedVAE(p_encoder,
                         p_decoder,
                         vae_optim=tf.keras.optimizers.Adam,
@@ -115,8 +91,8 @@ def cbas(config):
         os.path.join(config['logging_dir'], 'p_vae'), 1)
 
     # build a weighted data set
-    train_data, val_data = task.build(
-        x=x, y=y, importance_weights=np.ones_like(task.y),
+    train_data, val_data = build_pipeline(
+        x=x, y=y, w=np.ones_like(task.y),
         batch_size=config['vae_batch_size'],
         val_size=config['val_size'])
 
@@ -128,12 +104,12 @@ def cbas(config):
                  config['offline_epochs'])
 
     # build the encoder and decoder distribution and the p model
-    q_encoder = Encoder(task.input_shape,
+    q_encoder = Encoder(task,
                         config['latent_size'],
-                        hidden=config['hidden_size'])
-    q_decoder = decoder(task.input_shape,
+                        hidden_size=config['hidden_size'])
+    q_decoder = decoder(task,
                         config['latent_size'],
-                        hidden=config['hidden_size'])
+                        hidden_size=config['hidden_size'])
     q_vae = WeightedVAE(q_encoder,
                         q_decoder,
                         vae_optim=tf.keras.optimizers.Adam,
@@ -158,23 +134,28 @@ def cbas(config):
     for i in range(config['iterations']):
 
         # generate an importance weighted dataset
-        x, y, w = cbas.generate_data(
+        x_t, y_t, w = cbas.generate_data(
             config['online_batches'],
             config['vae_batch_size'],
             config['percentile'])
 
+        np.save(os.path.join(config["logging_dir"], f"x-{i}.npy"),
+                x_t[:config['solver_samples']].numpy())
+
         # evaluate the sampled designs
-        score = task.score(x[:config['solver_samples']] * st_x + mu_x)
+        score = task.predict(x_t[:config['solver_samples']])
+        if task.is_normalized_y:
+            score = task.denormalize_y(score)
         logger.record("score",
                       score,
                       i,
                       percentile=True)
 
         # build a weighted data set
-        train_data, val_data = task.build(
-            x=x.numpy(),
-            y=y.numpy(),
-            importance_weights=w.numpy(),
+        train_data, val_data = build_pipeline(
+            x=x_t.numpy(),
+            y=y_t.numpy(),
+            w=w.numpy(),
             batch_size=config['vae_batch_size'],
             val_size=config['val_size'])
 
@@ -195,7 +176,12 @@ def cbas(config):
     # sample designs from the prior
     z = tf.random.normal([config['solver_samples'], config['latent_size']])
     q_dx = q_decoder.get_distribution(z, training=False)
-    score = task.score(q_dx.sample() * st_x + mu_x)
+    x_t = q_dx.sample()
+    np.save(os.path.join(config["logging_dir"],
+                         f"x-{config['iterations']}.npy"), x_t.numpy())
+    score = task.predict(x_t)
+    if task.is_normalized_y:
+        score = task.denormalize_y(score)
     logger.record("score",
                   score,
                   config['iterations'],

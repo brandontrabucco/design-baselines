@@ -69,7 +69,8 @@ class Ensemble(tf.Module):
     def train_step(self,
                    x,
                    y,
-                   b):
+                   b,
+                   w):
         """Perform a training step of gradient descent on an ensemble
         using bootstrap weights for each model in the ensemble
 
@@ -104,8 +105,8 @@ class Ensemble(tf.Module):
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
                 # build the total loss and weight by the bootstrap
-                total_loss = tf.math.divide_no_nan(
-                    tf.reduce_sum(b[:, i] * nll), tf.reduce_sum(b[:, i]))
+                total_loss = tf.math.divide_no_nan(tf.reduce_sum(
+                    w[:, 0] * b[:, i] * nll), tf.reduce_sum(b[:, i]))
 
             grads = tape.gradient(total_loss, fm.trainable_variables)
             fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
@@ -169,8 +170,8 @@ class Ensemble(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for x, y, b in dataset:
-            for name, tensor in self.train_step(x, y, b).items():
+        for x, y, b, w in dataset:
+            for name, tensor in self.train_step(x, y, b, w).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)
