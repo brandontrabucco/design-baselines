@@ -26,7 +26,7 @@ cycler==0.10.0
 Cython==0.29.21
 decorator==4.4.2
 defusedxml==0.6.0
-design-bench==1.6
+design-bench==2.0.2
 dm-tree==0.1.5
 docker==4.3.0
 entrypoints==0.3
@@ -73,7 +73,7 @@ matplotlib==3.3.0
 mistune==0.8.4
 morphing-agents==1.4
 msgpack==1.0.0
-mujoco-py==2.0.2.13
+mujoco-py==2.0.2.3
 multidict==4.7.6
 nbconvert==5.6.1
 nbformat==5.0.7
