@@ -12,10 +12,7 @@ class Ensemble(tf.Module):
     def __init__(self,
                  forward_models,
                  forward_model_optim=tf.keras.optimizers.Adam,
-                 forward_model_lr=0.001,
-                 is_discrete=False,
-                 continuous_noise_std=0.0,
-                 discrete_keep=1.0):
+                 forward_model_lr=0.001):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -32,9 +29,6 @@ class Ensemble(tf.Module):
         super().__init__()
         self.forward_models = forward_models
         self.bootstraps = len(forward_models)
-        self.is_discrete = is_discrete
-        self.continuous_noise_std = continuous_noise_std
-        self.discrete_keep = discrete_keep
 
         # create optimizers for each model in the ensemble
         self.forward_model_optims = [
@@ -102,12 +96,6 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
             fm_optim = self.forward_model_optims[i]
 
-            # corrupt the inputs with noise
-            if self.is_discrete:
-                x = disc_noise(x, keep=self.discrete_keep, temp=1e-3)
-            else:
-                x = cont_noise(x, self.continuous_noise_std)
-
             with tf.GradientTape(persistent=True) as tape:
 
                 # calculate the prediction error and accuracy of the model
@@ -118,8 +106,8 @@ class Ensemble(tf.Module):
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
                 # build the total loss and weight by the bootstrap
-                total_loss = tf.math.divide_no_nan(
-                    tf.reduce_sum(b[:, i] * nll), tf.reduce_sum(b[:, i]))
+                total_loss = tf.math.divide_no_nan(tf.reduce_sum(
+                    b[:, i] * nll), tf.reduce_sum(b[:, i]))
 
             grads = tape.gradient(total_loss, fm.trainable_variables)
             fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
@@ -153,12 +141,6 @@ class Ensemble(tf.Module):
 
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
-
-            # corrupt the inputs with noise
-            if self.is_discrete:
-                x = disc_noise(x, keep=self.discrete_keep, temp=1e-3)
-            else:
-                x = cont_noise(x, self.continuous_noise_std)
 
             # calculate the prediction error and accuracy of the model
             d = fm.get_distribution(x, training=False)
