@@ -9,24 +9,26 @@ class ForwardModel(tf.keras.Sequential):
 
     distribution = tfpd.Normal
 
-    def __init__(self,
-                 input_shape,
-                 hidden=50,
-                 initial_max_std=1.5,
-                 initial_min_std=0.5):
-        """Create a fully connected net using keras that can process
+    def __init__(self, input_shape, hidden_size=50,
+                 num_layers=1, initial_max_std=1.5, initial_min_std=0.5):
+        """Create a fully connected architecture using keras that can process
         designs and predict a gaussian distribution over scores
 
         Args:
 
-        input_shape: List[int]
-            the shape of a single tensor input
-        hidden: int
+        task: StaticGraphTask
+            a model-based optimization task
+        embedding_size: int
+            the size of the embedding matrix for discrete tasks
+        hidden_size: int
             the global hidden size of the neural network
+        num_layers: int
+            the number of hidden layers
         initial_max_std: float
             the starting upper bound of the standard deviation
         initial_min_std: float
             the starting lower bound of the standard deviation
+
         """
 
         self.max_logstd = tf.Variable(tf.fill([1, 1], np.log(
@@ -34,13 +36,16 @@ class ForwardModel(tf.keras.Sequential):
         self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_min_std).astype(np.float32)), trainable=True)
 
-        super(ForwardModel, self).__init__([
-            tfkl.Flatten(input_shape=input_shape),
-            tfkl.Dense(hidden), tfkl.LeakyReLU(), tfkl.Dense(2)])
+        layers = []
+        layers.append(tfkl.Flatten(input_shape=input_shape)
+                      if len(layers) == 0 else tfkl.Flatten())
+        for i in range(num_layers):
+            layers.extend([tfkl.Dense(hidden_size), tfkl.LeakyReLU()])
 
-    def get_params(self,
-                   inputs,
-                   **kwargs):
+        layers.append(tfkl.Dense(2))
+        super(ForwardModel, self).__init__(layers)
+
+    def get_params(self, inputs, **kwargs):
         """Return a dictionary of parameters for a particular distribution
         family such as the mean and variance of a gaussian
 
@@ -61,9 +66,7 @@ class ForwardModel(tf.keras.Sequential):
         logstd = self.min_logstd + tf.nn.softplus(logstd - self.min_logstd)
         return {"loc": mean, "scale": tf.math.exp(logstd)}
 
-    def get_distribution(self,
-                         inputs,
-                         **kwargs):
+    def get_distribution(self, inputs, **kwargs):
         """Return a distribution over the outputs of this model, for example
         a Multivariate Gaussian Distribution
 

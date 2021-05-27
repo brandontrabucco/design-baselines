@@ -1,4 +1,4 @@
-from design_baselines.data import StaticGraphTask
+from design_baselines.data import StaticGraphTask, build_pipeline
 from design_baselines.logger import Logger
 from design_baselines.mins.replay_buffer import ReplayBuffer
 from design_baselines.mins.trainers import Ensemble
@@ -9,9 +9,7 @@ from design_baselines.mins.nets import DiscreteGenerator
 from design_baselines.mins.nets import ContinuousGenerator
 from design_baselines.mins.utils import get_weights
 from design_baselines.mins.utils import get_synthetic_data
-from design_baselines.utils import render_video
 import tensorflow as tf
-import numpy as np
 import os
 
 
@@ -28,14 +26,31 @@ def mins(config):
     # create the training task and logger
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
+
+    if config['normalize_ys']:
+        task.map_normalize_y()
+    if config['normalize_xs']:
+        task.map_normalize_x()
+
+    x = task.x
+    y = task.y
+
+    if task.is_discrete:
+        x = task.to_logits(x)
+        x = tf.pad(x, [[0, 0]] * (len(x.shape) - 1) + [[1, 0]])
+        x = tf.math.softmax(x / 1e-5).numpy()
+
+    input_shape = x.shape[1:]
+
     base_temp = config.get('base_temp', None)
 
     if config['offline']:
 
         # make several keras neural networks with two hidden layers
         forward_models = [ForwardModel(
-            task.input_shape,
-            hidden=config['hidden_size'],
+            input_shape,
+            hidden_size=config['hidden_size'],
+            num_layers=config['num_layers'],
             initial_max_std=config['initial_max_std'],
             initial_min_std=config['initial_min_std'])
             for _ in range(config['bootstraps'])]
@@ -44,7 +59,7 @@ def mins(config):
         oracle = Ensemble(forward_models,
                           forward_model_optim=tf.keras.optimizers.Adam,
                           forward_model_lr=config['oracle_lr'],
-                          is_discrete=config['is_discrete'],
+                          is_discrete=task.is_discrete,
                           noise_std=config.get('noise_std', 0.0),
                           keep=config.get('keep', 1.0),
                           temp=config.get('temp', 0.001))
@@ -55,8 +70,8 @@ def mins(config):
             os.path.join(config['logging_dir'], 'oracle'), 1)
 
         # build a bootstrapped data set
-        train_data, val_data = task.build(
-            bootstraps=config['bootstraps'],
+        train_data, val_data = build_pipeline(
+            x=x, y=y, bootstraps=config['bootstraps'],
             batch_size=config['oracle_batch_size'],
             val_size=config['val_size'])
 
@@ -68,32 +83,32 @@ def mins(config):
                       config['oracle_epochs'])
 
     # create replay buffers for both GANS
-    explore_pool = ReplayBuffer(config['pool_size'], task.input_shape)
-    exploit_pool = ReplayBuffer(config['pool_size'], task.input_shape)
+    explore_pool = ReplayBuffer(config['pool_size'], input_shape)
+    exploit_pool = ReplayBuffer(config['pool_size'], input_shape)
 
-    if config['is_discrete']:
+    if task.is_discrete:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
         explore_gen = DiscreteGenerator(
-            task.input_shape, config['latent_size'],
+            input_shape, config['latent_size'],
             hidden=config['hidden_size'])
         exploit_gen = DiscreteGenerator(
-            task.input_shape, config['latent_size'],
+            input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
     else:
 
         # build an LS-GAN to sample continuous outputs
         explore_gen = ContinuousGenerator(
-            task.input_shape, config['latent_size'],
+            input_shape, config['latent_size'],
             hidden=config['hidden_size'])
         exploit_gen = ContinuousGenerator(
-            task.input_shape, config['latent_size'],
+            input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
     # build the neural network GAN components
     explore_discriminator = Discriminator(
-        task.input_shape,
+        input_shape,
         hidden=config['hidden_size'],
         method=config['method'])
     explore_gan = WeightedGAN(
@@ -110,7 +125,7 @@ def mins(config):
         discriminator_lr=config['discriminator_lr'],
         discriminator_beta_1=config['discriminator_beta_1'],
         discriminator_beta_2=config['discriminator_beta_2'],
-        is_discrete=config['is_discrete'],
+        is_discrete=task.is_discrete,
         noise_std=config.get('noise_std', 0.0),
         keep=config.get('keep', 1.0),
         start_temp=config.get('start_temp', 5.0),
@@ -123,7 +138,7 @@ def mins(config):
 
     # build the neural network GAN components
     exploit_discriminator = Discriminator(
-        task.input_shape,
+        input_shape,
         hidden=config['hidden_size'],
         method=config['method'])
     exploit_gan = WeightedGAN(
@@ -140,7 +155,7 @@ def mins(config):
         discriminator_lr=config['discriminator_lr'],
         discriminator_beta_1=config['discriminator_beta_1'],
         discriminator_beta_2=config['discriminator_beta_2'],
-        is_discrete=config['is_discrete'],
+        is_discrete=task.is_discrete,
         noise_std=config.get('noise_std', 0.0),
         keep=config.get('keep', 1.0),
         start_temp=config.get('start_temp', 5.0),
@@ -155,47 +170,9 @@ def mins(config):
     explore_gan_manager.restore_or_initialize()
     exploit_gan_manager.restore_or_initialize()
 
-    # save the initial dataset statistics for safe keeping
-    x = task.x
-    y = task.y
-
-    if config['normalize_ys']:
-
-        # compute normalization statistics for the score
-        mu_y = np.mean(y, axis=0, keepdims=True)
-        mu_y = mu_y.astype(np.float32)
-        y = y - mu_y
-        st_y = np.std(y, axis=0, keepdims=True)
-        st_y = np.where(np.equal(st_y, 0), 1, st_y)
-        st_y = st_y.astype(np.float32)
-        y = y / st_y
-
-    else:
-
-        # compute normalization statistics for the score
-        mu_y = np.zeros_like(y[:1])
-        st_y = np.ones_like(y[:1])
-
-    if config['normalize_xs'] and not config['is_discrete']:
-
-        # compute normalization statistics for the data vectors
-        mu_x = np.mean(x, axis=0, keepdims=True)
-        mu_x = mu_x.astype(np.float32)
-        x = x - mu_x
-        st_x = np.std(x, axis=0, keepdims=True)
-        st_x = np.where(np.equal(st_x, 0), 1, st_x)
-        st_x = st_x.astype(np.float32)
-        x = x / st_x
-
-    else:
-
-        # compute normalization statistics for the score
-        mu_x = np.zeros_like(x[:1])
-        st_x = np.ones_like(x[:1])
-
     # build a weighted data set using newly collected samples
-    train_data, val_data = task.build(
-        x=x, y=y, importance_weights=get_weights(y, base_temp=base_temp),
+    train_data, val_data = build_pipeline(
+        x=x, y=y, w=get_weights(y, base_temp=base_temp),
         batch_size=config['gan_batch_size'],
         val_size=config['val_size'])
 
@@ -210,15 +187,18 @@ def mins(config):
 
     # generate samples for exploitation
     solver_xs = explore_gen.sample(condition_ys, temp=0.001)
-    actual_ys = (task.score(solver_xs * st_x + mu_x) - mu_y) / st_y
+    actual_ys = task.predict(tf.argmax(solver_xs, axis=-1, output_type=tf.int32)
+                             if task.is_discrete else solver_xs)
 
     # record score percentiles
     logger.record("exploration/condition_ys",
-                  condition_ys * st_y + mu_y,
+                  task.denormalize_y(condition_ys)
+                  if task.is_normalized_y else condition_ys,
                   0,
                   percentile=True)
     logger.record("exploration/actual_ys",
-                  actual_ys * st_y + mu_y,
+                  task.denormalize_y(actual_ys)
+                  if task.is_normalized_y else actual_ys,
                   0,
                   percentile=True)
 
@@ -229,20 +209,23 @@ def mins(config):
 
     # generate samples for exploitation
     solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
-    actual_ys = (task.score(solver_xs * st_x + mu_x) - mu_y) / st_y
+    actual_ys = task.predict(tf.argmax(solver_xs, axis=-1, output_type=tf.int32)
+                             if task.is_discrete else solver_xs)
 
     # record score percentiles
     logger.record("exploitation/condition_ys",
-                  condition_ys * st_y + mu_y,
+                  task.denormalize_y(condition_ys)
+                  if task.is_normalized_y else condition_ys,
                   0,
                   percentile=True)
     logger.record("exploitation/actual_ys",
-                  actual_ys * st_y + mu_y,
+                  task.denormalize_y(actual_ys)
+                  if task.is_normalized_y else actual_ys,
                   0,
                   percentile=True)
 
     # prevent the temperature from being annealed further
-    if config['is_discrete']:
+    if task.is_discrete:
         explore_gan.start_temp = explore_gan.final_temp
         exploit_gan.start_temp = exploit_gan.final_temp
 
@@ -257,9 +240,9 @@ def mins(config):
             base_temp=base_temp)
 
         # build a weighted data set using newly collected samples
-        train_data, val_data = task.build(
+        train_data, val_data = build_pipeline(
             x=tilde_x.numpy(), y=tilde_y.numpy(),
-            importance_weights=get_weights(tilde_y.numpy(), base_temp=base_temp),
+            w=get_weights(tilde_y.numpy(), base_temp=base_temp),
             batch_size=config['gan_batch_size'],
             val_size=config['val_size'])
 
@@ -276,18 +259,21 @@ def mins(config):
 
         # generate samples for exploration
         solver_xs = explore_gen.sample(condition_ys, temp=0.001)
-        actual_ys = oracle.get_distribution(solver_xs * st_x + mu_x).mean() \
-            if config['offline'] else task.score(solver_xs * st_x + mu_x)
-        actual_ys = (actual_ys - mu_y) / st_y
+        actual_ys = oracle.get_distribution(solver_xs).mean() \
+            if config['offline'] else task.predict(
+            tf.argmax(solver_xs, axis=-1, output_type=tf.int32)
+            if task.is_discrete else solver_xs)
 
         # record score percentiles
         logger.record("exploration/condition_ys",
-                      condition_ys * st_y + mu_y,
-                      iteration + 1,
+                      task.denormalize_y(condition_ys)
+                      if task.is_normalized_y else condition_ys,
+                      0,
                       percentile=True)
         logger.record("exploration/actual_ys",
-                      actual_ys * st_y + mu_y,
-                      iteration + 1,
+                      task.denormalize_y(actual_ys)
+                      if task.is_normalized_y else actual_ys,
+                      0,
                       percentile=True)
 
         # concatenate newly paired samples with the existing data set
@@ -295,9 +281,9 @@ def mins(config):
         y = tf.concat([y, actual_ys], 0)
 
         # build a weighted data set using newly collected samples
-        train_data, val_data = task.build(
+        train_data, val_data = build_pipeline(
             x=x.numpy(), y=y.numpy(),
-            importance_weights=get_weights(y.numpy(), base_temp=base_temp),
+            w=get_weights(y.numpy(), base_temp=base_temp),
             batch_size=config['gan_batch_size'],
             val_size=config['val_size'])
 
@@ -314,19 +300,17 @@ def mins(config):
 
         # generate samples for exploitation
         solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
-        actual_ys = (task.score(solver_xs * st_x + mu_x) - mu_y) / st_y
+        actual_ys = task.predict(tf.argmax(solver_xs, axis=-1, output_type=tf.int32)
+                                 if task.is_discrete else solver_xs)
 
         # record score percentiles
         logger.record("exploitation/condition_ys",
-                      condition_ys * st_y + mu_y,
-                      iteration + 1,
+                      task.denormalize_y(condition_ys)
+                      if task.is_normalized_y else condition_ys,
+                      0,
                       percentile=True)
         logger.record("exploitation/actual_ys",
-                      actual_ys * st_y + mu_y,
-                      iteration + 1,
+                      task.denormalize_y(actual_ys)
+                      if task.is_normalized_y else actual_ys,
+                      0,
                       percentile=True)
-
-    # render a video of the best solution found at the end
-    render_video(config,
-                 task,
-                 (solver_xs * st_x + mu_x)[np.argmax(np.reshape(actual_ys, [-1]))])
