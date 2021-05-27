@@ -20,7 +20,8 @@ def bo_qei(config):
 
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    task.map_to_logits()
+    if task.is_discrete:
+        task.map_to_logits()
 
     if config['normalize_ys']:
         task.map_normalize_y()
@@ -40,6 +41,7 @@ def bo_qei(config):
     forward_models = [ForwardModel(
         task,
         hidden_size=config['hidden_size'],
+        num_layers=config['num_layers'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'])
         for b in range(config['bootstraps'])]
@@ -215,9 +217,6 @@ def bo_qei(config):
 
         # evaluate the found solution and record a video
         score = task.predict(solution)
+        if task.is_normalized_y:
+            score = task.denormalize_y(score)
         logger.record("score", score, iteration, percentile=True)
-
-        # render a video of the best solution found at the end
-        if iteration == N_BATCH:
-            render_video(config, task, (
-                solution)[np.argmax(np.reshape(score, [-1]))])

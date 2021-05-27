@@ -1,18 +1,18 @@
 from design_baselines.data import StaticGraphTask, build_pipeline
 from design_baselines.logger import Logger
-from design_baselines.autofocus.trainers import Ensemble
-from design_baselines.autofocus.trainers import WeightedVAE
-from design_baselines.autofocus.trainers import CBAS
-from design_baselines.autofocus.nets import ForwardModel
-from design_baselines.autofocus.nets import Encoder
-from design_baselines.autofocus.nets import DiscreteDecoder
-from design_baselines.autofocus.nets import ContinuousDecoder
+from design_baselines.autofocused_cbas.trainers import Ensemble
+from design_baselines.autofocused_cbas.trainers import WeightedVAE
+from design_baselines.autofocused_cbas.trainers import CBAS
+from design_baselines.autofocused_cbas.nets import ForwardModel
+from design_baselines.autofocused_cbas.nets import Encoder
+from design_baselines.autofocused_cbas.nets import DiscreteDecoder
+from design_baselines.autofocused_cbas.nets import ContinuousDecoder
 import tensorflow as tf
 import numpy as np
 import os
 
 
-def autofocus(config):
+def autofocused_cbas(config):
     """Optimize a design problem score using the algorithm CBAS
     otherwise known as Conditioning by Adaptive Sampling
 

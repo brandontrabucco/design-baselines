@@ -10,9 +10,9 @@ class ForwardModel(tf.keras.Sequential):
     distribution = tfpd.Normal
 
     def __init__(self,
-                 input_shape,
+                 task,
                  activations=('relu', 'relu'),
-                 hidden=2048,
+                 hidden_size=2048,
                  initial_max_std=0.2,
                  initial_min_std=0.1):
         """Create a fully connected architecture using keras that can process
@@ -39,9 +39,9 @@ class ForwardModel(tf.keras.Sequential):
                        tfkl.Activation(tf.math.cos) if act == 'cos' else
                        act for act in activations]
 
-        layers = [tfkl.Flatten(input_shape=input_shape)]
+        layers = [tfkl.Flatten(input_shape=task.input_shape)]
         for act in activations:
-            layers.extend([tfkl.Dense(hidden),
+            layers.extend([tfkl.Dense(hidden_size),
                            tfkl.Activation(act)
                            if isinstance(act, str) else act()])
         layers.append(tfkl.Dense(2))

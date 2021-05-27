@@ -1,17 +1,13 @@
-from design_baselines.data import StaticGraphTask
+from design_baselines.data import StaticGraphTask, build_pipeline
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
-from design_baselines.utils import soft_noise
-from design_baselines.utils import render_video
 from design_baselines.gradient_ascent.trainers import MaximumLikelihood
 from design_baselines.gradient_ascent.trainers import Ensemble
 from design_baselines.gradient_ascent.nets import ForwardModel
-from collections import defaultdict
 import tensorflow_probability as tfp
 import tensorflow as tf
 import numpy as np
 import os
-import glob
 
 
 def gradient_ascent(config):
@@ -27,108 +23,35 @@ def gradient_ascent(config):
     # create the training task and logger
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    if task.is_discrete:
+        task.map_to_logits()
 
     # make several keras neural networks with different architectures
     forward_models = [ForwardModel(
-        task.input_shape,
+        task,
         activations=activations,
-        hidden=config['hidden_size'],
+        hidden_size=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'])
         for activations in config['activations']]
+
+    if config['normalize_ys']:
+        task.map_normalize_y()
+    if config['normalize_xs']:
+        task.map_normalize_x()
 
     # save the initial dataset statistics for safe keeping
     x = task.x
     y = task.y
 
-    if config['normalize_ys']:
-
-        # compute normalization statistics for the score
-        mu_y = np.mean(y, axis=0, keepdims=True)
-        mu_y = mu_y.astype(np.float32)
-        y = y - mu_y
-        st_y = np.std(y, axis=0, keepdims=True)
-        st_y = np.where(np.equal(st_y, 0), 1, st_y)
-        st_y = st_y.astype(np.float32)
-        y = y / st_y
-
-    else:
-
-        # compute normalization statistics for the score
-        mu_y = np.zeros_like(y[:1])
-        st_y = np.ones_like(y[:1])
-
-    if config['normalize_xs'] and not config['is_discrete']:
-
-        # compute normalization statistics for the data vectors
-        mu_x = np.mean(x, axis=0, keepdims=True)
-        mu_x = mu_x.astype(np.float32)
-        x = x - mu_x
-        st_x = np.std(x, axis=0, keepdims=True)
-        st_x = np.where(np.equal(st_x, 0), 1, st_x)
-        st_x = st_x.astype(np.float32)
-        x = x / st_x
-
-    else:
-
-        # compute normalization statistics for the score
-        mu_x = np.zeros_like(x[:1])
-        st_x = np.ones_like(x[:1])
-
     # scale the learning rate based on the number of channels in x
     config['solver_lr'] *= np.sqrt(np.prod(x.shape[1:]))
-
-    # make a neural network to predict scores
-    held_out_models = [ForwardModel(
-        task.input_shape,
-        activations=['relu' if i == j else 'tanh' for j in range(8)],
-        hidden=256,
-        initial_max_std=config['initial_max_std'],
-        initial_min_std=config['initial_min_std'])
-        for i in range(8)]
-
-    # create a trainer for a forward model with a conservative objective
-    held_out_trainer = Ensemble(
-        held_out_models,
-        forward_model_optim=tf.keras.optimizers.Adam,
-        forward_model_lr=0.001,
-        is_discrete=config['is_discrete'],
-        continuous_noise_std=config.get('continuous_noise_std', 0.0),
-        discrete_smoothing=config.get('discrete_smoothing', 0.6))
-
-    # create a bootstrapped data set
-    held_out_train_data, held_out_validate_data = task.build(
-        x=x, y=y,
-        batch_size=config['batch_size'],
-        val_size=config['val_size'],
-        bootstraps=len(held_out_models))
-
-    # train a held-out model on the validation set
-    for e in range(100):
-
-        statistics = defaultdict(list)
-        for xi, yi, bi in held_out_train_data:
-            for name, tensor in held_out_trainer.train_step(xi, yi, bi).items():
-                statistics["held_out/" + name].append(tensor)
-
-        for name in statistics.keys():
-            logger.record(
-                name, tf.concat(statistics[name], axis=0), e)
-
-        statistics = defaultdict(list)
-        for xi, yi in held_out_validate_data:
-            for name, tensor in held_out_trainer.validate_step(xi, yi).items():
-                statistics["held_out/" + name].append(tensor)
-
-        for name in statistics.keys():
-            logger.record(
-                name, tf.concat(statistics[name], axis=0), e)
 
     trs = []
     for i, fm in enumerate(forward_models):
 
         # create a bootstrapped data set
-        train_data, validate_data = task.build(
+        train_data, validate_data = build_pipeline(
             x=x, y=y, batch_size=config['batch_size'],
             val_size=config['val_size'], bootstraps=1)
 
@@ -137,9 +60,7 @@ def gradient_ascent(config):
             fm,
             forward_model_optim=tf.keras.optimizers.Adam,
             forward_model_lr=config['forward_model_lr'],
-            is_discrete=config['is_discrete'],
-            continuous_noise_std=config.get('continuous_noise_std', 0.0),
-            discrete_smoothing=config.get('discrete_smoothing', 0.6))
+            noise_std=config.get('model_noise_std', 0.0))
 
         # train the model for an additional number of epochs
         trs.append(trainer)
@@ -153,15 +74,19 @@ def gradient_ascent(config):
     mean_x = tf.reduce_mean(x, axis=0, keepdims=True)
     indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
     initial_x = tf.gather(x, indices, axis=0)
-    x = tf.math.log(soft_noise(initial_x,
-                               config.get('discrete_smoothing', 0.6))) \
-        if config['is_discrete'] else initial_x
+    x = initial_x
 
     # evaluate the starting point
-    solution = tf.math.softmax(x) if config['is_discrete'] else x
-    score = task.score(solution * st_x + mu_x)
-    preds = [fm.get_distribution(
-        solution).mean() * st_y + mu_y for fm in forward_models]
+    solution = x
+    score = task.predict(solution)
+    if task.is_normalized_y:
+        score = task.denormalize_y(score)
+        preds = [task.denormalize_y(
+            fm.get_distribution(solution).mean())
+            for fm in forward_models]
+    else:
+        preds = [fm.get_distribution(solution).mean()
+                 for fm in forward_models]
 
     # record the prediction and score to the logger
     logger.record("score", score, 0, percentile=True)
@@ -185,7 +110,7 @@ def gradient_ascent(config):
             tape.watch(x)
             predictions = []
             for fm in forward_models:
-                solution = tf.math.softmax(x) if config['is_discrete'] else x
+                solution = x
                 predictions.append(fm.get_distribution(solution).mean())
             if config['aggregation_method'] == 'mean':
                 score = tf.reduce_min(predictions, axis=0)
@@ -197,38 +122,20 @@ def gradient_ascent(config):
 
         # use the conservative optimizer to update the solution
         x = x + config['solver_lr'] * grads
-        solution = tf.math.softmax(x) if config['is_discrete'] else x
+        solution = x
 
         # evaluate the design using the oracle and the forward model
-        score = task.score(solution * st_x + mu_x)
-        preds = [fm.get_distribution(
-            solution).mean() * st_y + mu_y for fm in forward_models]
+        score = task.predict(solution)
+        if task.is_normalized_y:
+            score = task.denormalize_y(score)
+            preds = [task.denormalize_y(
+                fm.get_distribution(solution).mean())
+                for fm in forward_models]
+        else:
+            preds = [fm.get_distribution(solution).mean()
+                     for fm in forward_models]
         all_scores.append(score)
         all_predictions.append(preds[0].numpy())
-
-        held_out_m = [m.get_distribution(solution).mean()
-                      for m in held_out_models]
-        held_out_s = [m.get_distribution(solution).stddev()
-                      for m in held_out_models]
-
-        max_of_mean = tf.reduce_max(held_out_m, axis=0)
-        max_of_stddev = tf.reduce_max(held_out_s, axis=0)
-        min_of_mean = tf.reduce_min(held_out_m, axis=0)
-        min_of_stddev = tf.reduce_min(held_out_s, axis=0)
-        mean_of_mean = tf.reduce_mean(held_out_m, axis=0)
-        mean_of_stddev = tf.reduce_mean(held_out_s, axis=0)
-        logger.record(f"held_out/max_of_mean",
-                      max_of_mean, i)
-        logger.record(f"held_out/max_of_stddev",
-                      max_of_stddev, i)
-        logger.record(f"held_out/min_of_mean",
-                      min_of_mean, i)
-        logger.record(f"held_out/min_of_stddev",
-                      min_of_stddev, i)
-        logger.record(f"held_out/mean_of_mean",
-                      mean_of_mean, i)
-        logger.record(f"held_out/mean_of_stddev",
-                      mean_of_stddev, i)
 
         # record the prediction and score to the logger
         logger.record("score", score, i, percentile=True)
@@ -251,131 +158,3 @@ def gradient_ascent(config):
             np.concatenate(all_scores, axis=1))
     np.save(os.path.join(config['logging_dir'], "predictions.npy"),
             np.stack(all_predictions, axis=1))
-
-    # render a video of the best solution found at the end
-    render_video(config,
-                 task,
-                 (solution * st_x + mu_x)[np.argmax(np.reshape(score, [-1]))])
-
-
-def ablate_architecture(config):
-    """Train a forward model and perform model based optimization
-    using a conservative objective function
-
-    Args:
-
-    config: dict
-        a dictionary of hyper parameters such as the learning rate
-    """
-
-    # create the training task and logger
-    logger = Logger(config['logging_dir'])
-    task = StaticGraphTask(config['task'], **config['task_kwargs'])
-
-    # save the initial dataset statistics for safe keeping
-    x = task.x
-    y = task.y
-
-    if config['normalize_ys']:
-        # compute normalization statistics for the score
-        mu_y = np.mean(y, axis=0, keepdims=True).astype(np.float32)
-        y = y - mu_y
-        st_y = np.std(y, axis=0, keepdims=True).astype(np.float32)
-        st_y = np.where(np.equal(st_y, 0), 1, st_y)
-        y = y / st_y
-    else:
-        # compute normalization statistics for the score
-        mu_y = np.zeros_like(y[:1])
-        st_y = np.ones_like(y[:1])
-
-    if config['normalize_xs'] and not config['is_discrete']:
-        # compute normalization statistics for the data vectors
-        mu_x = np.mean(x, axis=0, keepdims=True).astype(np.float32)
-        x = x - mu_x
-        st_x = np.std(x, axis=0, keepdims=True).astype(np.float32)
-        st_x = np.where(np.equal(st_x, 0), 1, st_x)
-        x = x / st_x
-    else:
-        # compute normalization statistics for the score
-        mu_x = np.zeros_like(x[:1])
-        st_x = np.ones_like(x[:1])
-
-    # make a neural network to predict scores
-    held_out_models = [ForwardModel(
-        task.input_shape,
-        activations=config['activations'][0],
-        hidden=256,
-        initial_max_std=config['initial_max_std'],
-        initial_min_std=config['initial_min_std'])
-        for i in range(8)]
-
-    # create a trainer for a forward model with a conservative objective
-    held_out_trainer = Ensemble(
-        held_out_models,
-        forward_model_optim=tf.keras.optimizers.Adam,
-        forward_model_lr=0.001)
-
-    # create a bootstrapped data set
-    held_out_train_data, held_out_validate_data = task.build(
-        x=x, y=y,
-        batch_size=config['batch_size'],
-        val_size=config['val_size'],
-        bootstraps=len(held_out_models))
-
-    # train a held-out model on the validation set
-    for e in range(100):
-
-        statistics = defaultdict(list)
-        for xi, yi, bi in held_out_train_data:
-            for name, tensor in held_out_trainer.train_step(xi, yi, bi).items():
-                statistics["held_out2/" + name].append(tensor)
-
-        for name in statistics.keys():
-            logger.record(
-                name, tf.concat(statistics[name], axis=0), e)
-
-        statistics = defaultdict(list)
-        for xi, yi in held_out_validate_data:
-            for name, tensor in held_out_trainer.validate_step(xi, yi).items():
-                statistics["held_out2/" + name].append(tensor)
-
-        for name in statistics.keys():
-            logger.record(
-                name, tf.concat(statistics[name], axis=0), e)
-
-    def evaluate_solution(solution, evaluations):
-
-        # evaluate the design using the oracle and the forward model
-        held_out_m = [m.get_distribution(solution).mean()
-                      for m in held_out_models]
-        held_out_s = [m.get_distribution(solution).stddev()
-                      for m in held_out_models]
-
-        max_of_mean = tf.reduce_max(held_out_m, axis=0)
-        max_of_stddev = tf.reduce_max(held_out_s, axis=0)
-        min_of_mean = tf.reduce_min(held_out_m, axis=0)
-        min_of_stddev = tf.reduce_min(held_out_s, axis=0)
-        mean_of_mean = tf.reduce_mean(held_out_m, axis=0)
-        mean_of_stddev = tf.reduce_mean(held_out_s, axis=0)
-
-        logger.record(f"oracle/same_architecture/max_of_mean",
-                      max_of_mean, evaluations)
-        logger.record(f"oracle/same_architecture/max_of_stddev",
-                      max_of_stddev, evaluations)
-        logger.record(f"oracle/same_architecture/min_of_mean",
-                      min_of_mean, evaluations)
-        logger.record(f"oracle/same_architecture/min_of_stddev",
-                      min_of_stddev, evaluations)
-        logger.record(f"oracle/same_architecture/mean_of_mean",
-                      mean_of_mean, evaluations)
-        logger.record(f"oracle/same_architecture/mean_of_stddev",
-                      mean_of_stddev, evaluations)
-
-    # train a held-out model on the validation set
-
-    for file_name in glob.glob(
-            os.path.join(config['logging_dir'], f'solution_*.npy')):
-
-        iteration = file_name.split('_')[-1].split('.')[0]
-        solution = np.load(file_name)
-        evaluate_solution(solution, int(iteration))

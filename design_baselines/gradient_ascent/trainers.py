@@ -12,9 +12,7 @@ class Ensemble(tf.Module):
                  forward_models,
                  forward_model_optim=tf.keras.optimizers.Adam,
                  forward_model_lr=0.001,
-                 is_discrete=False,
-                 continuous_noise_std=0.0,
-                 discrete_smoothing=0.0):
+                 noise_std=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -31,11 +29,7 @@ class Ensemble(tf.Module):
         super().__init__()
         self.forward_models = forward_models
         self.bootstraps = len(forward_models)
-
-        # create machinery for sampling adversarial examples
-        self.is_discrete = is_discrete
-        self.noise_std = continuous_noise_std
-        self.keep = discrete_smoothing
+        self.noise_std = noise_std
 
         # create optimizers for each model in the ensemble
         self.forward_model_optims = [
@@ -100,8 +94,7 @@ class Ensemble(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        x0 = soft_noise(x, self.keep) \
-            if self.is_discrete else cont_noise(x, self.noise_std)
+        x0 = cont_noise(x, self.noise_std)
 
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
@@ -151,8 +144,7 @@ class Ensemble(tf.Module):
         statistics = dict()
 
         # corrupt the inputs with noise
-        x0 = soft_noise(x, self.keep) \
-            if self.is_discrete else cont_noise(x, self.noise_std)
+        x0 = cont_noise(x, self.noise_std)
 
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
@@ -267,9 +259,7 @@ class MaximumLikelihood(tf.Module):
                  forward_model,
                  forward_model_optim=tf.keras.optimizers.Adam,
                  forward_model_lr=0.001,
-                 is_discrete=False,
-                 continuous_noise_std=0.0,
-                 discrete_smoothing=0.0):
+                 noise_std=0.0):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -287,11 +277,7 @@ class MaximumLikelihood(tf.Module):
         self.fm = forward_model
         self.optim = forward_model_optim(
             learning_rate=forward_model_lr)
-
-        # create machinery for sampling adversarial examples
-        self.is_discrete = is_discrete
-        self.noise_std = continuous_noise_std
-        self.keep = discrete_smoothing
+        self.noise_std = noise_std
 
     @tf.function(experimental_relax_shapes=True)
     def train_step(self,
@@ -317,8 +303,7 @@ class MaximumLikelihood(tf.Module):
         """
 
         # corrupt the inputs with noise
-        x0 = soft_noise(x, self.keep) \
-            if self.is_discrete else cont_noise(x, self.noise_std)
+        x0 = cont_noise(x, self.noise_std)
 
         statistics = dict()
         with tf.GradientTape(persistent=True) as tape:
@@ -367,8 +352,7 @@ class MaximumLikelihood(tf.Module):
         """
 
         # corrupt the inputs with noise
-        x0 = soft_noise(x, self.keep) \
-            if self.is_discrete else cont_noise(x, self.noise_std)
+        x0 = cont_noise(x, self.noise_std)
 
         statistics = dict()
 

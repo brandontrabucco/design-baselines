@@ -15,7 +15,7 @@ def cli():
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-dkitty')
+@click.option('--local-dir', type=str, default='autofocused-cbas-dkitty')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -26,12 +26,12 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": True,
@@ -65,7 +65,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-ant')
+@click.option('--local-dir', type=str, default='autofocused-cbas-ant')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -76,12 +76,12 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": True,
@@ -115,7 +115,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-hopper')
+@click.option('--local-dir', type=str, default='autofocused-cbas-hopper')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -126,12 +126,12 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": True,
@@ -165,7 +165,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-superconductor')
+@click.option('--local-dir', type=str, default='autofocused-cbas-superconductor')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -176,12 +176,12 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": True,
@@ -215,7 +215,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-chembl')
+@click.option('--local-dir', type=str, default='autofocused-cbas-chembl')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -226,12 +226,12 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
@@ -265,7 +265,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-gfp-gp')
+@click.option('--local-dir', type=str, default='autofocused-cbas-gfp-gp')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -276,12 +276,12 @@ def gfp_gp(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
@@ -315,7 +315,7 @@ def gfp_gp(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-gfp-rf')
+@click.option('--local-dir', type=str, default='autofocused-cbas-gfp-rf')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -326,12 +326,12 @@ def gfp_rf(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
@@ -365,7 +365,7 @@ def gfp_rf(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-gfp-fc')
+@click.option('--local-dir', type=str, default='autofocused-cbas-gfp-fc')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -376,12 +376,12 @@ def gfp_fc(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
@@ -415,7 +415,7 @@ def gfp_fc(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-gfp-rn')
+@click.option('--local-dir', type=str, default='autofocused-cbas-gfp-rn')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -426,12 +426,12 @@ def gfp_rn(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
@@ -465,7 +465,7 @@ def gfp_rn(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-gfp-tr')
+@click.option('--local-dir', type=str, default='autofocused-cbas-gfp-tr')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -476,12 +476,12 @@ def gfp_tr(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
@@ -515,7 +515,7 @@ def gfp_tr(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-tf-bind-8')
+@click.option('--local-dir', type=str, default='autofocused-cbas-tf-bind-8')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -526,12 +526,12 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
@@ -565,7 +565,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocus-utr')
+@click.option('--local-dir', type=str, default='autofocused-cbas-utr')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
@@ -576,12 +576,12 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
 
     # Final Version
 
-    from design_baselines.autofocus import autofocus
+    from design_baselines.autofocused_cbas import autofocused_cbas
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocus, config={
+    tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
