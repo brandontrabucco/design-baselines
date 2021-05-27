@@ -1,6 +1,5 @@
-from design_baselines.data import StaticGraphTask
+from design_baselines.data import StaticGraphTask, build_pipeline
 from design_baselines.logger import Logger
-from design_baselines.utils import soft_noise
 from design_baselines.bo_qei.trainers import Ensemble
 from design_baselines.bo_qei.nets import ForwardModel
 from design_baselines.utils import render_video
@@ -21,53 +20,26 @@ def bo_qei(config):
 
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
+    task.map_to_logits()
+
+    if config['normalize_ys']:
+        task.map_normalize_y()
+    if config['normalize_xs']:
+        task.map_normalize_x()
+
     x = task.x
     y = task.y
 
-    if config['normalize_ys']:
-
-        # compute normalization statistics for the score
-        mu_y = np.mean(y, axis=0, keepdims=True)
-        mu_y = mu_y.astype(np.float32)
-        y = y - mu_y
-        st_y = np.std(y, axis=0, keepdims=True)
-        st_y = np.where(np.equal(st_y, 0), 1, st_y)
-        st_y = st_y.astype(np.float32)
-        y = y / st_y
-
-    else:
-
-        # compute normalization statistics for the data vectors
-        mu_y = np.zeros_like(y[:1])
-        st_y = np.ones_like(y[:1])
-
-    if config['normalize_xs'] and not config['is_discrete']:
-
-        # compute normalization statistics for the data vectors
-        mu_x = np.mean(x, axis=0, keepdims=True)
-        mu_x = mu_x.astype(np.float32)
-        x = x - mu_x
-        st_x = np.std(x, axis=0, keepdims=True)
-        st_x = np.where(np.equal(st_x, 0), 1, st_x)
-        st_x = st_x.astype(np.float32)
-        x = x / st_x
-
-    else:
-
-        # compute normalization statistics for the data vectors
-        mu_x = np.zeros_like(x[:1])
-        st_x = np.ones_like(x[:1])
-
     # create the training task and logger
-    train_data, val_data = task.build(
+    train_data, val_data = build_pipeline(
         x=x, y=y, bootstraps=config['bootstraps'],
         batch_size=config['ensemble_batch_size'],
         val_size=config['val_size'])
 
     # make several keras neural networks with two hidden layers
     forward_models = [ForwardModel(
-        task.input_shape,
-        hidden=config['hidden_size'],
+        task,
+        hidden_size=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'])
         for b in range(config['bootstraps'])]
@@ -76,10 +48,7 @@ def bo_qei(config):
     ensemble = Ensemble(
         forward_models,
         forward_model_optim=tf.keras.optimizers.Adam,
-        forward_model_lr=config['ensemble_lr'],
-        is_discrete=config['is_discrete'],
-        continuous_noise_std=config.get('continuous_noise_std', 0.0),
-        discrete_keep=config.get('discrete_keep', 1.0))
+        forward_model_lr=config['ensemble_lr'])
 
     # create a manager for saving algorithms state to the disk
     ensemble_manager = tf.train.CheckpointManager(
@@ -103,7 +72,7 @@ def bo_qei(config):
     from botorch.acquisition.objective import GenericMCObjective
     from botorch.optim import optimize_acqf
     from botorch import fit_gpytorch_model
-    from botorch.acquisition.monte_carlo import qExpectedImprovement, qNoisyExpectedImprovement
+    from botorch.acquisition.monte_carlo import qExpectedImprovement
     from botorch.sampling.samplers import SobolQMCNormalSampler
     from botorch.exceptions import BadInitialCandidatesWarning
 
@@ -138,7 +107,8 @@ def bo_qei(config):
 
     def initialize_model(train_x, train_obj, state_dict=None):
         # define models for objective
-        model_obj = FixedNoiseGP(train_x, train_obj, train_yvar.expand_as(train_obj)).to(train_x)
+        model_obj = FixedNoiseGP(train_x, train_obj,
+                                 train_yvar.expand_as(train_obj)).to(train_x)
         # combine into a multi-output GP model
         model = ModelListGP(model_obj)
         mll = SumMarginalLogLikelihood(model.likelihood, model)
@@ -160,7 +130,8 @@ def bo_qei(config):
         device=device, dtype=dtype)
 
     def optimize_acqf_and_get_observation(acq_func):
-        """Optimizes the acquisition function, and returns a new candidate and a noisy observation."""
+        """Optimizes the acquisition function, and returns
+        a new candidate and a noisy observation."""
         # optimize
         candidates, _ = optimize_acqf(
             acq_function=acq_func,
@@ -243,10 +214,10 @@ def bo_qei(config):
         solution = tf.reshape(solution, [-1, *task.input_shape])
 
         # evaluate the found solution and record a video
-        score = task.score(solution * st_x + mu_x)
+        score = task.predict(solution)
         logger.record("score", score, iteration, percentile=True)
 
         # render a video of the best solution found at the end
         if iteration == N_BATCH:
             render_video(config, task, (
-                solution * st_x + mu_x)[np.argmax(np.reshape(score, [-1]))])
+                solution)[np.argmax(np.reshape(score, [-1]))])

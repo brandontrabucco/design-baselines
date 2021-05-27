@@ -21,7 +21,7 @@ def cli():
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on DKittyMorphology-v0
+    """Evaluate BO-QEI on DKittyMorphology-Exact-v0
     """
 
     # Final Version
@@ -29,18 +29,20 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.bo_qei import bo_qei
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(bo_qei, config={
         "logging_dir": "data",
-        "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "DKittyMorphology-v0",
-        "task_kwargs": {"split_percentile": 40, 'num_parallel': 2, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "task": "DKittyMorphology-Exact-v0",
+        "task_kwargs": {},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
+        "embedding_size": 256,
         "hidden_size": 256,
+        "num_layers": 1,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "ensemble_lr": 0.001,
@@ -68,7 +70,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def ant(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on AntMorphology-v0
+    """Evaluate BO-QEI on AntMorphology-Exact-v0
     """
 
     # Final Version
@@ -76,18 +78,20 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.bo_qei import bo_qei
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(bo_qei, config={
         "logging_dir": "data",
-        "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "AntMorphology-v0",
-        "task_kwargs": {"split_percentile": 20, 'num_parallel': 1, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "task": "AntMorphology-Exact-v0",
+        "task_kwargs": {},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
+        "embedding_size": 256,
         "hidden_size": 256,
+        "num_layers": 1,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "ensemble_lr": 0.001,
@@ -115,7 +119,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on HopperController-v0
+    """Evaluate BO-QEI on HopperController-Exact-v0
     """
 
     # Final Version
@@ -123,18 +127,20 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.bo_qei import bo_qei
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(bo_qei, config={
         "logging_dir": "data",
-        "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "HopperController-v0",
-        "task_kwargs": {'split_percentile': 100, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "task": "HopperController-Exact-v0",
+        "task_kwargs": {},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
+        "embedding_size": 256,
         "hidden_size": 256,
+        "num_layers": 1,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "ensemble_lr": 0.001,
@@ -162,7 +168,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on Superconductor-v0
+    """Evaluate BO-QEI on Superconductor-FullyConnected-v0
     """
 
     # Final Version
@@ -170,18 +176,20 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.bo_qei import bo_qei
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(bo_qei, config={
         "logging_dir": "data",
-        "is_discrete": False,
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "Superconductor-v0",
-        "task_kwargs": {'split_percentile': 80, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "task": "Superconductor-FullyConnected-v0",
+        "task_kwargs": {},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
+        "embedding_size": 256,
         "hidden_size": 256,
+        "num_layers": 1,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "ensemble_lr": 0.001,
@@ -203,13 +211,13 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='bo-qei-molecule')
+@click.option('--local-dir', type=str, default='bo-qei-chembl')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on MoleculeActivity-v0
+def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate BO-QEI on ChEMBL-ResNet-v0
     """
 
     # Final Version
@@ -217,18 +225,20 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.bo_qei import bo_qei
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(bo_qei, config={
         "logging_dir": "data",
-        "is_discrete": True,
         "normalize_ys": True,
-        "normalize_xs": False,
-        "task": "MoleculeActivity-v0",
-        "task_kwargs": {'split_percentile': 80, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "normalize_xs": True,
+        "task": "ChEMBL-ResNet-v0",
+        "task_kwargs": {},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
+        "embedding_size": 256,
         "hidden_size": 256,
+        "num_layers": 1,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "ensemble_lr": 0.001,
@@ -256,7 +266,7 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on GFP-v0
+    """Evaluate BO-QEI on GFP-Transformer-v0
     """
 
     # Final Version
@@ -264,18 +274,20 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.bo_qei import bo_qei
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(bo_qei, config={
         "logging_dir": "data",
-        "is_discrete": True,
         "normalize_ys": True,
-        "normalize_xs": False,
-        "task": "GFP-v0",
-        "task_kwargs": {'seed': tune.randint(1000), 'split_percentile': 100, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "normalize_xs": True,
+        "task": "GFP-Transformer-v0",
+        "task_kwargs": {},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
+        "embedding_size": 256,
         "hidden_size": 256,
+        "num_layers": 1,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "ensemble_lr": 0.001,
@@ -297,13 +309,13 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='bo-qei-gfp-v1')
+@click.option('--local-dir', type=str, default='bo-qei-tf-bind-8')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def gfp_v1(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on GFP-v1
+def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate BO-QEI on TFBind8-Exact-v0
     """
 
     # Final Version
@@ -311,18 +323,69 @@ def gfp_v1(local_dir, cpus, gpus, num_parallel, num_samples):
     from design_baselines.bo_qei import bo_qei
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
+             include_dashboard=False,
              temp_dir=os.path.expanduser('~/tmp'))
     tune.run(bo_qei, config={
         "logging_dir": "data",
-        "is_discrete": True,
         "normalize_ys": True,
-        "normalize_xs": False,
-        "task": "GFP-v1",
-        "task_kwargs": {'split_percentile': 20, 'ys_noise': tune.grid_search([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])},
+        "normalize_xs": True,
+        "task": "TFBind8-Exact-v0",
+        "task_kwargs": {},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
+        "embedding_size": 256,
         "hidden_size": 256,
+        "num_layers": 1,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "bo_noise_se": 0.1,
+        "bo_gp_samples": 5000,
+        "bo_batch_size": 32,
+        "bo_num_restarts": 10,
+        "bo_raw_samples": 128,
+        "bo_batch_limit": 5,
+        "bo_maxiter": 200,
+        "bo_iterations": 20,
+        "bo_mc_samples": 128,
+        "solver_samples": 128},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='bo-qei-utr')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def utr(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate BO-QEI on UTR-Transformer-v0
+    """
+
+    # Final Version
+
+    from design_baselines.bo_qei import bo_qei
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             include_dashboard=False,
+             temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(bo_qei, config={
+        "logging_dir": "data",
+        "normalize_ys": True,
+        "normalize_xs": True,
+        "task": "UTR-Transformer-v0",
+        "task_kwargs": {},
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "embedding_size": 256,
+        "hidden_size": 256,
+        "num_layers": 1,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "ensemble_lr": 0.001,

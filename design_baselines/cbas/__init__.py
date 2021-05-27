@@ -45,7 +45,9 @@ def cbas(config):
     # make several keras neural networks with two hidden layers
     forward_models = [ForwardModel(
         task,
+        embedding_size=config['embedding_size'],
         hidden_size=config['hidden_size'],
+        num_layers=config['num_layers'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'])
         for b in range(config['bootstraps'])]
@@ -75,10 +77,16 @@ def cbas(config):
     # build the encoder and decoder distribution and the p model
     p_encoder = Encoder(task,
                         config['latent_size'],
-                        hidden_size=config['hidden_size'])
+                        embedding_size=config['embedding_size'],
+                        hidden_size=config['hidden_size'],
+                        num_layers=config['num_layers'],
+                        initial_max_std=config['initial_max_std'],
+                        initial_min_std=config['initial_min_std'])
     p_decoder = decoder(task,
                         config['latent_size'],
-                        hidden_size=config['hidden_size'])
+                        hidden_size=config['hidden_size'],
+                        initial_max_std=config['initial_max_std'],
+                        initial_min_std=config['initial_min_std'])
     p_vae = WeightedVAE(p_encoder,
                         p_decoder,
                         vae_optim=tf.keras.optimizers.Adam,
@@ -106,10 +114,16 @@ def cbas(config):
     # build the encoder and decoder distribution and the p model
     q_encoder = Encoder(task,
                         config['latent_size'],
-                        hidden_size=config['hidden_size'])
+                        embedding_size=config['embedding_size'],
+                        hidden_size=config['hidden_size'],
+                        num_layers=config['num_layers'],
+                        initial_max_std=config['initial_max_std'],
+                        initial_min_std=config['initial_min_std'])
     q_decoder = decoder(task,
                         config['latent_size'],
-                        hidden_size=config['hidden_size'])
+                        hidden_size=config['hidden_size'],
+                        initial_max_std=config['initial_max_std'],
+                        initial_min_std=config['initial_min_std'])
     q_vae = WeightedVAE(q_encoder,
                         q_decoder,
                         vae_optim=tf.keras.optimizers.Adam,

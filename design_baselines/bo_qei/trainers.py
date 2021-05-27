@@ -1,9 +1,6 @@
 from design_baselines.utils import spearman
-from design_baselines.utils import disc_noise
-from design_baselines.utils import cont_noise
 from collections import defaultdict
 from tensorflow_probability import distributions as tfpd
-import tensorflow_probability as tfp
 import tensorflow as tf
 
 
@@ -12,10 +9,7 @@ class Ensemble(tf.Module):
     def __init__(self,
                  forward_models,
                  forward_model_optim=tf.keras.optimizers.Adam,
-                 forward_model_lr=0.001,
-                 is_discrete=False,
-                 continuous_noise_std=0.0,
-                 discrete_keep=1.0):
+                 forward_model_lr=0.001):
         """Build a trainer for an ensemble of probabilistic neural networks
         trained on bootstraps of a dataset
 
@@ -32,9 +26,6 @@ class Ensemble(tf.Module):
         super().__init__()
         self.forward_models = forward_models
         self.bootstraps = len(forward_models)
-        self.is_discrete = is_discrete
-        self.continuous_noise_std = continuous_noise_std
-        self.discrete_keep = discrete_keep
 
         # create optimizers for each model in the ensemble
         self.forward_model_optims = [
@@ -77,7 +68,8 @@ class Ensemble(tf.Module):
     def train_step(self,
                    x,
                    y,
-                   b):
+                   b,
+                   w):
         """Perform a training step of gradient descent on an ensemble
         using bootstrap weights for each model in the ensemble
 
@@ -102,12 +94,6 @@ class Ensemble(tf.Module):
             fm = self.forward_models[i]
             fm_optim = self.forward_model_optims[i]
 
-            # corrupt the inputs with noise
-            if self.is_discrete:
-                x = disc_noise(x, keep=self.discrete_keep, temp=1e-3)
-            else:
-                x = cont_noise(x, self.continuous_noise_std)
-
             with tf.GradientTape(persistent=True) as tape:
 
                 # calculate the prediction error and accuracy of the model
@@ -118,8 +104,8 @@ class Ensemble(tf.Module):
                 rank_correlation = spearman(y[:, 0], d.mean()[:, 0])
 
                 # build the total loss and weight by the bootstrap
-                total_loss = tf.math.divide_no_nan(
-                    tf.reduce_sum(b[:, i] * nll), tf.reduce_sum(b[:, i]))
+                total_loss = tf.math.divide_no_nan(tf.reduce_sum(
+                    w[:, 0] * b[:, i] * nll), tf.reduce_sum(b[:, i]))
 
             grads = tape.gradient(total_loss, fm.trainable_variables)
             fm_optim.apply_gradients(zip(grads, fm.trainable_variables))
@@ -154,12 +140,6 @@ class Ensemble(tf.Module):
         for i in range(self.bootstraps):
             fm = self.forward_models[i]
 
-            # corrupt the inputs with noise
-            if self.is_discrete:
-                x = disc_noise(x, keep=self.discrete_keep, temp=1e-3)
-            else:
-                x = cont_noise(x, self.continuous_noise_std)
-
             # calculate the prediction error and accuracy of the model
             d = fm.get_distribution(x, training=False)
             nll = -d.log_prob(y)[:, 0]
@@ -189,8 +169,8 @@ class Ensemble(tf.Module):
         """
 
         statistics = defaultdict(list)
-        for x, y, b in dataset:
-            for name, tensor in self.train_step(x, y, b).items():
+        for x, y, b, w in dataset:
+            for name, tensor in self.train_step(x, y, b, w).items():
                 statistics[name].append(tensor)
         for name in statistics.keys():
             statistics[name] = tf.concat(statistics[name], axis=0)

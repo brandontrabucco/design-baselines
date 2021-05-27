@@ -176,7 +176,7 @@ class DiscreteDecoder(tf.keras.Sequential):
 
     distribution = tfpd.Categorical
 
-    def __init__(self, task, latent_size, hidden_size=50):
+    def __init__(self, task, latent_size, hidden_size=50, **kwargs):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 

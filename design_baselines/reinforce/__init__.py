@@ -42,7 +42,9 @@ def reinforce(config):
     # make several keras neural networks with two hidden layers
     forward_models = [ForwardModel(
         task,
+        embedding_size=config['embedding_size'],
         hidden_size=config['hidden_size'],
+        num_layers=config['num_layers'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'])
         for b in range(config['bootstraps'])]
@@ -73,7 +75,8 @@ def reinforce(config):
     initial_x = tf.gather(x, indices, axis=0)
 
     if task.is_discrete:
-        probs = tf.math.softmax(tf.pad(task.to_logits(initial_x), [[0, 0], [0, 0], [1, 0]]) / 1e-5)
+        logits = tf.pad(task.to_logits(initial_x), [[0, 0], [0, 0], [1, 0]])
+        probs = tf.math.softmax(logits / 1e-5)
         logits = tf.math.log(tf.reduce_mean(probs, axis=0))
         sampler = DiscreteMarginal(logits)
 
