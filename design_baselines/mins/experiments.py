@@ -30,7 +30,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-Exact-v0",
@@ -94,7 +94,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "AntMorphology-Exact-v0",
@@ -158,7 +158,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "HopperController-Exact-v0",
@@ -222,7 +222,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "Superconductor-FullyConnected-v0",
@@ -286,7 +286,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "ChEMBL-ResNet-v0",
@@ -352,7 +352,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "GFP-Transformer-v0",
@@ -418,7 +418,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "TFBind8-Exact-v0",
@@ -484,7 +484,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "UTR-Transformer-v0",

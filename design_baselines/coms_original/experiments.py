@@ -29,7 +29,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -79,7 +79,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
@@ -128,7 +128,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-v0",
@@ -178,7 +178,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "AntMorphology-v0",
@@ -231,7 +231,7 @@ def hopper_ablation(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -281,7 +281,7 @@ def superconductor_ablation(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
@@ -334,7 +334,7 @@ def hopper_heatmap(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -384,7 +384,7 @@ def superconductor_heatmap(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
@@ -437,7 +437,7 @@ def hopper_heatmap_v2(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "HopperController-v0",
@@ -487,7 +487,7 @@ def superconductor_heatmap_v2(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "Superconductor-v0",
@@ -540,7 +540,7 @@ def molecule(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "MoleculeActivity-v0",
@@ -591,7 +591,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "GFP-v0",
@@ -642,7 +642,7 @@ def tfbind8(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser(f'~/tmp_{randint(0, 1000000)}'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(coms_original, config={
         "logging_dir": "data",
         "task": "TfBind8-v0",

@@ -30,7 +30,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -80,7 +80,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -130,7 +130,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -180,7 +180,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -230,7 +230,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -265,12 +265,12 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='autofocused-cbas-gfp-gp')
+@click.option('--local-dir', type=str, default='autofocused-cbas-gfp')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def gfp_gp(local_dir, cpus, gpus, num_parallel, num_samples):
+def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     """Evaluate AutoFocusing on GFP-Transformer-v0
     """
 
@@ -280,207 +280,7 @@ def gfp_gp(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocused_cbas, config={
-        "logging_dir": "data",
-        "normalize_ys": True,
-        "normalize_xs": False,
-        "task": "GFP-GP-v0",
-        "task_kwargs": {},
-        "bootstraps": 5,
-        "val_size": 200,
-        "ensemble_batch_size": 100,
-        "vae_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
-        "ensemble_lr": 0.0003,
-        "ensemble_epochs": 100,
-        "latent_size": 32,
-        "vae_lr": 0.0003,
-        "vae_beta": 1.0,
-        "offline_epochs": 200,
-        "online_batches": 10,
-        "online_epochs": 10,
-        "autofocus_epochs": 10,
-        "iterations": 50,
-        "percentile": 80.0,
-        "solver_samples": 128},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
-                             'gpu': gpus / num_parallel - 0.01})
-
-
-@cli.command()
-@click.option('--local-dir', type=str, default='autofocused-cbas-gfp-rf')
-@click.option('--cpus', type=int, default=24)
-@click.option('--gpus', type=int, default=1)
-@click.option('--num-parallel', type=int, default=1)
-@click.option('--num-samples', type=int, default=1)
-def gfp_rf(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate AutoFocusing on GFP-Transformer-v0
-    """
-
-    # Final Version
-
-    from design_baselines.autofocused_cbas import autofocused_cbas
-    ray.init(num_cpus=cpus,
-             num_gpus=gpus,
-             include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocused_cbas, config={
-        "logging_dir": "data",
-        "normalize_ys": True,
-        "normalize_xs": False,
-        "task": "GFP-RandomForest-v0",
-        "task_kwargs": {},
-        "bootstraps": 5,
-        "val_size": 200,
-        "ensemble_batch_size": 100,
-        "vae_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
-        "ensemble_lr": 0.0003,
-        "ensemble_epochs": 100,
-        "latent_size": 32,
-        "vae_lr": 0.0003,
-        "vae_beta": 1.0,
-        "offline_epochs": 200,
-        "online_batches": 10,
-        "online_epochs": 10,
-        "autofocus_epochs": 10,
-        "iterations": 50,
-        "percentile": 80.0,
-        "solver_samples": 128},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
-                             'gpu': gpus / num_parallel - 0.01})
-
-
-@cli.command()
-@click.option('--local-dir', type=str, default='autofocused-cbas-gfp-fc')
-@click.option('--cpus', type=int, default=24)
-@click.option('--gpus', type=int, default=1)
-@click.option('--num-parallel', type=int, default=1)
-@click.option('--num-samples', type=int, default=1)
-def gfp_fc(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate AutoFocusing on GFP-Transformer-v0
-    """
-
-    # Final Version
-
-    from design_baselines.autofocused_cbas import autofocused_cbas
-    ray.init(num_cpus=cpus,
-             num_gpus=gpus,
-             include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocused_cbas, config={
-        "logging_dir": "data",
-        "normalize_ys": True,
-        "normalize_xs": False,
-        "task": "GFP-FullyConnected-v0",
-        "task_kwargs": {},
-        "bootstraps": 5,
-        "val_size": 200,
-        "ensemble_batch_size": 100,
-        "vae_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
-        "ensemble_lr": 0.0003,
-        "ensemble_epochs": 100,
-        "latent_size": 32,
-        "vae_lr": 0.0003,
-        "vae_beta": 1.0,
-        "offline_epochs": 200,
-        "online_batches": 10,
-        "online_epochs": 10,
-        "autofocus_epochs": 10,
-        "iterations": 50,
-        "percentile": 80.0,
-        "solver_samples": 128},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
-                             'gpu': gpus / num_parallel - 0.01})
-
-
-@cli.command()
-@click.option('--local-dir', type=str, default='autofocused-cbas-gfp-rn')
-@click.option('--cpus', type=int, default=24)
-@click.option('--gpus', type=int, default=1)
-@click.option('--num-parallel', type=int, default=1)
-@click.option('--num-samples', type=int, default=1)
-def gfp_rn(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate AutoFocusing on GFP-Transformer-v0
-    """
-
-    # Final Version
-
-    from design_baselines.autofocused_cbas import autofocused_cbas
-    ray.init(num_cpus=cpus,
-             num_gpus=gpus,
-             include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(autofocused_cbas, config={
-        "logging_dir": "data",
-        "normalize_ys": True,
-        "normalize_xs": False,
-        "task": "GFP-ResNet-v0",
-        "task_kwargs": {},
-        "bootstraps": 5,
-        "val_size": 200,
-        "ensemble_batch_size": 100,
-        "vae_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
-        "ensemble_lr": 0.0003,
-        "ensemble_epochs": 100,
-        "latent_size": 32,
-        "vae_lr": 0.0003,
-        "vae_beta": 1.0,
-        "offline_epochs": 200,
-        "online_batches": 10,
-        "online_epochs": 10,
-        "autofocus_epochs": 10,
-        "iterations": 50,
-        "percentile": 80.0,
-        "solver_samples": 128},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
-                             'gpu': gpus / num_parallel - 0.01})
-
-
-@cli.command()
-@click.option('--local-dir', type=str, default='autofocused-cbas-gfp-tr')
-@click.option('--cpus', type=int, default=24)
-@click.option('--gpus', type=int, default=1)
-@click.option('--num-parallel', type=int, default=1)
-@click.option('--num-samples', type=int, default=1)
-def gfp_tr(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate AutoFocusing on GFP-Transformer-v0
-    """
-
-    # Final Version
-
-    from design_baselines.autofocused_cbas import autofocused_cbas
-    ray.init(num_cpus=cpus,
-             num_gpus=gpus,
-             include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -530,7 +330,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -580,7 +380,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(autofocused_cbas, config={
         "logging_dir": "data",
         "normalize_ys": True,

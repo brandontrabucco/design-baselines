@@ -30,7 +30,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-Exact-v0",
@@ -72,7 +72,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "AntMorphology-Exact-v0",
@@ -114,7 +114,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "HopperController-Exact-v0",
@@ -156,7 +156,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "Superconductor-FullyConnected-v0",
@@ -198,7 +198,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "ChEMBL-ResNet-v0",
@@ -240,7 +240,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "GFP-Transformer-v0",
@@ -282,7 +282,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "TFBind8-Exact-v0",
@@ -324,7 +324,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "UTR-Transformer-v0",
@@ -369,7 +369,7 @@ def dkitty_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-Exact-v0",
@@ -411,7 +411,7 @@ def ant_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "AntMorphology-Exact-v0",
@@ -453,7 +453,7 @@ def hopper_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "HopperController-Exact-v0",
@@ -495,7 +495,7 @@ def superconductor_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_sample
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "Superconductor-FullyConnected-v0",
@@ -537,7 +537,7 @@ def chembl_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "ChEMBL-ResNet-v0",
@@ -579,7 +579,7 @@ def gfp_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "GFP-Transformer-v0",
@@ -621,7 +621,7 @@ def tf_bind_8_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "TFBind8-Exact-v0",
@@ -663,7 +663,7 @@ def utr_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "UTR-Transformer-v0",
@@ -708,7 +708,7 @@ def dkitty_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-Exact-v0",
@@ -750,7 +750,7 @@ def ant_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "AntMorphology-Exact-v0",
@@ -792,7 +792,7 @@ def hopper_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "HopperController-Exact-v0",
@@ -834,7 +834,7 @@ def superconductor_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "Superconductor-FullyConnected-v0",
@@ -876,7 +876,7 @@ def chembl_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "ChEMBL-ResNet-v0",
@@ -918,7 +918,7 @@ def gfp_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "GFP-Transformer-v0",
@@ -960,7 +960,7 @@ def tf_bind_8_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "TFBind8-Exact-v0",
@@ -1002,7 +1002,7 @@ def utr_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "UTR-Transformer-v0",

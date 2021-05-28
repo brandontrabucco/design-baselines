@@ -30,7 +30,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(cma_es, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -71,7 +71,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(cma_es, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -112,7 +112,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(cma_es, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -153,7 +153,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(cma_es, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -194,7 +194,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(cma_es, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -235,7 +235,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(cma_es, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -276,7 +276,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(cma_es, config={
         "logging_dir": "data",
         "normalize_ys": True,
@@ -317,7 +317,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             temp_dir=os.path.expanduser('~/tmp'))
+             _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(cma_es, config={
         "logging_dir": "data",
         "normalize_ys": True,
