@@ -176,7 +176,8 @@ class DiscreteDecoder(tf.keras.Sequential):
 
     distribution = tfpd.Categorical
 
-    def __init__(self, task, latent_size, hidden_size=50):
+    def __init__(self, task, latent_size, hidden_size=50,
+                 num_layers=1, **kwargs):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
@@ -190,11 +191,17 @@ class DiscreteDecoder(tf.keras.Sequential):
             the global hidden size of the neural network
         """
 
-        super(DiscreteDecoder, self).__init__([
-            tfkl.Dense(hidden_size, input_shape=(latent_size,)),
-            tfkl.LeakyReLU(),
-            tfkl.Dense(np.prod(task.input_shape) * task.num_classes),
-            tfkl.Reshape(list(task.input_shape) + [task.num_classes])])
+        layers = []
+        for i in range(num_layers):
+            kwargs = dict()
+            if i == 0:
+                kwargs["input_shape"] = (latent_size,)
+            layers.extend([tfkl.Dense(hidden_size, **kwargs),
+                           tfkl.LeakyReLU()])
+
+        layers.append(tfkl.Dense(np.prod(task.input_shape) * task.num_classes))
+        layers.append(tfkl.Reshape(list(task.input_shape) + [task.num_classes]))
+        super(DiscreteDecoder, self).__init__(layers)
 
     def get_params(self, inputs, **kwargs):
         """Return a dictionary of parameters for a particular distribution
@@ -239,8 +246,8 @@ class ContinuousDecoder(tf.keras.Sequential):
 
     distribution = tfpd.MultivariateNormalDiag
 
-    def __init__(self, task, latent_size, hidden=50,
-                 initial_max_std=1.5, initial_min_std=0.5):
+    def __init__(self, task, latent_size, hidden_size=50,
+                 num_layers=1, initial_max_std=1.5, initial_min_std=0.5):
         """Create a fully connected architecture using keras that can process
         several parallel streams of weights and biases
 
@@ -263,11 +270,17 @@ class ContinuousDecoder(tf.keras.Sequential):
         self.min_logstd = tf.Variable(tf.fill([1, 1], np.log(
             initial_min_std).astype(np.float32)), trainable=True)
 
-        super(ContinuousDecoder, self).__init__([
-            tfkl.Dense(hidden, input_shape=(latent_size,)),
-            tfkl.LeakyReLU(),
-            tfkl.Dense(np.prod(task.input_shape) * 2),
-            tfkl.Reshape(list(task.input_shape) + [2])])
+        layers = []
+        for i in range(num_layers):
+            kwargs = dict()
+            if i == 0:
+                kwargs["input_shape"] = (latent_size,)
+            layers.extend([tfkl.Dense(hidden_size, **kwargs),
+                           tfkl.LeakyReLU()])
+
+        layers.append(tfkl.Dense(np.prod(task.input_shape) * 2))
+        layers.append(tfkl.Reshape(list(task.input_shape) + [2]))
+        super(ContinuousDecoder, self).__init__(layers)
 
     def get_params(self, inputs, **kwargs):
         """Return a dictionary of parameters for a particular distribution
