@@ -45,7 +45,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -87,7 +87,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -129,7 +129,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -147,7 +147,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Naive Gradient Ascent on Superconductor-FullyConnected-v0
+    """Evaluate Naive Gradient Ascent on Superconductor-RandomForest-v0
     """
 
     # Final Version
@@ -159,19 +159,19 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
              _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
-        "task": "Superconductor-FullyConnected-v0",
+        "task": "Superconductor-RandomForest-v0",
         "task_kwargs": {},
         "normalize_ys": True,
         "normalize_xs": True,
         "model_noise_std": 0.0,
         "val_size": 200,
         "batch_size": 128,
-        "epochs": 100,
+        "epochs": 50,
         "activations": [['leaky_relu', 'leaky_relu']],
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -213,7 +213,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -255,7 +255,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -297,7 +297,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -339,7 +339,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -384,7 +384,7 @@ def dkitty_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -426,7 +426,7 @@ def ant_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -468,7 +468,7 @@ def hopper_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -486,7 +486,7 @@ def hopper_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def superconductor_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Naive Gradient Ascent on Superconductor-FullyConnected-v0
+    """Evaluate Naive Gradient Ascent on Superconductor-RandomForest-v0
     """
 
     # Final Version
@@ -498,7 +498,7 @@ def superconductor_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_sample
              _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
-        "task": "Superconductor-FullyConnected-v0",
+        "task": "Superconductor-RandomForest-v0",
         "task_kwargs": {},
         "normalize_ys": True,
         "normalize_xs": True,
@@ -510,7 +510,7 @@ def superconductor_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_sample
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -552,7 +552,7 @@ def chembl_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -594,7 +594,7 @@ def gfp_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -636,7 +636,7 @@ def tf_bind_8_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -678,7 +678,7 @@ def utr_mean_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'mean',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -723,7 +723,7 @@ def dkitty_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'min',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -765,7 +765,7 @@ def ant_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'min',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -807,7 +807,7 @@ def hopper_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'min',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -825,7 +825,7 @@ def hopper_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def superconductor_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Naive Gradient Ascent on Superconductor-FullyConnected-v0
+    """Evaluate Naive Gradient Ascent on Superconductor-RandomForest-v0
     """
 
     # Final Version
@@ -837,7 +837,7 @@ def superconductor_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples
              _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
-        "task": "Superconductor-FullyConnected-v0",
+        "task": "Superconductor-RandomForest-v0",
         "task_kwargs": {},
         "normalize_ys": True,
         "normalize_xs": True,
@@ -849,7 +849,7 @@ def superconductor_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'min',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -891,7 +891,7 @@ def chembl_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'min',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -933,7 +933,7 @@ def gfp_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'min',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -975,7 +975,7 @@ def tf_bind_8_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'min',
         "solver_samples": 128,
         "solver_lr": 0.01,
@@ -1017,7 +1017,7 @@ def utr_min_ensemble(local_dir, cpus, gpus, num_parallel, num_samples):
         "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "forward_model_lr": 0.001,
+        "forward_model_lr": 0.0003,
         "aggregation_method": 'min',
         "solver_samples": 128,
         "solver_lr": 0.01,
