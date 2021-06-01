@@ -15,49 +15,41 @@ def cli():
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='bo-qei-dkitty')
+@click.option('--local-dir', type=str, default='gradient-ascent-dkitty')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on DKittyMorphology-Exact-v0
+    """Evaluate Naive Gradient Ascent on DKittyMorphology-Exact-v0
     """
 
     # Final Version
 
-    from design_baselines.bo_qei import bo_qei
+    from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              _temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(bo_qei, config={
+    tune.run(gradient_ascent, config={
         "logging_dir": "data",
+        "task": "DKittyMorphology-Exact-v0",
+        "task_kwargs": {"relabel": True},
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "DKittyMorphology-Exact-v0",
-        "task_kwargs": {"relabel": False},
-        "bootstraps": 5,
+        "model_noise_std": 0.0,
         "val_size": 200,
-        "optimize_ground_truth": False,
-        "ensemble_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
+        "batch_size": 128,
+        "epochs": 100,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "ensemble_lr": 0.001,
-        "ensemble_epochs": 100,
-        "bo_noise_se": 0.1,
-        "bo_gp_samples": 500,
-        "bo_batch_size": 32,
-        "bo_num_restarts": 10,
-        "bo_raw_samples": 128,
-        "bo_batch_limit": 5,
-        "bo_maxiter": 200,
-        "bo_iterations": 20,
-        "bo_mc_samples": 128,
-        "solver_samples": 128},
+        "forward_model_lr": 0.0003,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": 0.01,
+        "solver_steps": 500},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -65,49 +57,41 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='bo-qei-ant')
+@click.option('--local-dir', type=str, default='gradient-ascent-ant')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def ant(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on AntMorphology-Exact-v0
+    """Evaluate Naive Gradient Ascent on AntMorphology-Exact-v0
     """
 
     # Final Version
 
-    from design_baselines.bo_qei import bo_qei
+    from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              _temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(bo_qei, config={
+    tune.run(gradient_ascent, config={
         "logging_dir": "data",
+        "task": "AntMorphology-Exact-v0",
+        "task_kwargs": {"relabel": True},
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "AntMorphology-Exact-v0",
-        "task_kwargs": {"relabel": False},
-        "bootstraps": 5,
+        "model_noise_std": 0.0,
         "val_size": 200,
-        "optimize_ground_truth": False,
-        "ensemble_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
+        "batch_size": 128,
+        "epochs": 100,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "ensemble_lr": 0.001,
-        "ensemble_epochs": 100,
-        "bo_noise_se": 0.1,
-        "bo_gp_samples": 500,
-        "bo_batch_size": 32,
-        "bo_num_restarts": 10,
-        "bo_raw_samples": 128,
-        "bo_batch_limit": 5,
-        "bo_maxiter": 200,
-        "bo_iterations": 20,
-        "bo_mc_samples": 128,
-        "solver_samples": 128},
+        "forward_model_lr": 0.0003,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": 0.01,
+        "solver_steps": 500},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -115,49 +99,41 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='bo-qei-hopper')
+@click.option('--local-dir', type=str, default='gradient-ascent-hopper')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on HopperController-Exact-v0
+    """Evaluate Naive Gradient Ascent on HopperController-Exact-v0
     """
 
     # Final Version
 
-    from design_baselines.bo_qei import bo_qei
+    from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              _temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(bo_qei, config={
+    tune.run(gradient_ascent, config={
         "logging_dir": "data",
+        "task": "HopperController-Exact-v0",
+        "task_kwargs": {"relabel": True},
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "HopperController-Exact-v0",
-        "task_kwargs": {"relabel": False},
-        "bootstraps": 5,
+        "model_noise_std": 0.0,
         "val_size": 200,
-        "optimize_ground_truth": False,
-        "ensemble_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
+        "batch_size": 128,
+        "epochs": 100,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "ensemble_lr": 0.001,
-        "ensemble_epochs": 100,
-        "bo_noise_se": 0.1,
-        "bo_gp_samples": 500,
-        "bo_batch_size": 32,
-        "bo_num_restarts": 10,
-        "bo_raw_samples": 128,
-        "bo_batch_limit": 5,
-        "bo_maxiter": 200,
-        "bo_iterations": 20,
-        "bo_mc_samples": 128,
-        "solver_samples": 128},
+        "forward_model_lr": 0.0003,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": 0.01,
+        "solver_steps": 500},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -165,49 +141,41 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='bo-qei-superconductor')
+@click.option('--local-dir', type=str, default='gradient-ascent-superconductor')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on Superconductor-RandomForest-v0
+    """Evaluate Naive Gradient Ascent on Superconductor-RandomForest-v0
     """
 
     # Final Version
 
-    from design_baselines.bo_qei import bo_qei
+    from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              _temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(bo_qei, config={
+    tune.run(gradient_ascent, config={
         "logging_dir": "data",
+        "task": "Superconductor-RandomForest-v0",
+        "task_kwargs": {"relabel": True},
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "Superconductor-RandomForest-v0",
-        "task_kwargs": {"relabel": False},
-        "bootstraps": 5,
+        "model_noise_std": 0.0,
         "val_size": 200,
-        "optimize_ground_truth": False,
-        "ensemble_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
+        "batch_size": 128,
+        "epochs": 50,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "ensemble_lr": 0.001,
-        "ensemble_epochs": 100,
-        "bo_noise_se": 0.1,
-        "bo_gp_samples": 500,
-        "bo_batch_size": 32,
-        "bo_num_restarts": 10,
-        "bo_raw_samples": 128,
-        "bo_batch_limit": 5,
-        "bo_maxiter": 200,
-        "bo_iterations": 20,
-        "bo_mc_samples": 128,
-        "solver_samples": 128},
+        "forward_model_lr": 0.0003,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": 0.01,
+        "solver_steps": 500},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -215,34 +183,33 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='bo-qei-chembl')
+@click.option('--local-dir', type=str, default='gradient-ascent-chembl')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on ChEMBL-ResNet-v0
+    """Evaluate Naive Gradient Ascent on ChEMBL-ResNet-v0
     """
 
     # Final Version
 
-    from design_baselines.bo_qei import bo_qei
+    from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              _temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(bo_qei, config={
+    tune.run(gradient_ascent, config={
         "logging_dir": "data",
+        "task": "ChEMBL-ResNet-v0",
+        "task_kwargs": {"relabel": True},
         "normalize_ys": True,
         "normalize_xs": False,
-        "task": "ChEMBL-ResNet-v0",
-        "task_kwargs": {"relabel": False},
-        "bootstraps": 5,
+        "model_noise_std": 0.0,
         "val_size": 200,
-        "optimize_ground_truth": False,
         "use_vae": True,
         "vae_beta": 0.01,
-        "vae_epochs": 20,
+        "vae_epochs": 50,
         "vae_batch_size": 128,
         "vae_hidden_size": 64,
         "vae_latent_size": 256,
@@ -250,24 +217,17 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
         "vae_kernel_size": 3,
         "vae_num_blocks": 5,
         "vae_lr": 0.0003,
-        "ensemble_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
+        "batch_size": 128,
+        "epochs": 100,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "ensemble_lr": 0.001,
-        "ensemble_epochs": 100,
-        "bo_noise_se": 0.1,
-        "bo_gp_samples": 500,
-        "bo_batch_size": 32,
-        "bo_num_restarts": 10,
-        "bo_raw_samples": 128,
-        "bo_batch_limit": 5,
-        "bo_maxiter": 200,
-        "bo_iterations": 20,
-        "bo_mc_samples": 128,
-        "solver_samples": 128},
+        "forward_model_lr": 0.0003,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": 0.01,
+        "solver_steps": 500},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
@@ -275,31 +235,134 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
 
 
 @cli.command()
-@click.option('--local-dir', type=str, default='bo-qei-gfp')
+@click.option('--local-dir', type=str, default='gradient-ascent-gfp')
 @click.option('--cpus', type=int, default=24)
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on GFP-Transformer-v0
+    """Evaluate Naive Gradient Ascent on GFP-Transformer-v0
     """
 
     # Final Version
 
-    from design_baselines.bo_qei import bo_qei
+    from design_baselines.gradient_ascent import gradient_ascent
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
              _temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(bo_qei, config={
+    tune.run(gradient_ascent, config={
         "logging_dir": "data",
+        "task": "GFP-Transformer-v0",
+        "task_kwargs": {"relabel": True},
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "GFP-Transformer-v0",
-        "task_kwargs": {"relabel": False},
-        "bootstraps": 5,
+        "model_noise_std": 0.0,
         "val_size": 200,
-        "optimize_ground_truth": False,
+        "use_vae": False,
+        "vae_beta": 0.005,
+        "vae_epochs": 50,
+        "vae_batch_size": 128,
+        "vae_hidden_size": 64,
+        "vae_latent_size": 256,
+        "vae_activation": "relu",
+        "vae_kernel_size": 3,
+        "vae_num_blocks": 5,
+        "vae_lr": 0.0003,
+        "batch_size": 128,
+        "epochs": 100,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "forward_model_lr": 0.0003,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": 0.01,
+        "solver_steps": 500},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='gradient-ascent-tf-bind-8')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate Naive Gradient Ascent on TFBind8-Exact-v0
+    """
+
+    # Final Version
+
+    from design_baselines.gradient_ascent import gradient_ascent
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             include_dashboard=False,
+             _temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(gradient_ascent, config={
+        "logging_dir": "data",
+        "task": "TFBind8-Exact-v0",
+        "task_kwargs": {"relabel": True},
+        "normalize_ys": True,
+        "normalize_xs": True,
+        "model_noise_std": 0.0,
+        "val_size": 200,
+        "use_vae": False,
+        "vae_beta": 0.01,
+        "vae_epochs": 50,
+        "vae_batch_size": 128,
+        "vae_hidden_size": 64,
+        "vae_latent_size": 256,
+        "vae_activation": "relu",
+        "vae_kernel_size": 3,
+        "vae_num_blocks": 3,
+        "vae_lr": 0.0003,
+        "batch_size": 128,
+        "epochs": 100,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "forward_model_lr": 0.0003,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": 0.01,
+        "solver_steps": 500},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='gradient-ascent-utr')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def utr(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate Naive Gradient Ascent on UTR-Transformer-v0
+    """
+
+    # Final Version
+
+    from design_baselines.gradient_ascent import gradient_ascent
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             include_dashboard=False,
+             _temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(gradient_ascent, config={
+        "logging_dir": "data",
+        "task": "UTR-Transformer-v0",
+        "task_kwargs": {"relabel": True},
+        "normalize_ys": True,
+        "normalize_xs": True,
+        "model_noise_std": 0.0,
+        "val_size": 200,
         "use_vae": False,
         "vae_beta": 0.01,
         "vae_epochs": 50,
@@ -310,144 +373,17 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "vae_kernel_size": 3,
         "vae_num_blocks": 5,
         "vae_lr": 0.0003,
-        "ensemble_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
+        "batch_size": 128,
+        "epochs": 100,
+        "activations": [['leaky_relu', 'leaky_relu']],
+        "hidden_size": 2048,
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
-        "ensemble_lr": 0.001,
-        "ensemble_epochs": 100,
-        "bo_noise_se": 0.1,
-        "bo_gp_samples": 500,
-        "bo_batch_size": 32,
-        "bo_num_restarts": 10,
-        "bo_raw_samples": 128,
-        "bo_batch_limit": 5,
-        "bo_maxiter": 200,
-        "bo_iterations": 20,
-        "bo_mc_samples": 128,
-        "solver_samples": 128},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
-                             'gpu': gpus / num_parallel - 0.01})
-
-
-@cli.command()
-@click.option('--local-dir', type=str, default='bo-qei-tf-bind-8')
-@click.option('--cpus', type=int, default=24)
-@click.option('--gpus', type=int, default=1)
-@click.option('--num-parallel', type=int, default=1)
-@click.option('--num-samples', type=int, default=1)
-def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on TFBind8-Exact-v0
-    """
-
-    # Final Version
-
-    from design_baselines.bo_qei import bo_qei
-    ray.init(num_cpus=cpus,
-             num_gpus=gpus,
-             include_dashboard=False,
-             _temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(bo_qei, config={
-        "logging_dir": "data",
-        "normalize_ys": True,
-        "normalize_xs": True,
-        "task": "TFBind8-Exact-v0",
-        "task_kwargs": {"relabel": False},
-        "bootstraps": 5,
-        "val_size": 200,
-        "optimize_ground_truth": False,
-        "use_vae": False,
-        "vae_beta": 0.01,
-        "vae_epochs": 20,
-        "vae_batch_size": 128,
-        "vae_hidden_size": 64,
-        "vae_latent_size": 256,
-        "vae_activation": "relu",
-        "vae_kernel_size": 3,
-        "vae_num_blocks": 3,
-        "vae_lr": 0.001,
-        "ensemble_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
-        "ensemble_lr": 0.001,
-        "ensemble_epochs": 100,
-        "bo_noise_se": 0.1,
-        "bo_gp_samples": 500,
-        "bo_batch_size": 32,
-        "bo_num_restarts": 10,
-        "bo_raw_samples": 128,
-        "bo_batch_limit": 5,
-        "bo_maxiter": 200,
-        "bo_iterations": 20,
-        "bo_mc_samples": 128,
-        "solver_samples": 128},
-        num_samples=num_samples,
-        local_dir=local_dir,
-        resources_per_trial={'cpu': cpus // num_parallel,
-                             'gpu': gpus / num_parallel - 0.01})
-
-
-@cli.command()
-@click.option('--local-dir', type=str, default='bo-qei-utr')
-@click.option('--cpus', type=int, default=24)
-@click.option('--gpus', type=int, default=1)
-@click.option('--num-parallel', type=int, default=1)
-@click.option('--num-samples', type=int, default=1)
-def utr(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate BO-QEI on UTR-Transformer-v0
-    """
-
-    # Final Version
-
-    from design_baselines.bo_qei import bo_qei
-    ray.init(num_cpus=cpus,
-             num_gpus=gpus,
-             include_dashboard=False,
-             _temp_dir=os.path.expanduser('~/tmp'))
-    tune.run(bo_qei, config={
-        "logging_dir": "data",
-        "normalize_ys": True,
-        "normalize_xs": True,
-        "task": "UTR-Transformer-v0",
-        "task_kwargs": {"relabel": False},
-        "bootstraps": 5,
-        "val_size": 200,
-        "optimize_ground_truth": False,
-        "use_vae": False,
-        "vae_beta": 0.01,
-        "vae_epochs": 20,
-        "vae_batch_size": 128,
-        "vae_hidden_size": 64,
-        "vae_latent_size": 256,
-        "vae_activation": "relu",
-        "vae_kernel_size": 3,
-        "vae_num_blocks": 4,
-        "vae_lr": 0.001,
-        "ensemble_batch_size": 100,
-        "embedding_size": 256,
-        "hidden_size": 256,
-        "num_layers": 1,
-        "initial_max_std": 0.2,
-        "initial_min_std": 0.1,
-        "ensemble_lr": 0.001,
-        "ensemble_epochs": 100,
-        "bo_noise_se": 0.1,
-        "bo_gp_samples": 500,
-        "bo_batch_size": 32,
-        "bo_num_restarts": 10,
-        "bo_raw_samples": 128,
-        "bo_batch_limit": 5,
-        "bo_maxiter": 200,
-        "bo_iterations": 20,
-        "bo_mc_samples": 128,
-        "solver_samples": 128},
+        "forward_model_lr": 0.0003,
+        "aggregation_method": 'mean',
+        "solver_samples": 128,
+        "solver_lr": 0.01,
+        "solver_steps": 500},
         num_samples=num_samples,
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,

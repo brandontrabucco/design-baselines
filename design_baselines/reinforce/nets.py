@@ -89,7 +89,7 @@ class ForwardModel(tf.keras.Sequential):
 
 class ContinuousMarginal(tf.Module):
 
-    distribution = tfpd.Normal
+    distribution = tfpd.MultivariateNormalDiag
 
     def __init__(self,
                  initial_mean,
@@ -103,7 +103,7 @@ class ContinuousMarginal(tf.Module):
         """
 
         self.mean = tf.Variable(initial_mean, trainable=True)
-        self.logstd = tf.Variable(initial_logstd, trainable=True)
+        self.logstd = initial_logstd
         super(ContinuousMarginal, self).__init__()
 
     def get_params(self):
@@ -117,7 +117,7 @@ class ContinuousMarginal(tf.Module):
         """
 
         return {"loc": self.mean,
-                "scale": tf.math.softplus(self.logstd)}
+                "scale_diag": tf.math.exp(self.logstd)}
 
     def get_distribution(self):
         """Return a distribution over the outputs of this model, for example

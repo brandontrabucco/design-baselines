@@ -82,8 +82,7 @@ def reinforce(config):
 
     else:
         mean = tf.reduce_mean(initial_x, axis=0)
-        std = tf.maximum(tf.math.reduce_std(initial_x, axis=0), 0.1)
-        logstd = tf.math.log(std)
+        logstd = tf.math.log(tf.ones_like(mean) * config['exploration_std'])
         sampler = ContinuousMarginal(mean, logstd)
 
     for iteration in range(config['iterations']):
@@ -98,8 +97,9 @@ def reinforce(config):
 
             mean_y = tf.reduce_mean(ty)
             standard_dev_y = tf.math.reduce_std(ty - mean_y)
-            loss = -tf.reduce_mean(td.log_prob(
-                tx) * tf.stop_gradient((ty - mean_y) / standard_dev_y))
+            log_probs = td.log_prob(tf.stop_gradient(tx))
+            loss = tf.reduce_mean(-log_probs[:, tf.newaxis] *
+                                  tf.stop_gradient((ty - mean_y) / standard_dev_y))
 
         logger.record("reinforce/prediction",
                       ty, iteration, percentile=True)

@@ -34,7 +34,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "DKittyMorphology-Exact-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": True},
         "val_size": 200,
         "offline": True,
         "normalize_ys": True,
@@ -98,7 +98,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "AntMorphology-Exact-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": True},
         "val_size": 200,
         "offline": True,
         "normalize_ys": True,
@@ -162,7 +162,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "HopperController-Exact-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": True},
         "val_size": 200,
         "offline": True,
         "normalize_ys": True,
@@ -226,7 +226,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "Superconductor-RandomForest-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": True},
         "val_size": 200,
         "offline": True,
         "normalize_ys": True,
@@ -290,7 +290,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "ChEMBL-ResNet-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": True},
         "val_size": 200,
         "offline": True,
         "normalize_ys": True,
@@ -356,7 +356,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "GFP-Transformer-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": True},
         "val_size": 200,
         "offline": True,
         "normalize_ys": True,
@@ -422,7 +422,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "TFBind8-Exact-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": True},
         "val_size": 200,
         "offline": True,
         "normalize_ys": True,
@@ -488,7 +488,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "UTR-Transformer-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": True},
         "val_size": 200,
         "offline": True,
         "normalize_ys": True,

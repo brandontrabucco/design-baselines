@@ -1,7 +1,7 @@
 from design_baselines.data import StaticGraphTask, build_pipeline
 from design_baselines.logger import Logger
-from design_baselines.bo_qei.trainers import Ensemble
-from design_baselines.bo_qei.nets import ForwardModel
+from design_baselines.bo_qei.trainers import Ensemble, VAETrainer
+from design_baselines.bo_qei.nets import ForwardModel, SequentialVAE
 from design_baselines.utils import render_video
 import tensorflow as tf
 import numpy as np
@@ -18,18 +18,54 @@ def bo_qei(config):
         a dictionary of hyper parameters such as the learning rate
     """
 
+    # create the training task and logger
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    if task.is_discrete:
-        task.map_to_logits()
 
     if config['normalize_ys']:
         task.map_normalize_y()
+    if task.is_discrete and not config["use_vae"]:
+        task.map_to_logits()
     if config['normalize_xs']:
         task.map_normalize_x()
 
     x = task.x
     y = task.y
+
+    if task.is_discrete and config["use_vae"]:
+
+        vae_model = SequentialVAE(
+            task,
+            hidden_size=config['vae_hidden_size'],
+            latent_size=config['vae_latent_size'],
+            activation=config['vae_activation'],
+            kernel_size=config['vae_kernel_size'],
+            num_blocks=config['vae_num_blocks'])
+
+        vae_trainer = VAETrainer(vae_model,
+                                 vae_optim=tf.keras.optimizers.Adam,
+                                 vae_lr=config['vae_lr'],
+                                 beta=config['vae_beta'])
+
+        # create the training task and logger
+        train_data, val_data = build_pipeline(
+            x=x, y=y,
+            batch_size=config['vae_batch_size'],
+            val_size=config['val_size'])
+
+        # estimate the number of training steps per epoch
+        vae_trainer.launch(train_data, val_data,
+                           logger, config['vae_epochs'])
+
+        # map the x values to latent space
+        x = vae_model.encoder_cnn.predict(x)[0]
+
+        mean = np.mean(x, axis=0, keepdims=True)
+        standard_dev = np.std(x - mean, axis=0, keepdims=True)
+        x = (x - mean) / standard_dev
+
+    input_shape = x.shape[1:]
+    input_size = np.prod(input_shape)
 
     # create the training task and logger
     train_data, val_data = build_pipeline(
@@ -39,7 +75,7 @@ def bo_qei(config):
 
     # make several keras neural networks with two hidden layers
     forward_models = [ForwardModel(
-        task,
+        input_shape,
         hidden_size=config['hidden_size'],
         num_layers=config['num_layers'],
         initial_max_std=config['initial_max_std'],
@@ -97,8 +133,19 @@ def bo_qei(config):
             input_x = input_x.detach().numpy()
         batch_shape = input_x.shape[:-1]
         # pass the input into a TF model
-        input_x = tf.reshape(input_x, [-1, *task.input_shape])
-        ys = ensemble.get_distribution(input_x).mean().numpy()
+        input_x = tf.reshape(input_x, [-1, *input_shape])
+
+        # optimize teh ground truth or the learned model
+        if config["optimize_ground_truth"]:
+            if task.is_discrete and config["use_vae"]:
+                input_x = tf.argmax(vae_model.decoder_cnn.predict(
+                    input_x * standard_dev + mean), axis=2, output_type=tf.int32)
+            value = task.predict(input_x)
+        else:
+            value = ensemble.get_distribution(input_x).mean()
+
+        ys = value.numpy()
+
         ys.reshape(list(batch_shape) + [1])
         # convert the scores back to pytorch tensors
         return torch.tensor(ys).type_as(
@@ -127,8 +174,8 @@ def bo_qei(config):
 
     BATCH_SIZE = config['bo_batch_size']
     bounds = torch.tensor(
-        [np.min(x, axis=0).reshape([task.input_size]).tolist(),
-         np.max(x, axis=0).reshape([task.input_size]).tolist()],
+        [np.min(x, axis=0).reshape([input_size]).tolist(),
+         np.max(x, axis=0).reshape([input_size]).tolist()],
         device=device, dtype=dtype)
 
     def optimize_acqf_and_get_observation(acq_func):
@@ -155,7 +202,7 @@ def bo_qei(config):
     best_observed_ei = []
 
     # call helper functions to generate initial training data and initialize model
-    train_x_ei = initial_x.numpy().reshape([initial_x.shape[0], task.input_size])
+    train_x_ei = initial_x.numpy().reshape([initial_x.shape[0], input_size])
     train_x_ei = torch.tensor(train_x_ei).to(device, dtype=dtype)
 
     train_obj_ei = initial_y.numpy().reshape([initial_y.shape[0], 1])
@@ -213,7 +260,12 @@ def bo_qei(config):
         # select the top 1 initial designs from the dataset
         indices = tf.math.top_k(y_sol[:, 0], k=config['solver_samples'])[1]
         solution = tf.gather(x_sol, indices, axis=0)
-        solution = tf.reshape(solution, [-1, *task.input_shape])
+        solution = tf.reshape(solution, [-1, *input_shape])
+
+        if task.is_discrete and config["use_vae"]:
+            solution = solution * standard_dev + mean
+            logits = vae_model.decoder_cnn.predict(solution)
+            solution = tf.argmax(logits, axis=2, output_type=tf.int32)
 
         # evaluate the found solution and record a video
         score = task.predict(solution)

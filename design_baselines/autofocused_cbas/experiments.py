@@ -36,7 +36,7 @@ def dkitty(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": True,
         "task": "DKittyMorphology-Exact-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"relabel": False},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -86,7 +86,7 @@ def ant(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": True,
         "task": "AntMorphology-Exact-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"relabel": False},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -136,7 +136,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": True,
         "task": "HopperController-Exact-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"relabel": False},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -171,7 +171,7 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate AutoFocusing on Superconductor-FullyConnected-v0
+    """Evaluate AutoFocusing on Superconductor-RandomForest-v0
     """
 
     # Final Version
@@ -185,8 +185,8 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "Superconductor-FullyConnected-v0",
-        "task_kwargs": {},
+        "task": "Superconductor-RandomForest-v0",
+        "task_kwargs": {"relabel": False},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -236,7 +236,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": False,
         "task": "ChEMBL-ResNet-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"relabel": False},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -286,7 +286,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": False,
         "task": "GFP-Transformer-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"relabel": False},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -336,7 +336,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": False,
         "task": "TFBind8-Exact-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"relabel": False},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,
@@ -386,7 +386,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": False,
         "task": "UTR-Transformer-v0",
-        "task_kwargs": {},
+        "task_kwargs": {"relabel": False},
         "bootstraps": 5,
         "val_size": 200,
         "ensemble_batch_size": 100,

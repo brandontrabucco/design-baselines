@@ -2,8 +2,8 @@ from design_baselines.data import StaticGraphTask, build_pipeline
 from design_baselines.logger import Logger
 from design_baselines.utils import spearman
 from design_baselines.gradient_ascent.trainers import MaximumLikelihood
-from design_baselines.gradient_ascent.trainers import Ensemble
-from design_baselines.gradient_ascent.nets import ForwardModel
+from design_baselines.gradient_ascent.trainers import Ensemble, VAETrainer
+from design_baselines.gradient_ascent.nets import ForwardModel, SequentialVAE
 import tensorflow_probability as tfp
 import tensorflow as tf
 import numpy as np
@@ -23,26 +23,60 @@ def gradient_ascent(config):
     # create the training task and logger
     logger = Logger(config['logging_dir'])
     task = StaticGraphTask(config['task'], **config['task_kwargs'])
-    if task.is_discrete:
+
+    if config['normalize_ys']:
+        task.map_normalize_y()
+    if task.is_discrete and not config["use_vae"]:
         task.map_to_logits()
+    if config['normalize_xs']:
+        task.map_normalize_x()
+
+    x = task.x
+    y = task.y
+
+    if task.is_discrete and config["use_vae"]:
+
+        vae_model = SequentialVAE(
+            task,
+            hidden_size=config['vae_hidden_size'],
+            latent_size=config['vae_latent_size'],
+            activation=config['vae_activation'],
+            kernel_size=config['vae_kernel_size'],
+            num_blocks=config['vae_num_blocks'])
+
+        vae_trainer = VAETrainer(vae_model,
+                                 vae_optim=tf.keras.optimizers.Adam,
+                                 vae_lr=config['vae_lr'],
+                                 beta=config['vae_beta'])
+
+        # create the training task and logger
+        train_data, val_data = build_pipeline(
+            x=x, y=y,
+            batch_size=config['vae_batch_size'],
+            val_size=config['val_size'])
+
+        # estimate the number of training steps per epoch
+        vae_trainer.launch(train_data, val_data,
+                           logger, config['vae_epochs'])
+
+        # map the x values to latent space
+        x = vae_model.encoder_cnn.predict(x)[0]
+
+        mean = np.mean(x, axis=0, keepdims=True)
+        standard_dev = np.std(x - mean, axis=0, keepdims=True)
+        x = (x - mean) / standard_dev
+
+    input_shape = x.shape[1:]
+    input_size = np.prod(input_shape)
 
     # make several keras neural networks with different architectures
     forward_models = [ForwardModel(
-        task,
+        input_shape,
         activations=activations,
         hidden_size=config['hidden_size'],
         initial_max_std=config['initial_max_std'],
         initial_min_std=config['initial_min_std'])
         for activations in config['activations']]
-
-    if config['normalize_ys']:
-        task.map_normalize_y()
-    if config['normalize_xs']:
-        task.map_normalize_x()
-
-    # save the initial dataset statistics for safe keeping
-    x = task.x
-    y = task.y
 
     # scale the learning rate based on the number of channels in x
     config['solver_lr'] *= np.sqrt(np.prod(x.shape[1:]))
@@ -77,8 +111,12 @@ def gradient_ascent(config):
     x = initial_x
 
     # evaluate the starting point
-    solution = x
-    score = task.predict(solution)
+    solution2 = solution = x
+    if task.is_discrete and config["use_vae"]:
+        solution2 = solution2 * standard_dev + mean
+        logits = vae_model.decoder_cnn.predict(solution2)
+        solution2 = tf.argmax(logits, axis=2, output_type=tf.int32)
+    score = task.predict(solution2)
     if task.is_normalized_y:
         score = task.denormalize_y(score)
         preds = [task.denormalize_y(
@@ -122,10 +160,14 @@ def gradient_ascent(config):
 
         # use the conservative optimizer to update the solution
         x = x + config['solver_lr'] * grads
-        solution = x
+        solution2 = solution = x
+        if task.is_discrete and config["use_vae"]:
+            solution2 = solution2 * standard_dev + mean
+            logits = vae_model.decoder_cnn.predict(solution2)
+            solution2 = tf.argmax(logits, axis=2, output_type=tf.int32)
 
         # evaluate the design using the oracle and the forward model
-        score = task.predict(solution)
+        score = task.predict(solution2)
         if task.is_normalized_y:
             score = task.denormalize_y(score)
             preds = [task.denormalize_y(
@@ -144,7 +186,7 @@ def gradient_ascent(config):
         for n, prediction_i in enumerate(preds):
             logger.record(f"oracle_{n}/prediction", prediction_i, i)
             logger.record(f"oracle_{n}/grad_norm", tf.linalg.norm(
-                tf.reshape(grads[n], [-1, task.input_size]), axis=-1), i)
+                tf.reshape(grads[n], [-1, input_size]), axis=-1), i)
             logger.record(f"rank_corr/{n}_to_real",
                           spearman(prediction_i[:, 0], score[:, 0]), i)
             if n > 0:

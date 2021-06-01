@@ -459,3 +459,182 @@ class MaximumLikelihood(tf.Module):
             saveables[f'forward_model'] = self.fm
             saveables[f'forward_model_optim'] = self.optim
         return saveables
+
+
+class VAETrainer(tf.Module):
+
+    def __init__(self,
+                 vae,
+                 vae_optim=tf.keras.optimizers.Adam,
+                 vae_lr=0.001, beta=1.0):
+        """Build a trainer for an ensemble of probabilistic neural networks
+        trained on bootstraps of a dataset
+
+        Args:
+
+        oracles: List[tf.keras.Model]
+            a list of keras model that predict distributions over scores
+        oracle_optim: __class__
+            the optimizer class to use for optimizing the oracle model
+        oracle__lr: float
+            the learning rate for the oracle model optimizer
+        """
+
+        super().__init__()
+        self.vae = vae
+        self.beta = beta
+
+        # create optimizers for each model in the ensemble
+        self.vae_optim = vae_optim(learning_rate=vae_lr)
+
+    @tf.function(experimental_relax_shapes=True)
+    def train_step(self,
+                   x):
+        """Perform a training step of gradient descent on an ensemble
+        using bootstrap weights for each model in the ensemble
+
+        Args:
+
+        x: tf.Tensor
+            a batch of training inputs shaped like [batch_size, channels]
+
+        Returns:
+
+        statistics: dict
+            a dictionary that contains logging information
+        """
+
+        statistics = dict()
+
+        with tf.GradientTape() as tape:
+
+            latent = self.vae.encode(x, training=True)
+            z = latent.mean()
+            prediction = self.vae.decode(z)
+
+            nll = -prediction.log_prob(x)
+
+            kld = latent.kl_divergence(
+                tfpd.MultivariateNormalDiag(
+                    loc=tf.zeros_like(z), scale_diag=tf.ones_like(z)))
+
+            total_loss = tf.reduce_mean(
+                nll) + tf.reduce_mean(kld) * self.beta
+
+        variables = self.vae.trainable_variables
+
+        self.vae_optim.apply_gradients(zip(
+            tape.gradient(total_loss, variables), variables))
+
+        statistics[f'vae/train/nll'] = nll
+        statistics[f'vae/train/kld'] = kld
+
+        return statistics
+
+    @tf.function(experimental_relax_shapes=True)
+    def validate_step(self,
+                      x):
+        """Perform a validation step on an ensemble of models
+        without using bootstrapping weights
+
+        Args:
+
+        x: tf.Tensor
+            a batch of validation inputs shaped like [batch_size, channels]
+
+        Returns:
+
+        statistics: dict
+            a dictionary that contains logging information
+        """
+
+        statistics = dict()
+
+        latent = self.vae.encode(x, training=True)
+        z = latent.mean()
+        prediction = self.vae.decode(z)
+
+        nll = -prediction.log_prob(x)
+
+        kld = latent.kl_divergence(
+            tfpd.MultivariateNormalDiag(
+                loc=tf.zeros_like(z), scale_diag=tf.ones_like(z)))
+
+        statistics[f'vae/validate/nll'] = nll
+        statistics[f'vae/validate/kld'] = kld
+
+        return statistics
+
+    def train(self,
+              dataset):
+        """Perform training using gradient descent on an ensemble
+        using bootstrap weights for each model in the ensemble
+
+        Args:
+
+        dataset: tf.data.Dataset
+            the training dataset already batched and prefetched
+
+        Returns:
+
+        loss_dict: dict
+            a dictionary mapping names to loss values for logging
+        """
+
+        statistics = defaultdict(list)
+        for x, y in dataset:
+            for name, tensor in self.train_step(x).items():
+                statistics[name].append(tensor)
+        for name in statistics.keys():
+            statistics[name] = tf.concat(statistics[name], axis=0)
+        return statistics
+
+    def validate(self,
+                 dataset):
+        """Perform validation on an ensemble of models without
+        using bootstrapping weights
+
+        Args:
+
+        dataset: tf.data.Dataset
+            the validation dataset already batched and prefetched
+
+        Returns:
+
+        loss_dict: dict
+            a dictionary mapping names to loss values for logging
+        """
+
+        statistics = defaultdict(list)
+        for x, y in dataset:
+            for name, tensor in self.validate_step(x).items():
+                statistics[name].append(tensor)
+        for name in statistics.keys():
+            statistics[name] = tf.concat(statistics[name], axis=0)
+        return statistics
+
+    def launch(self,
+               train_data,
+               validate_data,
+               logger,
+               epochs):
+        """Launch training and validation for the model for the specified
+        number of epochs, and log statistics
+
+        Args:
+
+        train_data: tf.data.Dataset
+            the training dataset already batched and prefetched
+        validate_data: tf.data.Dataset
+            the validation dataset already batched and prefetched
+        logger: Logger
+            an instance of the logger used for writing to tensor board
+        epochs: int
+            the number of epochs through the data sets to take
+        """
+
+        for e in range(epochs):
+            for name, loss in self.train(train_data).items():
+                logger.record(name, loss, e)
+            for name, loss in self.validate(validate_data).items():
+                logger.record(name, loss, e)
