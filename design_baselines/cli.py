@@ -8,6 +8,159 @@ def cli():
     """
 
 
+
+
+@cli.command()
+@click.option('--table0', type=str)
+@click.option('--table1', type=str)
+def rank_tables(table0, table1):
+
+    import glob
+    import os
+    import tensorflow as tf
+    import tqdm
+    import numpy as np
+    import pandas as pd
+    import scipy.stats as stats
+
+    tasks = [
+        "gfp",
+        "tf-bind-8",
+        "utr",
+        "hopper",
+        "superconductor",
+        "chembl",
+        "ant",
+        "dkitty"
+    ]
+
+    metrics = [
+        "rank-correlation",
+        "max-shift",
+        "avg-shift"
+    ]
+
+    table0_df = pd.read_csv(table0)
+    table1_df = pd.read_csv(table1)
+
+    final_data_numeric = [[None for t in tasks] for m in metrics]
+    for i, task in enumerate(tasks):
+        table0_rank = table0_df[task].to_numpy()
+        table1_rank = table1_df[task].to_numpy()
+        for j, metric in enumerate(metrics):
+            if metric == "rank-correlation":
+                rho = stats.spearmanr(table0_rank, table1_rank)[0]
+                final_data_numeric[j][i] = rho
+            elif metric == "max-shift":
+                table0_index = table0_rank.argsort().argsort()
+                table1_index = table1_rank.argsort().argsort()
+                final_data_numeric[j][i] = np.abs(table0_index - table1_index).max()
+            elif metric == "avg-shift":
+                table0_index = table0_rank.argsort().argsort()
+                table1_index = table1_rank.argsort().argsort()
+                final_data_numeric[j][i] = np.abs(table0_index - table1_index).mean()
+
+    final_df_numeric = pd.DataFrame(data=final_data_numeric, columns=tasks, index=metrics)
+    print(final_df_numeric.to_latex())
+    final_df_numeric.to_csv(f"{os.path.basename(table0)[:-4]}-to-"
+                            f"{os.path.basename(table1)[:-4]}-rank-metrics.csv")
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--percentile', type=str, default="100th")
+@click.option('--modifier', type=str, default="")
+def make_table(dir, percentile, modifier):
+
+    import glob
+    import os
+    import tensorflow as tf
+    import tqdm
+    import numpy as np
+    import pandas as pd
+
+    tasks = [
+        "gfp",
+        "tf-bind-8",
+        "utr",
+        "hopper",
+        "superconductor",
+        "chembl",
+        "ant",
+        "dkitty"
+    ]
+
+    baselines = [
+        "autofocused-cbas",
+        "cbas",
+        "bo-qei",
+        "cma-es",
+        "gradient-ascent",
+        "gradient-ascent-min-ensemble",
+        "mins",
+        "reinforce"
+    ]
+
+    baseline_to_tag = {
+        "autofocused-cbas": f"score/{percentile}",
+        "cbas": f"score/{percentile}",
+        "bo-qei": f"score/{percentile}",
+        "cma-es": f"score/{percentile}",
+        "gradient-ascent": f"score/{percentile}",
+        "gradient-ascent-min-ensemble": f"score/{percentile}",
+        "mins": f"exploitation/actual_ys/{percentile}",
+        "reinforce": f"score/{percentile}"
+    }
+
+    baseline_to_iteration = {
+        "autofocused-cbas": 20,
+        "cbas": 20,
+        "bo-qei": 10,
+        "cma-es": 0,
+        "gradient-ascent": 200,
+        "gradient-ascent-min-ensemble": 200,
+        "mins": 0,
+        "reinforce": 200
+    }
+
+    performance = dict()
+    for task in tqdm.tqdm(tasks):
+        performance[task] = dict()
+        for baseline in baselines:
+            performance[task][baseline] = list()
+
+            dirs = [d for d in glob.glob(os.path.join(
+                dir, f"{baseline}{modifier}-{task}/*/*")) if os.path.isdir(d)]
+
+            for d in dirs:
+                for f in glob.glob(os.path.join(d, '*/events.out*')):
+                    for e in tf.compat.v1.train.summary_iterator(f):
+                        for v in e.summary.value:
+                            if v.tag == baseline_to_tag[baseline] \
+                                    and e.step == baseline_to_iteration[baseline]:
+                                performance[task][baseline].append(
+                                    tf.make_ndarray(v.tensor))
+
+    final_data = [[None for t in tasks] for b in baselines]
+    final_data_numeric = [[None for t in tasks] for b in baselines]
+    for i, task in enumerate(tasks):
+        for j, baseline in enumerate(baselines):
+            data = np.array(performance[task][baseline])
+            mean = 0.0
+            standard_dev = 0.0
+            if data.shape[0] > 0:
+                mean = np.mean(data)
+            if data.shape[0] > 1:
+                standard_dev = np.std(data - mean)
+            final_data[j][i] = f"{mean:0.3f} ± {standard_dev:0.3f}"
+            final_data_numeric[j][i] = mean
+
+    final_df = pd.DataFrame(data=final_data, columns=tasks, index=baselines)
+    final_df_numeric = pd.DataFrame(data=final_data_numeric, columns=tasks, index=baselines)
+    print(final_df.to_latex())
+    final_df_numeric.to_csv(f"performance{modifier}.csv")
+
+
 @cli.command()
 @click.option('--dir', type=str)
 @click.option('--name', type=str)

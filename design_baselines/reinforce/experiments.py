@@ -155,7 +155,8 @@ def hopper(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
+@click.option('--oracle', type=str, default="RandomForest")
+def superconductor(local_dir, cpus, gpus, num_parallel, num_samples, oracle):
     """Evaluate reinforce on Superconductor-RandomForest-v0
     """
 
@@ -170,7 +171,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples):
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "Superconductor-RandomForest-v0",
+        "task": f"Superconductor-{oracle}-v0",
         "task_kwargs": {"relabel": False},
         "optimize_ground_truth": False,
         "bootstraps": 5,
@@ -244,7 +245,8 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
+@click.option('--oracle', type=str, default="Transformer")
+def gfp(local_dir, cpus, gpus, num_parallel, num_samples, oracle):
     """Evaluate reinforce on GFP-Transformer-v0
     """
 
@@ -259,7 +261,7 @@ def gfp(local_dir, cpus, gpus, num_parallel, num_samples):
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
-        "task": "GFP-Transformer-v0",
+        "task": f"GFP-{oracle}-v0",
         "task_kwargs": {"relabel": False},
         "optimize_ground_truth": False,
         "bootstraps": 5,
