@@ -10,8 +10,8 @@ def cli():
 
 @cli.command()
 @click.option('--dir', type=str)
-@click.option('--percentile', type=str, default="100th")
-@click.option('--modifier', type=str, default="")
+@click.option('--percentile', type=float, default=100.)
+@click.option('--modifier', type=str, default="-fidelity")
 def agreement_heatmap(dir, percentile, modifier):
 
     import glob
@@ -35,6 +35,8 @@ def agreement_heatmap(dir, percentile, modifier):
     import matplotlib
     import matplotlib.pyplot as plt
     import numpy as np
+    import json
+    import design_bench as db
     from copy import deepcopy
 
     plt.rcParams['text.usetex'] = True
@@ -61,7 +63,7 @@ def agreement_heatmap(dir, percentile, modifier):
         "autofocused-cbas",
         "cbas",
         "bo-qei",
-        # "cma-es",  # didn't finish yet
+        # "cma-es",
         "gradient-ascent",
         "gradient-ascent-min-ensemble",
         "gradient-ascent-mean-ensemble",
@@ -75,36 +77,16 @@ def agreement_heatmap(dir, percentile, modifier):
         "avg-shift"
     ]
 
-    oracles = [
-        "GP",
-        "RandomForest",
-        "FullyConnected",
-        "ResNet",
-        "Transformer"
-    ]
-
-    baseline_to_tag = {
-        "autofocused-cbas": f"score/{percentile}",
-        "cbas": f"score/{percentile}",
-        "bo-qei": f"score/{percentile}",
-        "cma-es": f"score/{percentile}",
-        "gradient-ascent": f"score/{percentile}",
-        "gradient-ascent-min-ensemble": f"score/{percentile}",
-        "gradient-ascent-mean-ensemble": f"score/{percentile}",
-        "mins": f"exploitation/actual_ys/{percentile}",
-        "reinforce": f"score/{percentile}"
-    }
-
-    baseline_to_iteration = {
-        "autofocused-cbas": 20,
-        "cbas": 20,
-        "bo-qei": 10,
-        "cma-es": 0,
-        "gradient-ascent": 200,
-        "gradient-ascent-min-ensemble": 200,
-        "gradient-ascent-mean-ensemble": 200,
-        "mins": 0,
-        "reinforce": 200
+    baseline_to_logits = {
+        "autofocused-cbas": False,
+        "cbas": False,
+        "bo-qei": True,
+        "cma-es": True,
+        "gradient-ascent": True,
+        "gradient-ascent-min-ensemble": True,
+        "gradient-ascent-mean-ensemble": True,
+        "mins": False,
+        "reinforce": False
     }
 
     task_to_oracles = {
@@ -113,40 +95,61 @@ def agreement_heatmap(dir, percentile, modifier):
             "RandomForest",
             "FullyConnected",
             "ResNet",
-            "Transformer"],
+            "Transformer"
+        ],
         "superconductor": [
             "GP",
             "RandomForest",
-            "FullyConnected"]
+            "FullyConnected"
+        ]
     }
 
     p = defaultdict(list)
-    for baseline, task, oracle in tqdm.tqdm(
-            list(itertools.product(baselines, tasks, oracles))):
-        tag = baseline_to_tag[baseline]
-        step = baseline_to_iteration[baseline]
-        dirs = [d for d in glob.glob(os.path.join(
-            dir, f"{baseline}{modifier}-"
-                 f"{task}-{oracle}/*/*")) if os.path.isdir(d)]
+    task_pattern = re.compile(r'(\w+)-(\w+)-v(\d+)$')
 
-        for d in dirs:
-            for f in glob.glob(os.path.join(d, '*/events.out*')):
-                for e in tf.compat.v1.train.summary_iterator(f):
-                    for v in e.summary.value:
-                        if v.tag == tag and e.step == step:
-                            p[f"{baseline}-{task}-{oracle}"]\
-                                .append(tf.make_ndarray(v.tensor))
-                            if np.isnan(tf.make_ndarray(v.tensor)):
-                                print(baseline, task, oracle, f, "input was nana")
+    for baseline, task in tqdm.tqdm(
+            list(itertools.product(baselines, tasks))):
+
+        is_logits = baseline_to_logits[baseline]
+        files = glob.glob(os.path.join(dir, f"{baseline}{modifier}-"
+                          f"{task}/*/*/*/solution.npy"))
+
+        for f in files:
+
+            solution_tensor = np.load(f)
+
+            params = os.path.join(os.path.dirname(
+                os.path.dirname(f)), "params.json")
+
+            with open(params, "r") as params_file:
+                params = json.load(params_file)
+
+            for oracle in task_to_oracles[task]:
+                matches = task_pattern.search(params["task"])
+                db_task = db.make(params["task"].replace(
+                    matches.group(2), oracle), **params["task_kwargs"])
+
+                if is_logits and db_task.is_discrete:
+                    db_task.map_to_logits()
+
+                elif db_task.is_discrete:
+                    db_task.map_to_integers()
+
+                if params["normalize_xs"]:
+                    db_task.map_normalize_x()
+
+                scores = db_task.predict(solution_tensor)
+                p[f"{baseline}-{task}-"
+                  f"{oracle}"].append(np.percentile(scores, percentile))
 
     print("aggregating performance")
 
     p2 = dict()
     for task in tasks:
-        for oracle in oracles:
-            p2[f"{task}-{oracle}"] = \
-                [p[f"{baseline}-{task}-{oracle}"]
-                 for baseline in baselines]
+        for oracle in task_to_oracles[task]:
+            p2[f"{task}-{oracle}"] = [
+                p[f"{baseline}-{task}-{oracle}"]
+                for baseline in baselines]
 
     print("rendering heatmaps")
 
