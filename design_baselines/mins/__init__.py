@@ -10,6 +10,7 @@ from design_baselines.mins.nets import ContinuousGenerator
 from design_baselines.mins.utils import get_weights
 from design_baselines.mins.utils import get_synthetic_data
 import tensorflow as tf
+import  numpy as np
 import os
 
 
@@ -64,11 +65,6 @@ def mins(config):
                           keep=config.get('keep', 1.0),
                           temp=config.get('temp', 0.001))
 
-        # create a manager for saving algorithms state to the disk
-        oracle_manager = tf.train.CheckpointManager(
-            tf.train.Checkpoint(**oracle.get_saveables()),
-            os.path.join(config['logging_dir'], 'oracle'), 1)
-
         # build a bootstrapped data set
         train_data, val_data = build_pipeline(
             x=x, y=y, bootstraps=config['bootstraps'],
@@ -76,7 +72,6 @@ def mins(config):
             val_size=config['val_size'])
 
         # train the model for an additional number of epochs
-        oracle_manager.restore_or_initialize()
         oracle.launch(train_data,
                       val_data,
                       logger,
@@ -131,11 +126,6 @@ def mins(config):
         start_temp=config.get('start_temp', 5.0),
         final_temp=config.get('final_temp', 1.0))
 
-    # create a manager for saving algorithms state to the disk
-    explore_gan_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**explore_gan.get_saveables()),
-        os.path.join(config['logging_dir'], 'exploration_gan'), 1)
-
     # build the neural network GAN components
     exploit_discriminator = Discriminator(
         input_shape,
@@ -161,15 +151,6 @@ def mins(config):
         start_temp=config.get('start_temp', 5.0),
         final_temp=config.get('final_temp', 1.0))
 
-    # create a manager for saving algorithms state to the disk
-    exploit_gan_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**exploit_gan.get_saveables()),
-        os.path.join(config['logging_dir'], 'exploitation_gan'), 1)
-
-    # restore tha GANS if a checkpoint exists
-    explore_gan_manager.restore_or_initialize()
-    exploit_gan_manager.restore_or_initialize()
-
     # build a weighted data set using newly collected samples
     train_data, val_data = build_pipeline(
         x=x, y=y, w=get_weights(y, base_temp=base_temp),
@@ -185,20 +166,10 @@ def mins(config):
     condition_ys = tf.tile(tf.reduce_max(
         y, keepdims=True), [config['solver_samples'], 1])
 
-    # generate samples for exploitation
-    solver_xs = explore_gen.sample(condition_ys, temp=0.001)
-    actual_ys = task.predict(tf.argmax(solver_xs, axis=-1, output_type=tf.int32)
-                             if task.is_discrete else solver_xs)
-
     # record score percentiles
     logger.record("exploration/condition_ys",
                   task.denormalize_y(condition_ys)
                   if task.is_normalized_y else condition_ys,
-                  0,
-                  percentile=True)
-    logger.record("exploration/actual_ys",
-                  task.denormalize_y(actual_ys)
-                  if task.is_normalized_y else actual_ys,
                   0,
                   percentile=True)
 
@@ -207,20 +178,10 @@ def mins(config):
         train_data, val_data, logger, config['initial_epochs'],
         header="exploitation/")
 
-    # generate samples for exploitation
-    solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
-    actual_ys = task.predict(tf.argmax(solver_xs, axis=-1, output_type=tf.int32)
-                             if task.is_discrete else solver_xs)
-
     # record score percentiles
     logger.record("exploitation/condition_ys",
                   task.denormalize_y(condition_ys)
                   if task.is_normalized_y else condition_ys,
-                  0,
-                  percentile=True)
-    logger.record("exploitation/actual_ys",
-                  task.denormalize_y(actual_ys)
-                  if task.is_normalized_y else actual_ys,
                   0,
                   percentile=True)
 
@@ -298,19 +259,24 @@ def mins(config):
         condition_ys = tf.tile(tf.reduce_max(
             y, keepdims=True), [config['solver_samples'], 1])
 
-        # generate samples for exploitation
-        solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
-        actual_ys = task.predict(tf.argmax(solver_xs, axis=-1, output_type=tf.int32)
-                                 if task.is_discrete else solver_xs)
-
         # record score percentiles
         logger.record("exploitation/condition_ys",
                       task.denormalize_y(condition_ys)
                       if task.is_normalized_y else condition_ys,
                       0,
                       percentile=True)
-        logger.record("exploitation/actual_ys",
-                      task.denormalize_y(actual_ys)
-                      if task.is_normalized_y else actual_ys,
-                      0,
-                      percentile=True)
+
+    # generate samples for exploration
+    solver_xs = exploit_gan.sample(condition_ys, temp=0.001)
+    solution = tf.argmax(solver_xs, axis=-1, output_type=tf.int32) \
+               if task.is_discrete else solver_xs
+
+    # save the current solution to the disk
+    np.save(os.path.join(config["logging_dir"],
+                         f"solution.npy"), solution.numpy())
+
+    # evaluate the found solution and record a video
+    score = task.predict(solution)
+    if task.is_normalized_y:
+        score = task.denormalize_y(score)
+    logger.record("score", score, config['iterations'], percentile=True)

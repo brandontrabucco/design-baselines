@@ -202,7 +202,7 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples, oracle):
         "offline_epochs": 200,
         "online_batches": 10,
         "online_epochs": 10,
-        "iterations": 200,
+        "iterations": 50,
         "percentile": 80.0,
         "solver_samples": 128},
         num_samples=num_samples,

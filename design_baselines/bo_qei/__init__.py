@@ -88,13 +88,7 @@ def bo_qei(config):
         forward_model_optim=tf.keras.optimizers.Adam,
         forward_model_lr=config['ensemble_lr'])
 
-    # create a manager for saving algorithms state to the disk
-    ensemble_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**ensemble.get_saveables()),
-        os.path.join(config['logging_dir'], 'ensemble'), 1)
-
     # train the model for an additional number of epochs
-    ensemble_manager.restore_or_initialize()
     ensemble.launch(train_data,
                     val_data,
                     logger,
@@ -139,7 +133,8 @@ def bo_qei(config):
         if config["optimize_ground_truth"]:
             if task.is_discrete and config["use_vae"]:
                 input_x = tf.argmax(vae_model.decoder_cnn.predict(
-                    input_x * standard_dev + mean), axis=2, output_type=tf.int32)
+                    input_x * standard_dev + mean),
+                    axis=2, output_type=tf.int32)
             value = task.predict(input_x)
         else:
             value = ensemble.get_distribution(input_x).mean()
@@ -182,14 +177,17 @@ def bo_qei(config):
         """Optimizes the acquisition function, and returns
         a new candidate and a noisy observation."""
         # optimize
-        candidates, _ = optimize_acqf(
-            acq_function=acq_func,
-            bounds=bounds,
-            q=BATCH_SIZE,
-            num_restarts=config['bo_num_restarts'],
-            raw_samples=config['bo_raw_samples'],  # used for intialization heuristic
-            options={"batch_limit": config['bo_batch_limit'],
-                     "maxiter": config['bo_maxiter']})
+        try:
+            candidates, _ = optimize_acqf(
+                acq_function=acq_func,
+                bounds=bounds,
+                q=BATCH_SIZE,
+                num_restarts=config['bo_num_restarts'],
+                raw_samples=config['bo_raw_samples'],  # used for intialization heuristic
+                options={"batch_limit": config['bo_batch_limit'],
+                         "maxiter": config['bo_maxiter']})
+        except RuntimeError:
+            return
         # observe new values
         new_x = candidates.detach()
         exact_obj = objective(candidates)
@@ -229,7 +227,12 @@ def bo_qei(config):
             sampler=qmc_sampler, objective=obj)
 
         # optimize and get new observation
-        new_x_ei, new_obj_ei = optimize_acqf_and_get_observation(qEI)
+        result = optimize_acqf_and_get_observation(qEI)
+        if result is None:
+            print("RuntimeError was encountered, most likely a "
+                  "'symeig_cpu: the algorithm failed to converge'")
+            break
+        new_x_ei, new_obj_ei = result
 
         # update training points
         train_x_ei = torch.cat([train_x_ei, new_x_ei])
@@ -249,26 +252,30 @@ def bo_qei(config):
               f"({best_value_ei:>4.2f}), "
               f"time = {t1 - t0:>4.2f}.", end="")
 
-        if torch.cuda.is_available():
-            x_sol = train_x_ei.detach().cpu().numpy()
-            y_sol = train_obj_ei.detach().cpu().numpy()
+    if torch.cuda.is_available():
+        x_sol = train_x_ei.detach().cpu().numpy()
+        y_sol = train_obj_ei.detach().cpu().numpy()
 
-        else:
-            x_sol = train_x_ei.detach().numpy()
-            y_sol = train_obj_ei.detach().numpy()
+    else:
+        x_sol = train_x_ei.detach().numpy()
+        y_sol = train_obj_ei.detach().numpy()
 
-        # select the top 1 initial designs from the dataset
-        indices = tf.math.top_k(y_sol[:, 0], k=config['solver_samples'])[1]
-        solution = tf.gather(x_sol, indices, axis=0)
-        solution = tf.reshape(solution, [-1, *input_shape])
+    # select the top 1 initial designs from the dataset
+    indices = tf.math.top_k(y_sol[:, 0], k=config['solver_samples'])[1]
+    solution = tf.gather(x_sol, indices, axis=0)
+    solution = tf.reshape(solution, [-1, *input_shape])
 
-        if task.is_discrete and config["use_vae"]:
-            solution = solution * standard_dev + mean
-            logits = vae_model.decoder_cnn.predict(solution)
-            solution = tf.argmax(logits, axis=2, output_type=tf.int32)
+    if task.is_discrete and config["use_vae"]:
+        solution = solution * standard_dev + mean
+        logits = vae_model.decoder_cnn.predict(solution)
+        solution = tf.argmax(logits, axis=2, output_type=tf.int32)
 
-        # evaluate the found solution and record a video
-        score = task.predict(solution)
-        if task.is_normalized_y:
-            score = task.denormalize_y(score)
-        logger.record("score", score, iteration, percentile=True)
+    # save the current solution to the disk
+    np.save(os.path.join(config["logging_dir"],
+                         f"solution.npy"), solution.numpy())
+
+    # evaluate the found solution and record a video
+    score = task.predict(solution)
+    if task.is_normalized_y:
+        score = task.denormalize_y(score)
+    logger.record("score", score, N_BATCH, percentile=True)

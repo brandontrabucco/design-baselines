@@ -58,13 +58,7 @@ def cbas(config):
         forward_model_optim=tf.keras.optimizers.Adam,
         forward_model_lr=config['ensemble_lr'])
 
-    # create a manager for saving algorithms state to the disk
-    ensemble_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**ensemble.get_saveables()),
-        os.path.join(config['logging_dir'], 'ensemble'), 1)
-
     # train the model for an additional number of epochs
-    ensemble_manager.restore_or_initialize()
     ensemble.launch(train_data,
                     val_data,
                     logger,
@@ -91,11 +85,6 @@ def cbas(config):
                         vae_lr=config['vae_lr'],
                         vae_beta=config['vae_beta'])
 
-    # create a manager for saving algorithms state to the disk
-    p_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**p_vae.get_saveables()),
-        os.path.join(config['logging_dir'], 'p_vae'), 1)
-
     # build a weighted data set
     train_data, val_data = build_pipeline(
         x=x, y=y, w=np.ones_like(task.y),
@@ -103,7 +92,6 @@ def cbas(config):
         val_size=config['val_size'])
 
     # train the initial vae fit to the original data distribution
-    p_manager.restore_or_initialize()
     p_vae.launch(train_data,
                  val_data,
                  logger,
@@ -126,12 +114,6 @@ def cbas(config):
                         vae_lr=config['vae_lr'],
                         vae_beta=config['vae_beta'])
 
-    # create a manager for saving algorithms state to the disk
-    q_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**q_vae.get_saveables()),
-        directory=os.path.join(config['logging_dir'], 'q_vae'),
-        max_to_keep=1)
-
     # create the cbas importance weight generator
     cbas = CBAS(ensemble,
                 p_vae,
@@ -148,18 +130,6 @@ def cbas(config):
             config['online_batches'],
             config['vae_batch_size'],
             config['percentile'])
-
-        np.save(os.path.join(config["logging_dir"], f"x-{i}.npy"),
-                x_t[:config['solver_samples']].numpy())
-
-        # evaluate the sampled designs
-        score = task.predict(x_t[:config['solver_samples']])
-        if task.is_normalized_y:
-            score = task.denormalize_y(score)
-        logger.record("score",
-                      score,
-                      i,
-                      percentile=True)
 
         # build a weighted data set
         train_data, val_data = build_pipeline(
@@ -178,17 +148,12 @@ def cbas(config):
                      config['online_epochs'],
                      start_epoch=start_epoch)
 
-    # save every model to the disk
-    ensemble_manager.save()
-    p_manager.save()
-    q_manager.save()
-
     # sample designs from the prior
     z = tf.random.normal([config['solver_samples'], config['latent_size']])
     q_dx = q_decoder.get_distribution(z, training=False)
     x_t = q_dx.sample()
     np.save(os.path.join(config["logging_dir"],
-                         f"x-{config['iterations']}.npy"), x_t.numpy())
+                         f"solution.npy"), x_t.numpy())
     score = task.predict(x_t)
     if task.is_normalized_y:
         score = task.denormalize_y(score)

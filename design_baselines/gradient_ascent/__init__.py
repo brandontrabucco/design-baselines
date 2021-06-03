@@ -101,9 +101,6 @@ def gradient_ascent(config):
         trainer.launch(train_data, validate_data, logger,
                        config['epochs'], header=f'oracle_{i}/')
 
-        fm.save(os.path.join(config['logging_dir'],
-                             f'model_{i}'))
-
     # select the top k initial designs from the dataset
     mean_x = tf.reduce_mean(x, axis=0, keepdims=True)
     indices = tf.math.top_k(y[:, 0], k=config['solver_samples'])[1]
@@ -111,14 +108,8 @@ def gradient_ascent(config):
     x = initial_x
 
     # evaluate the starting point
-    solution2 = solution = x
-    if task.is_discrete and config["use_vae"]:
-        solution2 = solution2 * standard_dev + mean
-        logits = vae_model.decoder_cnn.predict(solution2)
-        solution2 = tf.argmax(logits, axis=2, output_type=tf.int32)
-    score = task.predict(solution2)
+    solution = x
     if task.is_normalized_y:
-        score = task.denormalize_y(score)
         preds = [task.denormalize_y(
             fm.get_distribution(solution).mean())
             for fm in forward_models]
@@ -127,19 +118,13 @@ def gradient_ascent(config):
                  for fm in forward_models]
 
     # record the prediction and score to the logger
-    logger.record("score", score, 0, percentile=True)
     logger.record("distance/travelled", tf.linalg.norm(solution - initial_x), 0)
     logger.record("distance/from_mean", tf.linalg.norm(solution - mean_x), 0)
     for n, prediction_i in enumerate(preds):
         logger.record(f"oracle_{n}/prediction", prediction_i, 0)
-        logger.record(f"rank_corr/{n}_to_real",
-                      spearman(prediction_i[:, 0], score[:, 0]), 0)
         if n > 0:
             logger.record(f"rank_corr/0_to_{n}",
                           spearman(preds[0][:, 0], prediction_i[:, 0]), 0)
-
-    all_scores = []
-    all_predictions = []
 
     # perform gradient ascent on the score through the forward model
     for i in range(1, config['solver_steps'] + 1):
@@ -160,43 +145,41 @@ def gradient_ascent(config):
 
         # use the conservative optimizer to update the solution
         x = x + config['solver_lr'] * grads
-        solution2 = solution = x
-        if task.is_discrete and config["use_vae"]:
-            solution2 = solution2 * standard_dev + mean
-            logits = vae_model.decoder_cnn.predict(solution2)
-            solution2 = tf.argmax(logits, axis=2, output_type=tf.int32)
+        solution = x
 
         # evaluate the design using the oracle and the forward model
-        score = task.predict(solution2)
         if task.is_normalized_y:
-            score = task.denormalize_y(score)
             preds = [task.denormalize_y(
                 fm.get_distribution(solution).mean())
                 for fm in forward_models]
         else:
             preds = [fm.get_distribution(solution).mean()
                      for fm in forward_models]
-        all_scores.append(score)
-        all_predictions.append(preds[0].numpy())
 
         # record the prediction and score to the logger
-        logger.record("score", score, i, percentile=True)
         logger.record("distance/travelled", tf.linalg.norm(solution - initial_x), i)
         logger.record("distance/from_mean", tf.linalg.norm(solution - mean_x), i)
         for n, prediction_i in enumerate(preds):
             logger.record(f"oracle_{n}/prediction", prediction_i, i)
             logger.record(f"oracle_{n}/grad_norm", tf.linalg.norm(
                 tf.reshape(grads[n], [-1, input_size]), axis=-1), i)
-            logger.record(f"rank_corr/{n}_to_real",
-                          spearman(prediction_i[:, 0], score[:, 0]), i)
             if n > 0:
                 logger.record(f"rank_corr/0_to_{n}",
                               spearman(preds[0][:, 0], prediction_i[:, 0]), i)
                 logger.record(f"grad_corr/0_to_{n}", tfp.stats.correlation(
                     grads[0], grads[n], sample_axis=0, event_axis=None), i)
 
-    # save the model predictions and scores to be aggregated later
-    np.save(os.path.join(config['logging_dir'], "scores.npy"),
-            np.concatenate(all_scores, axis=1))
-    np.save(os.path.join(config['logging_dir'], "predictions.npy"),
-            np.stack(all_predictions, axis=1))
+    if task.is_discrete and config["use_vae"]:
+        solution = solution * standard_dev + mean
+        logits = vae_model.decoder_cnn.predict(solution)
+        solution = tf.argmax(logits, axis=2, output_type=tf.int32)
+
+    # save the current solution to the disk
+    np.save(os.path.join(config["logging_dir"],
+                         f"solution.npy"), solution.numpy())
+
+    # evaluate the found solution and record a video
+    score = task.predict(solution)
+    if task.is_normalized_y:
+        score = task.denormalize_y(score)
+    logger.record("score", score, config['solver_steps'], percentile=True)

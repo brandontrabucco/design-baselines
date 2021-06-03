@@ -55,13 +55,7 @@ def reinforce(config):
         forward_model_optim=tf.keras.optimizers.Adam,
         forward_model_lr=config['ensemble_lr'])
 
-    # create a manager for saving algorithms state to the disk
-    ensemble_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**ensemble.get_saveables()),
-        os.path.join(config['logging_dir'], 'ensemble'), 1)
-
     # train the model for an additional number of epochs
-    ensemble_manager.restore_or_initialize()
     ensemble.launch(train_data,
                     val_data,
                     logger,
@@ -99,7 +93,11 @@ def reinforce(config):
             standard_dev_y = tf.math.reduce_std(ty - mean_y)
             log_probs = td.log_prob(tf.stop_gradient(tx))
             loss = tf.reduce_mean(-log_probs[:, tf.newaxis] *
-                                  tf.stop_gradient((ty - mean_y) / standard_dev_y))
+                                  tf.stop_gradient(
+                                      (ty - mean_y) / standard_dev_y))
+
+        print(f"[Iteration {iteration}] "
+              f"Average Prediction = {tf.reduce_mean(ty)}")
 
         logger.record("reinforce/prediction",
                       ty, iteration, percentile=True)
@@ -112,19 +110,16 @@ def reinforce(config):
         rl_opt.apply_gradients(zip(
             grads, sampler.trainable_variables))
 
-        td = sampler.get_distribution()
-        solution = td.sample(sample_shape=config['solver_samples'])
+    td = sampler.get_distribution()
+    solution = td.sample(sample_shape=config['solver_samples'])
 
-        # evaluate the found solution and record a video
-        score = task.predict(solution)
-        if config['normalize_ys']:
-            score = task.denormalize_y(score)
-        logger.record(
-            "score", score, iteration, percentile=True)
-        print(f"[Iteration {iteration}] "
-              f"Average Score = {tf.reduce_mean(score)}")
+    # save the current solution to the disk
+    np.save(os.path.join(config["logging_dir"],
+                         f"solution.npy"), solution.numpy())
 
-        # render a video of the best solution found at the end
-        if iteration == config['iterations'] - 1:
-            render_video(config, task, (
-                solution)[np.argmax(np.reshape(score, [-1]))])
+    # evaluate the found solution and record a video
+    score = task.predict(solution)
+    if config['normalize_ys']:
+        score = task.denormalize_y(score)
+    logger.record(
+        "score", score, config['iterations'], percentile=True)

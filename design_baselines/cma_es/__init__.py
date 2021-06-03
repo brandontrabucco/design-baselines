@@ -84,11 +84,6 @@ def cma_es(config):
         forward_model_optim=tf.keras.optimizers.Adam,
         forward_model_lr=config['ensemble_lr'])
 
-    # create a manager for saving algorithms state to the disk
-    ensemble_manager = tf.train.CheckpointManager(
-        tf.train.Checkpoint(**ensemble.get_saveables()),
-        os.path.join(config['logging_dir'], 'ensemble'), 1)
-
     # create the training task and logger
     train_data, val_data = build_pipeline(
         x=x, y=y, bootstraps=config['bootstraps'],
@@ -96,7 +91,6 @@ def cma_es(config):
         val_size=config['val_size'])
 
     # train the model for an additional number of epochs
-    ensemble_manager.restore_or_initialize()
     ensemble.launch(train_data,
                     val_data,
                     logger,
@@ -141,6 +135,10 @@ def cma_es(config):
         solution = solution * standard_dev + mean
         logits = vae_model.decoder_cnn.predict(solution)
         solution = tf.argmax(logits, axis=2, output_type=tf.int32)
+
+    # save the current solution to the disk
+    np.save(os.path.join(config["logging_dir"],
+                         f"solution.npy"), solution.numpy())
 
     # evaluate the found solution
     score = task.predict(solution)
