@@ -12,7 +12,8 @@ def cli():
 @click.option('--dir', type=str)
 @click.option('--percentile', type=float, default=100.)
 @click.option('--modifier', type=str, default="-fidelity")
-def agreement_heatmap(dir, percentile, modifier):
+@click.option('--load', is_flag=True, default=False)
+def agreement_heatmap(dir, percentile, modifier, load):
 
     import glob
     import os
@@ -63,7 +64,7 @@ def agreement_heatmap(dir, percentile, modifier):
         "autofocused-cbas",
         "cbas",
         "bo-qei",
-        # "cma-es",
+        #"cma-es",
         "gradient-ascent",
         "gradient-ascent-min-ensemble",
         "gradient-ascent-mean-ensemble",
@@ -107,49 +108,51 @@ def agreement_heatmap(dir, percentile, modifier):
     p = defaultdict(list)
     task_pattern = re.compile(r'(\w+)-(\w+)-v(\d+)$')
 
-    for baseline, task in tqdm.tqdm(
-            list(itertools.product(baselines, tasks))):
+    if not load:
+        for baseline, task in tqdm.tqdm(
+                list(itertools.product(baselines, tasks))):
 
-        is_logits = baseline_to_logits[baseline]
-        files = glob.glob(os.path.join(dir, f"{baseline}{modifier}-"
-                          f"{task}/*/*/*/solution.npy"))
+            is_logits = baseline_to_logits[baseline]
+            files = glob.glob(os.path.join(dir, f"{baseline}{modifier}-"
+                              f"{task}/*/*/*/solution.npy"))
 
-        for f in files:
+            for f in files:
 
-            solution_tensor = np.load(f)
+                solution_tensor = np.load(f)
 
-            params = os.path.join(os.path.dirname(
-                os.path.dirname(f)), "params.json")
+                params = os.path.join(os.path.dirname(
+                    os.path.dirname(f)), "params.json")
 
-            with open(params, "r") as params_file:
-                params = json.load(params_file)
+                with open(params, "r") as params_file:
+                    params = json.load(params_file)
 
-            for oracle in task_to_oracles[task]:
-                matches = task_pattern.search(params["task"])
-                db_task = db.make(params["task"].replace(
-                    matches.group(2), oracle), **params["task_kwargs"])
+                for oracle in task_to_oracles[task]:
+                    matches = task_pattern.search(params["task"])
+                    db_task = db.make(params["task"].replace(
+                        matches.group(2), oracle), **params["task_kwargs"])
 
-                if is_logits and db_task.is_discrete:
-                    db_task.map_to_logits()
+                    if is_logits and db_task.is_discrete:
+                        db_task.map_to_logits()
 
-                elif db_task.is_discrete:
-                    db_task.map_to_integers()
+                    elif db_task.is_discrete:
+                        db_task.map_to_integers()
 
-                if params["normalize_xs"]:
-                    db_task.map_normalize_x()
+                    if params["normalize_xs"]:
+                        db_task.map_normalize_x()
 
-                scores = db_task.predict(solution_tensor)
-                p[f"{baseline}-{task}-"
-                  f"{oracle}"].append(np.percentile(scores, percentile))
+                    scores = db_task.predict(solution_tensor)
+                    p[f"{baseline}-{task}-"
+                      f"{oracle}"].append(np.percentile(scores, percentile))
 
     print("aggregating performance")
 
     p2 = dict()
-    for task in tasks:
-        for oracle in task_to_oracles[task]:
-            p2[f"{task}-{oracle}"] = [
-                p[f"{baseline}-{task}-{oracle}"]
-                for baseline in baselines]
+    if not load:
+        for task in tasks:
+            for oracle in task_to_oracles[task]:
+                p2[f"{task}-{oracle}"] = [
+                    p[f"{baseline}-{task}-{oracle}"]
+                    for baseline in baselines]
 
     print("rendering heatmaps")
 
@@ -160,34 +163,37 @@ def agreement_heatmap(dir, percentile, modifier):
 
         metric_data = np.zeros([len(task_oracles), len(task_oracles)])
 
-        for i, oracle0 in enumerate(task_oracles):
-            for j, oracle1 in enumerate(task_oracles):
-                oracle0_data = deepcopy(p2[f"{task}-{oracle0}"])
-                oracle1_data = deepcopy(p2[f"{task}-{oracle1}"])
+        if not load:
+            for i, oracle0 in enumerate(task_oracles):
+                for j, oracle1 in enumerate(task_oracles):
+                    oracle0_data = deepcopy(p2[f"{task}-{oracle0}"])
+                    oracle1_data = deepcopy(p2[f"{task}-{oracle1}"])
 
-                oracle0_data = [0.0 if len(value) == 0 else
-                                np.mean(value) for value in oracle0_data]
-                oracle1_data = [0.0 if len(value) == 0 else
-                                np.mean(value) for value in oracle1_data]
+                    oracle0_data = [0.0 if len(value) == 0 else
+                                    np.mean(value) for value in oracle0_data]
+                    oracle1_data = [0.0 if len(value) == 0 else
+                                    np.mean(value) for value in oracle1_data]
 
-                oracle0_data = np.array(oracle0_data)
-                oracle1_data = np.array(oracle1_data)
+                    oracle0_data = np.array(oracle0_data)
+                    oracle1_data = np.array(oracle1_data)
 
-                if metric == "rank-correlation":
-                    rho = stats.spearmanr(oracle0_data, oracle1_data)[0]
-                    metric_data[j][i] = rho
+                    if metric == "rank-correlation":
+                        rho = stats.spearmanr(oracle0_data, oracle1_data)[0]
+                        metric_data[j][i] = rho
 
-                elif metric == "max-shift":
-                    table0_index = oracle0_data.argsort().argsort()
-                    table1_index = oracle1_data.argsort().argsort()
-                    max_shift = np.abs(table0_index - table1_index).max()
-                    metric_data[j][i] = max_shift
+                    elif metric == "max-shift":
+                        table0_index = oracle0_data.argsort().argsort()
+                        table1_index = oracle1_data.argsort().argsort()
+                        max_shift = np.abs(table0_index - table1_index).max()
+                        metric_data[j][i] = max_shift
 
-                elif metric == "avg-shift":
-                    table0_index = oracle0_data.argsort().argsort()
-                    table1_index = oracle1_data.argsort().argsort()
-                    avg_shift = np.abs(table0_index - table1_index).mean()
-                    metric_data[j][i] = avg_shift
+                    elif metric == "avg-shift":
+                        table0_index = oracle0_data.argsort().argsort()
+                        table1_index = oracle1_data.argsort().argsort()
+                        avg_shift = np.abs(table0_index - table1_index).mean()
+                        metric_data[j][i] = avg_shift
+        else:
+            metric_data = np.load(f'{task}{modifier}-{metric}-heatmap.npy')
 
         # save a separate plot for every hyper parameter
         plt.clf()
@@ -195,12 +201,12 @@ def agreement_heatmap(dir, percentile, modifier):
                     xticklabels=task_oracles,
                     yticklabels=task_oracles,
                     cbar_kws={'label': metric},
-                    square=True)
+                    square=True, vmin=0,
+                    vmax=1 if metric == "rank-correlation" else None)
         plt.title(f"Oracle Agreement: {task}")
         plt.xticks(rotation=90)
         plt.yticks(rotation=0)
-        plt.savefig(f'{task}{modifier}-{metric}-heatmap.png',
-                    bbox_inches='tight')
+        plt.savefig(f'{task}{modifier}-{metric}-heatmap.png', bbox_inches='tight')
         np.save(f'{task}{modifier}-{metric}-heatmap.npy', metric_data)
 
 
@@ -265,7 +271,8 @@ def rank_tables(table0, table1):
 @click.option('--dir', type=str)
 @click.option('--percentile', type=str, default="100th")
 @click.option('--modifier', type=str, default="")
-def make_table(dir, percentile, modifier):
+@click.option('--group', type=str, default="")
+def make_table(dir, percentile, modifier, group):
 
     import glob
     import os
@@ -274,16 +281,68 @@ def make_table(dir, percentile, modifier):
     import numpy as np
     import pandas as pd
 
+    from design_bench.datasets.discrete.gfp_dataset import GFPDataset
+    from design_bench.datasets.discrete.tf_bind_8_dataset import TFBind8Dataset
+    from design_bench.datasets.discrete.utr_dataset import UTRDataset
+    from design_bench.datasets.discrete.chembl_dataset import ChEMBLDataset
+
+    from design_bench.datasets.continuous.superconductor_dataset import SuperconductorDataset
+    from design_bench.datasets.continuous.ant_morphology_dataset import AntMorphologyDataset
+    from design_bench.datasets.continuous.dkitty_morphology_dataset import DKittyMorphologyDataset
+    from design_bench.datasets.continuous.hopper_controller_dataset import HopperControllerDataset
+
     tasks = [
         "gfp",
         "tf-bind-8",
         "utr",
-        "hopper",
-        "superconductor",
         "chembl",
+    ] if group == "A" else [
+        "superconductor",
         "ant",
-        "dkitty"
+        "dkitty",
+        "hopper",
+    ] if group == "B" else [
+        "gfp",
+        "tf-bind-8",
+        "utr",
+        "chembl",
+        "superconductor",
+        "ant",
+        "dkitty",
+        "hopper",
     ]
+
+    gfp_dataset = GFPDataset()
+    tf_bind_8_dataset = TFBind8Dataset()
+    utr_dataset = UTRDataset()
+    chembl_dataset = ChEMBLDataset()
+
+    superconductor_dataset = SuperconductorDataset()
+    ant_dataset = AntMorphologyDataset()
+    dkitty_dataset = DKittyMorphologyDataset()
+    hopper_dataset = HopperControllerDataset()
+
+    task_to_min = {
+        "gfp": gfp_dataset.y.min(),
+        "tf-bind-8": tf_bind_8_dataset.y.min(),
+        "utr": utr_dataset.y.min(),
+        "chembl": chembl_dataset.y.min(),
+        "superconductor": superconductor_dataset.y.min(),
+        "ant": ant_dataset.y.min(),
+        "dkitty": dkitty_dataset.y.min(),
+        "hopper": hopper_dataset.y.min(),
+    }
+
+    task_to_max = {
+        "gfp": gfp_dataset.y.max(),
+        "tf-bind-8": tf_bind_8_dataset.y.max(),
+        "utr": utr_dataset.y.max(),
+        "chembl": chembl_dataset.y.max(),
+        "superconductor": superconductor_dataset.y.max(),
+        "ant": ant_dataset.y.max(),
+        "dkitty": dkitty_dataset.y.max(),
+        "hopper": hopper_dataset.y.max(),
+    }
 
     baselines = [
         "autofocused-cbas",
@@ -323,6 +382,8 @@ def make_table(dir, percentile, modifier):
 
     performance = dict()
     for task in tqdm.tqdm(tasks):
+        task_min = task_to_min[task]
+        task_max = task_to_max[task]
         performance[task] = dict()
         for baseline in baselines:
             performance[task][baseline] = list()
@@ -337,7 +398,9 @@ def make_table(dir, percentile, modifier):
                             if v.tag == baseline_to_tag[baseline] \
                                     and e.step == baseline_to_iteration[baseline]:
                                 performance[task][baseline].append(
-                                    tf.make_ndarray(v.tensor))
+                                    (tf.make_ndarray(v.tensor) - task_min)/
+                                    (task_max - task_min)
+                                )
 
     final_data = [[None for t in tasks] for b in baselines]
     final_data_numeric = [[None for t in tasks] for b in baselines]
