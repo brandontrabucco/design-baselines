@@ -267,7 +267,7 @@ def mins(config):
                       percentile=True)
 
     # generate samples for exploration
-    solver_xs = exploit_gan.sample(condition_ys, temp=0.001)
+    solver_xs = exploit_gen.sample(condition_ys, temp=0.001)
     solution = tf.argmax(solver_xs, axis=-1, output_type=tf.int32) \
                if task.is_discrete else solver_xs
 
