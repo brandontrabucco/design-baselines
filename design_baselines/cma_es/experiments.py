@@ -347,7 +347,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def utr(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate CMA-ES on UTR-Transformer-v0
+    """Evaluate CMA-ES on UTR-ResNet-v0
     """
 
     # Final Version
@@ -361,7 +361,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": True,
-        "task": "UTR-Transformer-v0",
+        "task": "UTR-ResNet-v0",
         "task_kwargs": {"relabel": False},
         "bootstraps": 5,
         "val_size": 200,

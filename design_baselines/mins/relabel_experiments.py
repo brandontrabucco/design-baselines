@@ -475,7 +475,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def utr(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate MINs on UTR-Transformer-v0
+    """Evaluate MINs on UTR-ResNet-v0
     """
 
     # Final Version
@@ -487,7 +487,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
              _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(mins, config={
         "logging_dir": "data",
-        "task": "UTR-Transformer-v0",
+        "task": "UTR-ResNet-v0",
         "task_kwargs": {"relabel": True},
         "val_size": 200,
         "offline": True,

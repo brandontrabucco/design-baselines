@@ -333,7 +333,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def utr(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate reinforce on UTR-Transformer-v0
+    """Evaluate reinforce on UTR-ResNet-v0
     """
 
     # Final Version
@@ -347,7 +347,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
-        "task": "UTR-Transformer-v0",
+        "task": "UTR-ResNet-v0",
         "task_kwargs": {"relabel": True},
         "optimize_ground_truth": False,
         "bootstraps": 5,

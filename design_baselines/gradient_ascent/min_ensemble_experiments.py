@@ -347,7 +347,7 @@ def tf_bind_8(local_dir, cpus, gpus, num_parallel, num_samples):
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
 def utr(local_dir, cpus, gpus, num_parallel, num_samples):
-    """Evaluate Naive Gradient Ascent on UTR-Transformer-v0
+    """Evaluate Naive Gradient Ascent on UTR-ResNet-v0
     """
 
     # Final Version
@@ -359,7 +359,7 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
              _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
-        "task": "UTR-Transformer-v0",
+        "task": "UTR-ResNet-v0",
         "task_kwargs": {"relabel": False},
         "normalize_ys": True,
         "normalize_xs": True,
