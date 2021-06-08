@@ -291,7 +291,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "ChEMBL-ResNet-v0",
-        "task_kwargs": {"relabel": False, "dataset_kwargs": dict(max_samples=5000)},
+        "task_kwargs": {"relabel": False, "dataset_kwargs": dict(max_samples=1000)},
         "val_size": 200,
         "offline": True,
         "normalize_ys": True,
