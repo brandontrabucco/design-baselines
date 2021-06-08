@@ -252,7 +252,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
         "latent_size": 32,
         "vae_lr": 0.0003,
         "vae_beta": 1.0,
-        "offline_epochs": 200,
+        "offline_epochs": 50,
         "online_batches": 10,
         "online_epochs": 10,
         "autofocus_epochs": 10,

@@ -357,15 +357,15 @@ def make_table(dir, percentile, modifier, group):
     ]
 
     baseline_to_tag = {
-        "autofocused-cbas": f"score/{percentile}",
-        "cbas": f"score/{percentile}",
-        "bo-qei": f"score/{percentile}",
-        "cma-es": f"score/{percentile}",
-        "gradient-ascent": f"score/{percentile}",
-        "gradient-ascent-min-ensemble": f"score/{percentile}",
-        "gradient-ascent-mean-ensemble": f"score/{percentile}",
-        "mins": f"exploitation/actual_ys/{percentile}",
-        "reinforce": f"score/{percentile}"
+        "autofocused-cbas": [f"score/{percentile}"],
+        "cbas": [f"score/{percentile}"],
+        "bo-qei": [f"score/{percentile}"],
+        "cma-es": [f"score/{percentile}"],
+        "gradient-ascent": [f"score/{percentile}"],
+        "gradient-ascent-min-ensemble": [f"score/{percentile}"],
+        "gradient-ascent-mean-ensemble": [f"score/{percentile}"],
+        "mins": [f"exploitation/actual_ys/{percentile}", f"score/{percentile}"],
+        "reinforce": [f"score/{percentile}"]
     }
 
     baseline_to_iteration = {
@@ -395,10 +395,10 @@ def make_table(dir, percentile, modifier, group):
                 for f in glob.glob(os.path.join(d, '*/events.out*')):
                     for e in tf.compat.v1.train.summary_iterator(f):
                         for v in e.summary.value:
-                            if v.tag == baseline_to_tag[baseline] \
+                            if v.tag in baseline_to_tag[baseline]\
                                     and e.step == baseline_to_iteration[baseline]:
                                 performance[task][baseline].append(
-                                    (tf.make_ndarray(v.tensor) - task_min)/
+                                    (tf.make_ndarray(v.tensor) - task_min) /
                                     (task_max - task_min)
                                 )
 
