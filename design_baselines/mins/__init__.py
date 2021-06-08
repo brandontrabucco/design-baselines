@@ -36,12 +36,14 @@ def mins(config):
     x = task.x
     y = task.y
 
-    if task.is_discrete:
+    def map_to_probs(x, *rest):
         x = task.to_logits(x)
         x = tf.pad(x, [[0, 0]] * (len(x.shape) - 1) + [[1, 0]])
-        x = tf.math.softmax(x / 1e-5).numpy()
+        return (tf.math.softmax(x / 1e-5), *rest)
 
     input_shape = x.shape[1:]
+    if task.is_discrete:
+        input_shape = list(x.shape[1:]) + [task.num_classes]
 
     base_temp = config.get('base_temp', None)
 
@@ -70,6 +72,11 @@ def mins(config):
             x=x, y=y, bootstraps=config['bootstraps'],
             batch_size=config['oracle_batch_size'],
             val_size=config['val_size'])
+
+        train_data = train_data.map(
+            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        val_data = val_data.map(
+            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
         # train the model for an additional number of epochs
         oracle.launch(train_data,
@@ -157,6 +164,11 @@ def mins(config):
         batch_size=config['gan_batch_size'],
         val_size=config['val_size'])
 
+    train_data = train_data.map(
+        map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    val_data = val_data.map(
+        map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
     # train the gan for several epochs
     explore_gan.launch(
         train_data, val_data, logger, config['initial_epochs'],
@@ -207,6 +219,11 @@ def mins(config):
             batch_size=config['gan_batch_size'],
             val_size=config['val_size'])
 
+        train_data = train_data.map(
+            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        val_data = val_data.map(
+            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
         # train the gan for several epochs
         explore_gan.launch(
             train_data, val_data, logger, config['epochs_per_iteration'],
@@ -220,10 +237,11 @@ def mins(config):
 
         # generate samples for exploration
         solver_xs = explore_gen.sample(condition_ys, temp=0.001)
+        if task.is_discrete:
+            solver_xs = tf.argmax(
+                solver_xs, axis=-1, output_type=tf.int32)
         actual_ys = oracle.get_distribution(solver_xs).mean() \
-            if config['offline'] else task.predict(
-            tf.argmax(solver_xs, axis=-1, output_type=tf.int32)
-            if task.is_discrete else solver_xs)
+            if config['offline'] else task.predict(solver_xs)
 
         # record score percentiles
         logger.record("exploration/condition_ys",
@@ -247,6 +265,11 @@ def mins(config):
             w=get_weights(y.numpy(), base_temp=base_temp),
             batch_size=config['gan_batch_size'],
             val_size=config['val_size'])
+
+        train_data = train_data.map(
+            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        val_data = val_data.map(
+            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
         # train the gan for several epochs
         exploit_gan.launch(
