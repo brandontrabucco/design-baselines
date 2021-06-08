@@ -71,7 +71,7 @@ def mins(config):
         train_data, val_data = build_pipeline(
             x=x, y=y, bootstraps=config['bootstraps'],
             batch_size=config['oracle_batch_size'],
-            val_size=config['val_size'])
+            val_size=config['val_size'], buffer=1)
 
         train_data = train_data.map(
             map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -162,7 +162,7 @@ def mins(config):
     train_data, val_data = build_pipeline(
         x=x, y=y, w=get_weights(y, base_temp=base_temp),
         batch_size=config['gan_batch_size'],
-        val_size=config['val_size'])
+        val_size=config['val_size'], buffer=1)
 
     train_data = train_data.map(
         map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -217,7 +217,7 @@ def mins(config):
             x=tilde_x.numpy(), y=tilde_y.numpy(),
             w=get_weights(tilde_y.numpy(), base_temp=base_temp),
             batch_size=config['gan_batch_size'],
-            val_size=config['val_size'])
+            val_size=config['val_size'], buffer=1)
 
         train_data = train_data.map(
             map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -264,7 +264,7 @@ def mins(config):
             x=x.numpy(), y=y.numpy(),
             w=get_weights(y.numpy(), base_temp=base_temp),
             batch_size=config['gan_batch_size'],
-            val_size=config['val_size'])
+            val_size=config['val_size'], buffer=1)
 
         train_data = train_data.map(
             map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)

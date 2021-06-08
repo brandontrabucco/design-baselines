@@ -6,7 +6,7 @@ import numpy as np
 
 
 def build_pipeline(x, y, w=None, val_size=200, batch_size=128,
-                   bootstraps=0, bootstraps_noise=None):
+                   bootstraps=0, bootstraps_noise=None, buffer=None):
     """Split a model-based optimization dataset consisting of a set of design
     values x and prediction values y into a training and validation set,
     supporting bootstrapping and importance weighting
@@ -79,8 +79,8 @@ def build_pipeline(x, y, w=None, val_size=200, batch_size=128,
     # build the parallel tensorflow data loading pipeline
     training_dataset = Dataset.from_tensor_slices(tuple(train_inputs))
     validation_dataset = Dataset.from_tensor_slices(tuple(validate_inputs))
-    training_dataset = training_dataset.shuffle(size)
-    validation_dataset = validation_dataset.shuffle(val_size)
+    training_dataset = training_dataset.shuffle(size if buffer is None else buffer)
+    validation_dataset = validation_dataset
 
     # batch and prefetch each data set
     training_dataset = training_dataset.batch(batch_size)
@@ -965,7 +965,7 @@ class StaticGraphTask(Task):
 
         new_x = tf.numpy_function(self.to_logits_numpy, [x], tf.float32)
         new_x.set_shape(list(x.shape) +
-                        [self.wrapped_task.dataset.num_classes])
+                        [self.wrapped_task.dataset.num_classes - 1])
         return new_x
 
     def predict_numpy(self, x_batch):
