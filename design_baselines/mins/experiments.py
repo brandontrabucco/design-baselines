@@ -287,7 +287,6 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
     ray.init(num_cpus=cpus,
              num_gpus=gpus,
              include_dashboard=False,
-             local_mode=True,
              _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(mins, config={
         "logging_dir": "data",
