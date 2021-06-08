@@ -64,7 +64,7 @@ def agreement_heatmap(dir, percentile, modifier, load):
         "autofocused-cbas",
         "cbas",
         "bo-qei",
-        #"cma-es",
+        # "cma-es", didn't finish by the deadline
         "gradient-ascent",
         "gradient-ascent-min-ensemble",
         "gradient-ascent-mean-ensemble",
@@ -99,7 +99,7 @@ def agreement_heatmap(dir, percentile, modifier, load):
             "Transformer"
         ],
         "superconductor": [
-            "GP",
+            # "GP",
             "RandomForest",
             "FullyConnected"
         ]
