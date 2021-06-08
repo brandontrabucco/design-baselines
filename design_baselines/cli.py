@@ -315,7 +315,7 @@ def make_table(dir, percentile, modifier, group):
     gfp_dataset = GFPDataset()
     tf_bind_8_dataset = TFBind8Dataset()
     utr_dataset = UTRDataset()
-    chembl_dataset = ChEMBLDataset()
+    chembl_dataset = ChEMBLDataset(max_percentile=53)
 
     superconductor_dataset = SuperconductorDataset()
     ant_dataset = AntMorphologyDataset()
