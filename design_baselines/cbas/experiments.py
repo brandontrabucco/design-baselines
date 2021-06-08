@@ -244,7 +244,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_max_std": 0.2,
         "initial_min_std": 0.1,
         "ensemble_lr": 0.0003,
-        "ensemble_epochs": 100,
+        "ensemble_epochs": 50,
         "latent_size": 32,
         "vae_lr": 0.0003,
         "vae_beta": 1.0,

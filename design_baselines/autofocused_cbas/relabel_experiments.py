@@ -239,7 +239,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
         "task_kwargs": {"relabel": True},
         "bootstraps": 5,
         "val_size": 200,
-        "ensemble_batch_size": 100,
+        "ensemble_batch_size": 50,
         "vae_batch_size": 100,
         "embedding_size": 256,
         "hidden_size": 256,
