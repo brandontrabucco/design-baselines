@@ -272,7 +272,8 @@ def rank_tables(table0, table1):
 @click.option('--percentile', type=str, default="100th")
 @click.option('--modifier', type=str, default="")
 @click.option('--group', type=str, default="")
-def make_table(dir, percentile, modifier, group):
+@click.option('--normalize/--no-normalize', is_flag=True, default=True)
+def make_table(dir, percentile, modifier, group, normalize):
 
     import glob
     import os
@@ -397,9 +398,10 @@ def make_table(dir, percentile, modifier, group):
                         for v in e.summary.value:
                             if v.tag in baseline_to_tag[baseline]\
                                     and e.step == baseline_to_iteration[baseline]:
+                                score = tf.make_ndarray(v.tensor)
                                 performance[task][baseline].append(
-                                    (tf.make_ndarray(v.tensor) - task_min) /
-                                    (task_max - task_min)
+                                    ((score - task_min) / (
+                                        task_max - task_min)) if normalize else score
                                 )
 
     final_data = [[None for t in tasks] for b in baselines]
@@ -1885,10 +1887,11 @@ def plot(dir, tag, xlabel, ylabel, separate_runs,
 @click.option('--tag', type=str)
 @click.option('--xlabel', type=str)
 @click.option('--ylabel', type=str)
+@click.option('--cbar-label', type=str)
 @click.option('--iteration', type=int, default=999999)
 @click.option('--lower-limit', type=float, default=-999999.)
 @click.option('--upper-limit', type=float, default=999999.)
-def plot_heatmap(dir, tag, xlabel, ylabel,
+def plot_heatmap(dir, tag, xlabel, ylabel, cbar_label,
                  iteration, lower_limit, upper_limit):
 
     from collections import defaultdict
@@ -1999,12 +2002,14 @@ def plot_heatmap(dir, tag, xlabel, ylabel,
     g = sns.heatmap(data,
                     xticklabels=[r"$\infty$" if x == 10.0 else f"{x}" for x in p0_keys],
                     yticklabels=[r"$\infty$" if x == 10.0 else f"{x}" for x in p1_keys],
-                    square=True)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+                    square=True,
+                    cbar_kws={'label': r"$\textbf{" + cbar_label + r"}$"})
+    plt.title(r"$\textbf{" + task_name + r"}$")
+    plt.xlabel(r"$\textbf{" + xlabel + r"}$")
+    plt.ylabel(r"$\textbf{" + ylabel + r"}$")
     plt.xticks(rotation=90)
     plt.yticks(rotation=0)
-    plt.savefig(f'{algo_name}_{task_name}_{tag.replace("/", "_")}_heatmap.png',
+    plt.savefig(f'{algo_name}_{task_name}_{tag.replace("/", "_")}_heatmap.pdf',
                 bbox_inches='tight')
 
 

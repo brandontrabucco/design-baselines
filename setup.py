@@ -13,6 +13,8 @@ setup(
     entry_points={'console_scripts': (
         'design-baselines=design_baselines.cli:cli',
 
+        'coms=design_baselines.coms_cleaned:coms_cleaned',
+
         'coms-cleaned=design_baselines.'
         'coms_cleaned.experiments:cli',
         'coms-original=design_baselines.'
