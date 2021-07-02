@@ -21,22 +21,22 @@ import json
               default='HopperController-Exact-v0',
               help='The name of the design-bench task to use during '
                    'the experiment.')
-@click.option('--task-relabel',
+@click.option('--task-relabel/--no-task-relabel',
               default=False,
               help='Whether to relabel the real Offline MBO data with '
                    'predictions made by the oracle (this eliminates a '
                    'train-test discrepency if the oracle is not an '
                    'adequate model of the data).')
-@click.option('--normalize-ys',
+@click.option('--normalize-ys/--no-normalize-ys',
               default=True,
               help='Whether to normalize the y values in the Offline MBO '
                    'dataset before performing model-based optimization.')
-@click.option('--normalize-xs',
+@click.option('--normalize-xs/--no-normalize-xs',
               default=True,
               help='Whether to normalize the x values in the Offline MBO '
                    'dataset before performing model-based optimization. '
                    '(note that x must not be discrete)')
-@click.option('--in-latent-space',
+@click.option('--in-latent-space/--not-in-latent-space',
               default=False,
               help='Whether to embed the designs into the latent space of '
                    'a VAE before performing model-based optimization '
@@ -77,7 +77,11 @@ import json
 @click.option('--particle-lr',
               default=0.05,
               help='The learning rate used in the COMs inner loop.')
-@click.option('--particle-gradient-steps',
+@click.option('--particle-train-gradient-steps',
+              default=50,
+              help='The number of gradient ascent steps used in the '
+                   'COMs inner loop.')
+@click.option('--particle-evaluate-gradient-steps',
               default=50,
               help='The number of gradient ascent steps used in the '
                    'COMs inner loop.')
@@ -92,7 +96,7 @@ import json
 @click.option('--forward-model-hidden-size',
               default=2048,
               help='The hidden size of the forward model.')
-@click.option('--forward-model-final-tanh',
+@click.option('--forward-model-final-tanh/--no-forward-model-final-tanh',
               default=False,
               help='Whether to use a final tanh activation as the final '
                    'layer of the forward model.')
@@ -144,7 +148,8 @@ def coms_cleaned(
         vae_val_size=200,
         vae_epochs=10,
         particle_lr=0.05,
-        particle_gradient_steps=1,
+        particle_train_gradient_steps=1,
+        particle_evaluate_gradient_steps=1,
         particle_entropy_coefficient=0.0,
         forward_model_activations=("relu", "relu"),
         forward_model_hidden_size=2048,
@@ -182,7 +187,10 @@ def coms_cleaned(
         vae_val_size=vae_val_size,
         vae_epochs=vae_epochs,
         particle_lr=particle_lr,
-        particle_gradient_steps=particle_gradient_steps,
+        particle_train_gradient_steps=
+        particle_train_gradient_steps,
+        particle_evaluate_gradient_steps=
+        particle_evaluate_gradient_steps,
         particle_entropy_coefficient=
         particle_entropy_coefficient,
         forward_model_activations=forward_model_activations,
@@ -262,7 +270,7 @@ def coms_cleaned(
         alpha_opt=tf.keras.optimizers.Adam, alpha_lr=forward_model_alpha_lr,
         overestimation_limit=forward_model_overestimation_limit,
         particle_lr=particle_lr, noise_std=forward_model_noise_std,
-        particle_gradient_steps=particle_gradient_steps,
+        particle_gradient_steps=particle_train_gradient_steps,
         entropy_coefficient=particle_entropy_coefficient)
 
     # create a data set
@@ -277,17 +285,25 @@ def coms_cleaned(
     # select the top k initial designs from the dataset
     indices = tf.math.top_k(y[:, 0], k=evaluation_samples)[1]
     initial_x = tf.gather(x, indices, axis=0)
+    initial_y = tf.gather(y, indices, axis=0)
     xt = initial_x
 
     scores = []
     predictions = []
 
-    for step in range(particle_gradient_steps):
+    score = task.predict(xt)
+    if normalize_ys:
+        initial_y = task.denormalize_y(initial_y)
+        score = task.denormalize_y(score)
+    logger.record(f"dataset_score", initial_y, 0, percentile=True)
+    logger.record(f"score", score, 0, percentile=True)
+
+    for step in range(particle_evaluate_gradient_steps):
 
         # update the set of solution particles
         xt = trainer.optimize(xt, 1, training=False)
         final_xt = trainer.optimize(
-            xt, particle_gradient_steps, training=False)
+            xt, particle_train_gradient_steps, training=False)
 
         # evaluate the solutions found by the model
         score = task.predict(xt)

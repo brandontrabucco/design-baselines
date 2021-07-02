@@ -112,7 +112,8 @@ class ConservativeObjectiveModel(tf.Module):
                 loss = self.entropy_coefficient * entropy + score
 
             # update the particles to maximize the conservatism
-            return xt + self.particle_lr * tape.gradient(loss, xt),
+            return tf.stop_gradient(
+                xt + self.particle_lr * tape.gradient(loss, xt)),
 
         # use a while loop to perform gradient ascent on the score
         return tf.while_loop(
