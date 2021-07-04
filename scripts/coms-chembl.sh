@@ -1,5 +1,5 @@
 #!/bin/bash
-NUM_TRIALS_PER_GPU=1
+NUM_TRIALS_PER_GPU=2
 IFS=, read -ra DEVICES <<< "$CUDA_VISIBLE_DEVICES"
 for DEVICE in "${DEVICES[@]}"; do
     for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
