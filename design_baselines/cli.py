@@ -354,7 +354,8 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gradient-ascent-min-ensemble",
         "gradient-ascent-mean-ensemble",
         "mins",
-        "reinforce"
+        "reinforce",
+        "coms"
     ]
 
     baseline_to_tag = {
@@ -366,7 +367,8 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gradient-ascent-min-ensemble": [f"score/{percentile}"],
         "gradient-ascent-mean-ensemble": [f"score/{percentile}"],
         "mins": [f"exploitation/actual_ys/{percentile}", f"score/{percentile}"],
-        "reinforce": [f"score/{percentile}"]
+        "reinforce": [f"score/{percentile}"],
+        "coms": [f"score/{percentile}"]
     }
 
     baseline_to_iteration = {
@@ -378,7 +380,8 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gradient-ascent-min-ensemble": 200,
         "gradient-ascent-mean-ensemble": 200,
         "mins": 0,
-        "reinforce": 200
+        "reinforce": 200,
+        "coms": 49
     }
 
     performance = dict()
@@ -393,7 +396,11 @@ def make_table(dir, percentile, modifier, group, normalize):
                 dir, f"{baseline}{modifier}-{task}/*/*")) if os.path.isdir(d)]
 
             for d in dirs:
-                for f in glob.glob(os.path.join(d, '*/events.out*')):
+                event_files = (
+                    list(glob.glob(os.path.join(d, '*/events.out*'))) +
+                    list(glob.glob(os.path.join(d, 'events.out*')))
+                )
+                for f in event_files:
                     for e in tf.compat.v1.train.summary_iterator(f):
                         for v in e.summary.value:
                             if v.tag in baseline_to_tag[baseline]\

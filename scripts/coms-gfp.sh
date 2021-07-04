@@ -29,9 +29,9 @@ for DEVICE in "${DEVICES[@]}"; do
             --forward-model-hidden-size 2048 \
             --no-forward-model-final-tanh \
             --forward-model-lr 0.0003 \
-            --forward-model-alpha 0.0 \
-            --forward-model-alpha-lr 0.0 \
-            --forward-model-overestimation-limit 0.5 \
+            --forward-model-alpha 0.1 \
+            --forward-model-alpha-lr 0.01 \
+            --forward-model-overestimation-limit 0.1 \
             --forward-model-noise-std 0.0 \
             --forward-model-batch-size 128 \
             --forward-model-val-size 500 \
