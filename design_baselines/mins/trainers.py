@@ -281,11 +281,8 @@ class WeightedGAN(tf.Module):
     def __init__(self,
                  generator,
                  discriminator,
-                 pool,
                  critic_frequency=5,
                  flip_frac=0.0,
-                 pool_frac=0.0,
-                 pool_save=0,
                  fake_pair_frac=0.0,
                  penalty_weight=0.0,
                  generator_lr=0.0002,
@@ -310,21 +307,12 @@ class WeightedGAN(tf.Module):
         discriminator: tf.keras.Model
             the discriminator model in a generative adversarial network
             conditioned on designs x and target y values
-        pool: ReplayBuffer
-            a replay buffer that is able to store previously generated
-            designs x from the gan up to a certain capacity
         critic_frequency: int
             the number of critic gradient descent steps on different batches
             to take before optimizing the generator
         flip_frac: float
             the probability of flipping the labels of real samples
             when training the discriminator
-        pool_frac: float
-            the fraction of the fake loss taken from samples of
-            designs from the replay pool
-        pool_save: int
-            the number of designs samples from the current generator to
-            store in the replay buffer at every step
         fake_pair_frac: float
             the fraction of the fake loss taken from samples of
             fake pairs of real samples
@@ -378,10 +366,6 @@ class WeightedGAN(tf.Module):
         self.start_temp = start_temp
         self.final_temp = final_temp
         self.temp = tf.Variable(0.0, dtype=tf.float32)
-
-        self.pool = pool
-        self.pool_frac = pool_frac
-        self.pool_save = pool_save
 
         # create optimizers for the generator
         self.generator = generator
@@ -438,16 +422,14 @@ class WeightedGAN(tf.Module):
             p_fake, d_fake, acc_fake = self.discriminator.loss(
                 x_fake, y_real, tf.zeros([batch_dim, 1]), training=False)
 
-            statistics[f'generator/train/x_fake'] = x_fake
             statistics[f'generator/train/y_real'] = y_real
             statistics[f'discriminator/train/p_fake'] = p_fake
             statistics[f'discriminator/train/d_fake'] = d_fake
             statistics[f'discriminator/train/acc_fake'] = acc_fake
 
             # normalize the fake evaluation metrics
-            d_fake = d_fake * (1.0 - self.fake_pair_frac - self.pool_frac)
+            d_fake = d_fake * (1.0 - self.fake_pair_frac)
 
-            x_pair = tf.zeros_like(x_fake)
             p_pair = tf.zeros_like(p_fake)
             d_pair = tf.zeros_like(d_fake)
             acc_pair = tf.zeros_like(acc_fake)
@@ -462,36 +444,9 @@ class WeightedGAN(tf.Module):
                 # average the metrics between fake samples
                 d_fake = d_pair * self.fake_pair_frac + d_fake
 
-            statistics[f'generator/train/x_pair'] = x_pair
             statistics[f'discriminator/train/p_pair'] = p_pair
             statistics[f'discriminator/train/d_pair'] = d_pair
             statistics[f'discriminator/train/acc_pair'] = acc_pair
-
-            x_pool = tf.zeros_like(x_fake)
-            p_pool = tf.zeros_like(p_fake)
-            d_pool = tf.zeros_like(d_fake)
-            acc_pool = tf.zeros_like(acc_fake)
-
-            if self.pool.size > batch_dim and self.pool_frac > 0:
-
-                # evaluate discriminator on samples from a replay buffer
-                x_pool, y_pool = self.pool.sample(batch_dim)
-                p_pool, d_pool, acc_pool = self.discriminator.loss(
-                    x_pool, y_pool, tf.zeros([batch_dim, 1]), training=False)
-
-                # average the metrics between fake samples
-                d_fake = d_pool * self.pool_frac + d_fake
-
-            statistics[f'generator/train/x_pool'] = x_pool
-            statistics[f'discriminator/train/p_pool'] = p_pool
-            statistics[f'discriminator/train/d_pool'] = d_pool
-            statistics[f'discriminator/train/acc_pool'] = acc_pool
-
-            if self.pool_save > 0:
-
-                # possibly add more generated samples to the replay pool
-                self.pool.insert_many(x_fake[:self.pool_save],
-                                      y_real[:self.pool_save])
 
             # evaluate the discriminator on real inputs
             labels = tf.cast(self.flip_frac <=
@@ -499,7 +454,6 @@ class WeightedGAN(tf.Module):
             p_real, d_real, acc_real = self.discriminator.loss(
                 x_real, y_real, labels, training=True)
 
-            statistics[f'generator/train/x_real'] = x_real
             statistics[f'discriminator/train/p_real'] = p_real
             statistics[f'discriminator/train/d_real'] = d_real
             statistics[f'discriminator/train/acc_real'] = acc_real
@@ -575,13 +529,11 @@ class WeightedGAN(tf.Module):
         p_fake, d_fake, acc_fake = self.discriminator.loss(
             x_fake, y_real, tf.zeros([batch_dim, 1]), training=False)
 
-        statistics[f'generator/validate/x_fake'] = x_fake
         statistics[f'generator/validate/y_real'] = y_real
         statistics[f'discriminator/validate/p_fake'] = p_fake
         statistics[f'discriminator/validate/d_fake'] = d_fake
         statistics[f'discriminator/validate/acc_fake'] = acc_fake
 
-        x_pair = tf.zeros_like(x_fake)
         p_pair = tf.zeros_like(p_fake)
         d_pair = tf.zeros_like(d_fake)
         acc_pair = tf.zeros_like(acc_fake)
@@ -593,33 +545,14 @@ class WeightedGAN(tf.Module):
             p_pair, d_pair, acc_pair = self.discriminator.loss(
                 x_pair, y_real, tf.zeros([batch_dim, 1]), training=False)
 
-        statistics[f'generator/validate/x_pair'] = x_pair
         statistics[f'discriminator/validate/p_pair'] = p_pair
         statistics[f'discriminator/validate/d_pair'] = d_pair
         statistics[f'discriminator/validate/acc_pair'] = acc_pair
-
-        x_pool = tf.zeros_like(x_fake)
-        p_pool = tf.zeros_like(p_fake)
-        d_pool = tf.zeros_like(d_fake)
-        acc_pool = tf.zeros_like(acc_fake)
-
-        if self.pool.size > batch_dim and self.pool_frac > 0:
-
-            # evaluate discriminator on samples from a replay buffer
-            x_pool, y_pool = self.pool.sample(batch_dim)
-            p_pool, d_pool, acc_pool = self.discriminator.loss(
-                x_pool, y_pool, tf.zeros([batch_dim, 1]), training=False)
-
-        statistics[f'generator/validate/x_pool'] = x_pool
-        statistics[f'discriminator/validate/p_pool'] = p_pool
-        statistics[f'discriminator/validate/d_pool'] = d_pool
-        statistics[f'discriminator/validate/acc_pool'] = acc_pool
 
         # evaluate the discriminator on real inputs
         p_real, d_real, acc_real = self.discriminator.loss(
             x_real, y_real, tf.ones([batch_dim, 1]), training=False)
 
-        statistics[f'generator/validate/x_real'] = x_real
         statistics[f'discriminator/validate/p_real'] = p_real
         statistics[f'discriminator/validate/d_real'] = d_real
         statistics[f'discriminator/validate/acc_real'] = acc_real
@@ -731,5 +664,4 @@ class WeightedGAN(tf.Module):
         saveables['generator_optim'] = self.generator_optim
         saveables['discriminator_optim'] = self.discriminator_optim
         saveables['temp'] = self.temp
-        saveables['pool'] = self.pool
         return saveables

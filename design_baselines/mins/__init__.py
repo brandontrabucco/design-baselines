@@ -87,10 +87,6 @@ def mins(config):
                       logger,
                       config['oracle_epochs'])
 
-    # create replay buffers for both GANS
-    explore_pool = ReplayBuffer(config['pool_size'], input_shape)
-    exploit_pool = ReplayBuffer(config['pool_size'], input_shape)
-
     disc_class = Discriminator
     dgen_class = DiscreteGenerator
     cgen_class = ContinuousGenerator
@@ -128,11 +124,9 @@ def mins(config):
         hidden=config['hidden_size'],
         method=config['method'])
     explore_gan = WeightedGAN(
-        explore_gen, explore_discriminator, explore_pool,
+        explore_gen, explore_discriminator,
         critic_frequency=config['critic_frequency'],
         flip_frac=config['flip_frac'],
-        pool_frac=config['pool_frac'],
-        pool_save=config['pool_save'],
         fake_pair_frac=config['fake_pair_frac'],
         penalty_weight=config['penalty_weight'],
         generator_lr=config['generator_lr'],
@@ -153,11 +147,9 @@ def mins(config):
         hidden=config['hidden_size'],
         method=config['method'])
     exploit_gan = WeightedGAN(
-        exploit_gen, exploit_discriminator, exploit_pool,
+        exploit_gen, exploit_discriminator,
         critic_frequency=config['critic_frequency'],
         flip_frac=config['flip_frac'],
-        pool_frac=config['pool_frac'],
-        pool_save=config['pool_save'],
         fake_pair_frac=config['fake_pair_frac'],
         penalty_weight=config['penalty_weight'],
         generator_lr=config['generator_lr'],
