@@ -91,39 +91,39 @@ def mins(config):
     explore_pool = ReplayBuffer(config['pool_size'], input_shape)
     exploit_pool = ReplayBuffer(config['pool_size'], input_shape)
 
-    d_class = ConvDiscriminator
-    dg_class = DiscreteConvGenerator
-    cg_class = ContinuousConvGenerator
+    disc_class = Discriminator
+    dgen_class = DiscreteGenerator
+    cgen_class = ContinuousGenerator
 
     if config['use_conv']:
 
         # use a convolutional architecture for the GAN
-        d_class = ConvDiscriminator
-        dg_class = DiscreteConvGenerator
-        cg_class = ContinuousConvGenerator
+        disc_class = ConvDiscriminator
+        dgen_class = DiscreteConvGenerator
+        cgen_class = ContinuousConvGenerator
 
     if task.is_discrete:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
-        explore_gen = dg_class(
+        explore_gen = dgen_class(
             input_shape, config['latent_size'],
             hidden=config['hidden_size'])
-        exploit_gen = dg_class(
+        exploit_gen = dgen_class(
             input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
     else:
 
         # build an LS-GAN to sample continuous outputs
-        explore_gen = cg_class(
+        explore_gen = cgen_class(
             input_shape, config['latent_size'],
             hidden=config['hidden_size'])
-        exploit_gen = cg_class(
+        exploit_gen = cgen_class(
             input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
     # build the neural network GAN components
-    explore_discriminator = d_class(
+    explore_discriminator = disc_class(
         input_shape,
         hidden=config['hidden_size'],
         method=config['method'])
@@ -148,7 +148,7 @@ def mins(config):
         final_temp=config.get('final_temp', 1.0))
 
     # build the neural network GAN components
-    exploit_discriminator = d_class(
+    exploit_discriminator = disc_class(
         input_shape,
         hidden=config['hidden_size'],
         method=config['method'])

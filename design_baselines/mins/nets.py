@@ -290,7 +290,7 @@ class ConvDiscriminator(tf.keras.Model):
 
         # define a layer of the neural net with two pathways
         self.dense_0 = tfkl.Conv1D(hidden, 3, strides=2, padding="same")
-        self.dense_0.build((None, None, design_shape[2] + hidden))
+        self.dense_0.build((None, None, design_shape[1] + hidden))
         self.ln_0 = tfkl.LayerNormalization()
         self.ln_0.build((None, None, hidden))
 
@@ -304,7 +304,7 @@ class ConvDiscriminator(tf.keras.Model):
         self.dense_2 = tfkl.Conv1D(hidden, 3, strides=2, padding="same")
         self.dense_2.build((None, None, hidden + hidden))
         self.ln_2 = tfkl.LayerNormalization()
-        self.ln_2.build((None, hidden))
+        self.ln_2.build((None, None, hidden))
 
         # define a layer of the neural net with two pathways
         self.dense_3 = tfkl.Dense(1)
@@ -336,15 +336,35 @@ class ConvDiscriminator(tf.keras.Model):
         x = tf.cast(x, tf.float32)
         y = tf.cast(y, tf.float32)
         y_embed = self.embed_0(y, **kwargs)
-        y_embed_seq = tf.broadcast_to(y_embed[:, tf.newaxis, :], [
-            tf.shape(y_embed)[0], tf.shape(x)[1], tf.shape(y_embed)[1]])
 
-        x = self.dense_0(tf.concat([x, y_embed_seq], 2), **kwargs)
+        x = self.dense_0(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
+
         x = tf.nn.leaky_relu(self.ln_0(x), alpha=0.2)
-        x = self.dense_1(tf.concat([x, y_embed_seq], 2), **kwargs)
+
+        x = self.dense_1(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
+
         x = tf.nn.leaky_relu(self.ln_1(x), alpha=0.2)
 
-        x = self.dense_2(tf.concat([x, y_embed_seq], 2), **kwargs)
+        x = self.dense_2(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
+
         x = tf.nn.leaky_relu(self.ln_2(x), alpha=0.2)
         x = tf.reduce_mean(x, axis=1)
         return self.dense_3(
@@ -569,7 +589,7 @@ class DiscreteConvGenerator(tf.keras.Model):
         self.ln_2.build((None, None, hidden))
 
         # define a layer of the neural net with two pathways
-        self.dense_3 = tfkl.Conv1D(design_shape[-1], 3, strides=1, padding="same")
+        self.dense_3 = tfkl.Conv1D(design_shape[1], 3, strides=1, padding="same")
         self.dense_3.build((None, None, hidden + hidden))
 
     def sample(self,
@@ -595,19 +615,45 @@ class DiscreteConvGenerator(tf.keras.Model):
         z = tf.random.normal([tf.shape(y)[0], self.design_shape[0], self.latent_size])
         x = tf.cast(z, tf.float32)
         y = tf.cast(y, tf.float32)
-
         y_embed = self.embed_0(y, **kwargs)
-        y_embed_seq = tf.broadcast_to(y_embed[:, tf.newaxis, :], [
-            tf.shape(y_embed)[0], tf.shape(x)[1], tf.shape(y_embed)[1]])
 
-        x = self.dense_0(tf.concat([x, y_embed_seq], 2), **kwargs)
+        x = self.dense_0(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
+
         x = tf.nn.leaky_relu(self.ln_0(x), alpha=0.2)
-        x = self.dense_1(tf.concat([x, y_embed_seq], 2), **kwargs)
+
+        x = self.dense_1(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
 
         x = tf.nn.leaky_relu(self.ln_1(x), alpha=0.2)
-        x = self.dense_2(tf.concat([x, y_embed_seq], 2), **kwargs)
+
+        x = self.dense_2(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
+
         x = tf.nn.leaky_relu(self.ln_2(x), alpha=0.2)
-        x = self.dense_3(tf.concat([x, y_embed_seq], 2), **kwargs)
+
+        x = self.dense_3(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
 
         return tfpd.RelaxedOneHotCategorical(
             temp, logits=tf.math.log_softmax(x)).sample()
@@ -748,7 +794,7 @@ class ContinuousConvGenerator(tf.keras.Model):
         self.ln_2.build((None, None, hidden))
 
         # define a layer of the neural net with two pathways
-        self.dense_3 = tfkl.Conv1D(design_shape[-1], 3, padding="same")
+        self.dense_3 = tfkl.Conv1D(design_shape[1], 3, padding="same")
         self.dense_3.build((None, None, hidden + hidden))
 
     def sample(self,
@@ -776,16 +822,43 @@ class ContinuousConvGenerator(tf.keras.Model):
         y = tf.cast(y, tf.float32)
 
         y_embed = self.embed_0(y, **kwargs)
-        y_embed_seq = tf.broadcast_to(y_embed[:, tf.newaxis, :], [
-            tf.shape(y_embed)[0], tf.shape(x)[1], tf.shape(y_embed)[1]])
 
-        x = self.dense_0(tf.concat([x, y_embed_seq], 2), **kwargs)
+        x = self.dense_0(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
+
         x = tf.nn.leaky_relu(self.ln_0(x), alpha=0.2)
-        x = self.dense_1(tf.concat([x, y_embed_seq], 2), **kwargs)
+
+        x = self.dense_1(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
 
         x = tf.nn.leaky_relu(self.ln_1(x), alpha=0.2)
-        x = self.dense_2(tf.concat([x, y_embed_seq], 2), **kwargs)
+
+        x = self.dense_2(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
+
         x = tf.nn.leaky_relu(self.ln_2(x), alpha=0.2)
-        x = self.dense_3(tf.concat([x, y_embed_seq], 2), **kwargs)
+
+        x = self.dense_3(tf.concat([
+            x,
+            tf.broadcast_to(y_embed[:, tf.newaxis, :], [
+                tf.shape(y_embed)[0],
+                tf.shape(x)[1],
+                tf.shape(y_embed)[1]])
+        ], 2), **kwargs)
 
         return x
