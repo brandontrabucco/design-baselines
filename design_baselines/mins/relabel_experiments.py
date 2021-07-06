@@ -293,7 +293,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
         "final_temp": 1.0,
         "method": "wasserstein",
         "use_conv": True,
-        "gan_batch_size": 128,
+        "gan_batch_size": 32,
         "hidden_size": 256,
         "num_layers": 1,
         "bootstraps": 1,
