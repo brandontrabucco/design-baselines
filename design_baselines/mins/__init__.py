@@ -7,6 +7,9 @@ from design_baselines.mins.nets import ForwardModel
 from design_baselines.mins.nets import Discriminator
 from design_baselines.mins.nets import DiscreteGenerator
 from design_baselines.mins.nets import ContinuousGenerator
+from design_baselines.mins.nets import ConvDiscriminator
+from design_baselines.mins.nets import DiscreteConvGenerator
+from design_baselines.mins.nets import ContinuousConvGenerator
 from design_baselines.mins.utils import get_weights
 from design_baselines.mins.utils import get_synthetic_data
 import tensorflow as tf
@@ -88,28 +91,39 @@ def mins(config):
     explore_pool = ReplayBuffer(config['pool_size'], input_shape)
     exploit_pool = ReplayBuffer(config['pool_size'], input_shape)
 
+    d_class = ConvDiscriminator
+    dg_class = DiscreteConvGenerator
+    cg_class = ContinuousConvGenerator
+
+    if config['use_conv']:
+
+        # use a convolutional architecture for the GAN
+        d_class = ConvDiscriminator
+        dg_class = DiscreteConvGenerator
+        cg_class = ContinuousConvGenerator
+
     if task.is_discrete:
 
         # build a Gumbel-Softmax GAN to sample discrete outputs
-        explore_gen = DiscreteGenerator(
+        explore_gen = dg_class(
             input_shape, config['latent_size'],
             hidden=config['hidden_size'])
-        exploit_gen = DiscreteGenerator(
+        exploit_gen = dg_class(
             input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
     else:
 
         # build an LS-GAN to sample continuous outputs
-        explore_gen = ContinuousGenerator(
+        explore_gen = cg_class(
             input_shape, config['latent_size'],
             hidden=config['hidden_size'])
-        exploit_gen = ContinuousGenerator(
+        exploit_gen = cg_class(
             input_shape, config['latent_size'],
             hidden=config['hidden_size'])
 
     # build the neural network GAN components
-    explore_discriminator = Discriminator(
+    explore_discriminator = d_class(
         input_shape,
         hidden=config['hidden_size'],
         method=config['method'])
@@ -134,7 +148,7 @@ def mins(config):
         final_temp=config.get('final_temp', 1.0))
 
     # build the neural network GAN components
-    exploit_discriminator = Discriminator(
+    exploit_discriminator = d_class(
         input_shape,
         hidden=config['hidden_size'],
         method=config['method'])
