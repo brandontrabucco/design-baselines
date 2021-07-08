@@ -76,10 +76,11 @@ def mins(config):
             batch_size=config['oracle_batch_size'],
             val_size=config['val_size'], buffer=1)
 
-        train_data = train_data.map(
-            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        val_data = val_data.map(
-            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        if task.is_discrete:
+            train_data = train_data.map(
+                map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            val_data = val_data.map(
+                map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
         # train the model for an additional number of epochs
         oracle.launch(train_data,
@@ -170,10 +171,11 @@ def mins(config):
         batch_size=config['gan_batch_size'],
         val_size=config['val_size'], buffer=1)
 
-    train_data = train_data.map(
-        map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    val_data = val_data.map(
-        map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    if task.is_discrete:
+        train_data = train_data.map(
+            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        val_data = val_data.map(
+            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
     # train the gan for several epochs
     explore_gan.launch(
@@ -225,10 +227,11 @@ def mins(config):
             batch_size=config['gan_batch_size'],
             val_size=config['val_size'], buffer=1)
 
-        train_data = train_data.map(
-            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        val_data = val_data.map(
-            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        if task.is_discrete:
+            train_data = train_data.map(
+                map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            val_data = val_data.map(
+                map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
         # train the gan for several epochs
         explore_gan.launch(
@@ -272,10 +275,11 @@ def mins(config):
             batch_size=config['gan_batch_size'],
             val_size=config['val_size'], buffer=1)
 
-        train_data = train_data.map(
-            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        val_data = val_data.map(
-            map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        if task.is_discrete:
+            train_data = train_data.map(
+                map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            val_data = val_data.map(
+                map_to_probs, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
         # train the gan for several epochs
         exploit_gan.launch(
