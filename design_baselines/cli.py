@@ -269,6 +269,525 @@ def rank_tables(table0, table1):
 
 @cli.command()
 @click.option('--dir', type=str)
+@click.option('--samples', type=int, default=128)
+@click.option('--percentile', type=int, default=100)
+@click.option('--main-table', type=str, default="performance.csv")
+@click.option('--load/--no-load', is_flag=True, default=False)
+def make_diversity_table(dir, samples, percentile, main_table, load):
+
+    import glob
+    import os
+    import tqdm
+    import numpy as np
+    import itertools
+    import design_bench as db
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import json
+    import pandas as pd
+
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.set_palette(palette)
+
+    tasks = [
+        "gfp",
+        "utr",
+    ]
+
+    baselines = [
+        "autofocused-cbas",
+        "cbas",
+        "bo-qei",
+        #"cma-es",
+        "gradient-ascent",
+        "gradient-ascent-min-ensemble",
+        "gradient-ascent-mean-ensemble",
+        "mins",
+        "reinforce"
+    ]
+
+    dist_options = [
+        "uniform",
+        "linear",
+        "quadratic",
+        "circular",
+        "exponential",
+    ]
+
+    task_to_name = {
+        "gfp": "GFP",
+        "utr": "UTR",
+    }
+
+    if not load:
+
+        task_to_task = {
+            "gfp": db.make("GFP-Transformer-v0"),
+            "utr": db.make("UTR-ResNet-v0"),
+        }
+
+        baseline_to_logits = {
+            "autofocused-cbas": False,
+            "cbas": False,
+            "bo-qei": True,
+            "cma-es": True,
+            "gradient-ascent": True,
+            "gradient-ascent-min-ensemble": True,
+            "gradient-ascent-mean-ensemble": True,
+            "mins": False,
+            "reinforce": False
+        }
+
+        dist_to_performance = dict()
+
+        for dist in dist_options:
+            dist_to_performance[dist] = dict()
+
+            for task in tasks:
+                dist_to_performance[dist][task] = dict()
+                for baseline in baselines:
+                    dist_to_performance[dist][task][baseline] = list()
+
+        for task, baseline in tqdm.tqdm(list(itertools.product(tasks, baselines))):
+            dirs = glob.glob(os.path.join(dir, f"{baseline}-{task}/*/*"))
+            for d in [d for d in dirs if os.path.isdir(d)]:
+
+                solution_files = glob.glob(os.path.join(d, '*/solution.npy'))[:samples]
+                for current_solution in solution_files:
+
+                    params = os.path.join(os.path.dirname(
+                        os.path.dirname(current_solution)), "params.json")
+                    with open(params, "r") as p_file:
+                        params = json.load(p_file)
+
+                    dist = params["task_kwargs"]["dataset_kwargs"]["distribution"]
+
+                    db_task = task_to_task[task]
+                    is_logits = baseline_to_logits[baseline] and not task == "chembl"
+
+                    if is_logits and db_task.is_discrete:
+                        db_task.map_to_logits()
+
+                    elif db_task.is_discrete:
+                        db_task.map_to_integers()
+
+                    if params["normalize_xs"]:
+                        db_task.map_normalize_x()
+
+                    scores = task_to_task[task].predict(np.load(current_solution))
+                    dist_to_performance[dist][task][baseline]\
+                        .append(np.percentile(scores, percentile))
+
+        for dist in dist_options:
+            for task, baseline in tqdm.tqdm(list(itertools.product(tasks, baselines))):
+                mean_perf = np.mean(dist_to_performance[dist][task][baseline])
+                dist_to_performance[dist][task][baseline] = mean_perf
+
+        diversity = np.zeros([len(tasks), len(dist_options)])
+
+        for task_idx, task in enumerate(tasks):
+            for dist_idx, dist in enumerate(dist_options):
+                diversity[task_idx, dist_idx] = np.std([
+                    dist_to_performance[dist][task][b] for b in baselines])
+
+        np.save(f"dist-diversity-{percentile}.npy", diversity)
+
+    else:
+
+        diversity = np.load(f"dist-diversity-{percentile}.npy")
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 7))
+
+    main_table = pd.read_csv(main_table)
+
+    for task_idx, task in enumerate(tasks):
+
+        main_data = main_table[task].to_numpy().std()
+
+        axes[task_idx].bar(np.arange(len(dist_options) + 1),
+                           [main_data, *diversity[task_idx]],
+                           tick_label=["original"] + dist_options,
+                           color=color_palette[:len(dist_options) + 1])
+
+        axes[task_idx].spines['right'].set_visible(False)
+        axes[task_idx].spines['top'].set_visible(False)
+        axes[task_idx].yaxis.set_ticks_position('left')
+        axes[task_idx].xaxis.set_ticks_position('bottom')
+        axes[task_idx].yaxis.set_tick_params(labelsize=18, labelrotation=0)
+        axes[task_idx].xaxis.set_tick_params(labelsize=18, labelrotation=90)
+
+        axes[task_idx].set_xlabel(r'\textbf{Subsampling Distribution}',
+                                  fontsize=18)
+        axes[task_idx].set_ylabel(r'\textbf{Standard Deviation Of All Baselines}',
+                                  fontsize=18)
+        axes[task_idx].set_title(r'\textbf{' + task_to_name[task] + '}',
+                                 fontsize=18)
+        axes[task_idx].grid(color='grey',
+                            linestyle='dotted',
+                            linewidth=2)
+
+    plt.tight_layout()
+    plt.savefig(f"dist-diversity-{percentile}.png")
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--samples', type=int, default=128)
+@click.option('--percentile', type=int, default=100)
+@click.option('--load/--no-load', is_flag=True, default=False)
+def make_table_from_distributions(dir, samples, percentile, load):
+
+    import glob
+    import os
+    import tqdm
+    import numpy as np
+    import itertools
+    import design_bench as db
+    import scipy.stats as stats
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import json
+
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.set_palette(palette)
+
+    tasks = [
+        "gfp",
+        "utr",
+        "superconductor",
+        "hopper",
+    ]
+
+    baselines = [
+        "autofocused-cbas",
+        "cbas",
+        "bo-qei",
+        #"cma-es",
+        "gradient-ascent",
+        "gradient-ascent-min-ensemble",
+        "gradient-ascent-mean-ensemble",
+        "mins",
+        "reinforce"
+    ]
+
+    dist_options = [
+        "uniform",
+        "linear",
+        "quadratic",
+        "circular",
+        "exponential",
+    ]
+
+    if not load:
+
+        task_to_task = {
+            "gfp": db.make("GFP-Transformer-v0"),
+            "tf-bind-8": db.make("TFBind8-Exact-v0"),
+            "utr": db.make("UTR-ResNet-v0"),
+            "chembl": db.make("ChEMBL-ResNet-v0"),
+            "superconductor": db.make("Superconductor-RandomForest-v0"),
+            "ant": db.make("AntMorphology-Exact-v0"),
+            "dkitty": db.make("DKittyMorphology-Exact-v0"),
+            "hopper": db.make("HopperController-Exact-v0")
+        }
+
+        baseline_to_logits = {
+            "autofocused-cbas": False,
+            "cbas": False,
+            "bo-qei": True,
+            "cma-es": True,
+            "gradient-ascent": True,
+            "gradient-ascent-min-ensemble": True,
+            "gradient-ascent-mean-ensemble": True,
+            "mins": False,
+            "reinforce": False
+        }
+
+        dist_to_performance = dict()
+
+        for dist in dist_options:
+            dist_to_performance[dist] = dict()
+
+            for task in tasks:
+                dist_to_performance[dist][task] = dict()
+                for baseline in baselines:
+                    dist_to_performance[dist][task][baseline] = list()
+
+        for task, baseline in tqdm.tqdm(list(itertools.product(tasks, baselines))):
+            dirs = glob.glob(os.path.join(dir, f"{baseline}-{task}/*/*"))
+            for d in [d for d in dirs if os.path.isdir(d)]:
+
+                solution_files = glob.glob(os.path.join(d, '*/solution.npy'))[:samples]
+                for current_solution in solution_files:
+
+                    params = os.path.join(os.path.dirname(
+                        os.path.dirname(current_solution)), "params.json")
+                    with open(params, "r") as p_file:
+                        params = json.load(p_file)
+
+                    dist = params["task_kwargs"]["dataset_kwargs"]["distribution"]
+
+                    db_task = task_to_task[task]
+                    is_logits = baseline_to_logits[baseline] and not task == "chembl"
+
+                    if is_logits and db_task.is_discrete:
+                        db_task.map_to_logits()
+
+                    elif db_task.is_discrete:
+                        db_task.map_to_integers()
+
+                    if params["normalize_xs"]:
+                        db_task.map_normalize_x()
+
+                    scores = task_to_task[task].predict(np.load(current_solution))
+                    dist_to_performance[dist][task][baseline]\
+                        .append(np.percentile(scores, percentile))
+
+        for dist in dist_options:
+            for task, baseline in tqdm.tqdm(list(itertools.product(tasks, baselines))):
+                mean_perf = np.mean(dist_to_performance[dist][task][baseline])
+                dist_to_performance[dist][task][baseline] = mean_perf
+
+        correlation = np.zeros([len(dist_options), len(dist_options)])
+        for a_idx, b_idx in itertools.product(
+                range(len(dist_options)), range(len(dist_options))):
+
+            perf_a = dist_to_performance[dist_options[a_idx]]
+            perf_b = dist_to_performance[dist_options[b_idx]]
+
+            correlation[a_idx, b_idx] = np.mean([
+                stats.spearmanr(np.array([perf_a[task][b] for b in baselines]),
+                                np.array([perf_b[task][b] for b in baselines]))[0]
+                for task in tasks
+            ])
+
+    else:
+
+        correlation = np.load(f"dist-heatmap-{percentile}.npy")
+
+    mask = np.zeros_like(correlation)
+    mask[np.triu_indices_from(mask)] = True
+    ax = sns.heatmap(correlation,
+                     xticklabels=dist_options,
+                     yticklabels=dist_options,
+                     mask=mask,
+                     vmin=0.0,
+                     vmax=1.0,
+                     square=True)
+
+    plt.title(r"Sensitivity To Distribution " + f"({percentile}th Percentile)", fontsize=20)
+    plt.xticks(rotation=90, fontsize=18)
+    plt.yticks(rotation=0, fontsize=18)
+    plt.ylabel(r"Subsampling Distribution", fontsize=18)
+    plt.xlabel(r"Subsampling Distribution", fontsize=18)
+
+    ax.collections[0].colorbar.ax.tick_params(labelsize=18)
+    ax.collections[0].colorbar.set_label(label=r"Spearman's $\rho$", size=20)
+
+    plt.tight_layout()
+    np.save(f"dist-heatmap-{percentile}.npy", correlation)
+    plt.savefig(f"dist-heatmap-{percentile}.png")
+
+
+@cli.command()
+@click.option('--dir', type=str)
+@click.option('--distribution', type=str, default="uniform")
+@click.option('--percentile', type=int, default=100)
+@click.option('--load/--no-load', is_flag=True, default=False)
+def make_table_from_solutions(dir, distribution, percentile, load):
+
+    import glob
+    import os
+    import tqdm
+    import numpy as np
+    import itertools
+    import design_bench as db
+    import scipy.stats as stats
+    import seaborn as sns
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import json
+
+    plt.rcParams['text.usetex'] = True
+    matplotlib.rc('font', family='serif', serif='cm10')
+    matplotlib.rc('mathtext', fontset='cm')
+    color_palette = ['#EE7733',
+                     '#0077BB',
+                     '#33BBEE',
+                     '#009988',
+                     '#CC3311',
+                     '#EE3377',
+                     '#BBBBBB',
+                     '#000000']
+    palette = sns.color_palette(color_palette)
+    sns.set_palette(palette)
+
+    tasks = [
+        "gfp",
+        "utr",
+        "superconductor",
+        "hopper",
+    ]
+
+    baselines = [
+        "autofocused-cbas",
+        "cbas",
+        "bo-qei",
+        #"cma-es",
+        "gradient-ascent",
+        "gradient-ascent-min-ensemble",
+        "gradient-ascent-mean-ensemble",
+        "mins",
+        "reinforce"
+    ]
+
+    sample_options = [2, 4, 8, 16, 32, 64, 128, 256, 512]
+
+    if not load:
+
+        task_to_task = {
+            "gfp": db.make("GFP-Transformer-v0"),
+            "tf-bind-8": db.make("TFBind8-Exact-v0"),
+            "utr": db.make("UTR-ResNet-v0"),
+            "chembl": db.make("ChEMBL-ResNet-v0"),
+            "superconductor": db.make("Superconductor-RandomForest-v0"),
+            "ant": db.make("AntMorphology-Exact-v0"),
+            "dkitty": db.make("DKittyMorphology-Exact-v0"),
+            "hopper": db.make("HopperController-Exact-v0")
+        }
+
+        baseline_to_logits = {
+            "autofocused-cbas": False,
+            "cbas": False,
+            "bo-qei": True,
+            "cma-es": True,
+            "gradient-ascent": True,
+            "gradient-ascent-min-ensemble": True,
+            "gradient-ascent-mean-ensemble": True,
+            "mins": False,
+            "reinforce": False
+        }
+
+        max_samples_to_performance = dict()
+
+        for max_samples in sample_options:
+            max_samples_to_performance[max_samples] = dict()
+
+            for task in tasks:
+                max_samples_to_performance[max_samples][task] = dict()
+                for baseline in baselines:
+                    max_samples_to_performance[max_samples][task][baseline] = list()
+
+        for task, baseline in tqdm.tqdm(list(itertools.product(tasks, baselines))):
+            dirs = glob.glob(os.path.join(dir, f"{baseline}-{task}/*/*"))
+            for d in [d for d in dirs if os.path.isdir(d)]:
+
+                solution_files = glob.glob(os.path.join(d, '*/solution.npy'))
+                for current_solution in solution_files:
+
+                    params = os.path.join(os.path.dirname(
+                        os.path.dirname(current_solution)), "params.json")
+                    with open(params, "r") as p_file:
+                        params = json.load(p_file)
+
+                    dataset_kwargs = params["task_kwargs"]["dataset_kwargs"]
+                    if dataset_kwargs["distribution"] != distribution:
+                        continue
+
+                    db_task = task_to_task[task]
+                    is_logits = baseline_to_logits[baseline] and not task == "chembl"
+
+                    if is_logits and db_task.is_discrete:
+                        db_task.map_to_logits()
+
+                    elif db_task.is_discrete:
+                        db_task.map_to_integers()
+
+                    if params["normalize_xs"]:
+                        db_task.map_normalize_x()
+
+                    scores = task_to_task[task].predict(np.load(current_solution))
+
+                    for max_samples in sample_options:
+                        max_samples_to_performance[max_samples][task][baseline]\
+                            .append(np.percentile(scores[:max_samples], percentile))
+
+        for max_samples in sample_options:
+            for task, baseline in tqdm.tqdm(list(itertools.product(tasks, baselines))):
+
+                mean_perf = np.mean(
+                    max_samples_to_performance[max_samples][task][baseline])
+
+                max_samples_to_performance[
+                    max_samples][task][baseline] = mean_perf
+
+        correlation = np.zeros([len(sample_options), len(sample_options)])
+        for a_idx, b_idx in itertools.product(
+                range(len(sample_options)), range(len(sample_options))):
+
+            perf_a = max_samples_to_performance[sample_options[a_idx]]
+            perf_b = max_samples_to_performance[sample_options[b_idx]]
+
+            correlation[a_idx, b_idx] = np.mean([
+                stats.spearmanr(np.array([perf_a[task][b] for b in baselines]),
+                                np.array([perf_b[task][b] for b in baselines]))[0]
+                for task in tasks
+            ])
+
+    else:
+
+        correlation = np.load(f"k-heatmap-{percentile}.npy")
+
+    mask = np.zeros_like(correlation)
+    mask[np.triu_indices_from(mask)] = True
+    ax = sns.heatmap(correlation,
+                     xticklabels=sample_options,
+                     yticklabels=sample_options,
+                     mask=mask,
+                     vmin=0.0,
+                     vmax=1.0,
+                     square=True)
+
+    plt.title(r"Sensitivity To $K$ " + f"({percentile}th Percentile)", fontsize=20)
+    plt.xticks(rotation=90, fontsize=18)
+    plt.yticks(rotation=0, fontsize=18)
+    plt.ylabel(r"Evaluation Budget $K$", fontsize=18)
+    plt.xlabel(r"Evaluation Budget $K$", fontsize=18)
+
+    ax.collections[0].colorbar.ax.tick_params(labelsize=18)
+    ax.collections[0].colorbar.set_label(label=r"Spearman's $\rho$", size=20)
+
+    plt.tight_layout()
+    np.save(f"k-heatmap-{percentile}.npy", correlation)
+    plt.savefig(f"k-heatmap-{percentile}.png")
+
+
+@cli.command()
+@click.option('--dir', type=str)
 @click.option('--percentile', type=str, default="100th")
 @click.option('--modifier', type=str, default="")
 @click.option('--group', type=str, default="")
@@ -384,6 +903,13 @@ def make_table(dir, percentile, modifier, group, normalize):
         "coms": 49
     }
 
+    coms_modifier = [
+        "0.5",
+        "0.2",
+        "0.05",
+        "0.01",
+    ][3]
+
     performance = dict()
     for task in tqdm.tqdm(tasks):
         task_min = task_to_min[task]
@@ -392,8 +918,15 @@ def make_table(dir, percentile, modifier, group, normalize):
         for baseline in baselines:
             performance[task][baseline] = list()
 
-            dirs = [d for d in glob.glob(os.path.join(
-                dir, f"{baseline}{modifier}-{task}/*/*")) if os.path.isdir(d)]
+            if baseline == "coms":
+
+                dirs = [d for d in glob.glob(os.path.join(
+                    dir, f"coms-{task}/coms-{task}-{coms_modifier}/*")) if os.path.isdir(d)]
+
+            else:
+
+                dirs = [d for d in glob.glob(os.path.join(
+                    dir, f"{baseline}{modifier}-{task}/*/*")) if os.path.isdir(d)]
 
             for d in dirs:
                 event_files = (

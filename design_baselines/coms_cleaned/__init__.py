@@ -130,6 +130,9 @@ import json
               default=128,
               help='The samples to generate when solving the model-based '
                    'optimization problem.')
+@click.option('--fast/--not-fast',
+              default=True,
+              help='Whether to run experiment quickly and only log once.')
 def coms_cleaned(
         logging_dir="coms-cleaned",
         task="HopperController-Exact-v0",
@@ -162,7 +165,8 @@ def coms_cleaned(
         forward_model_batch_size=32,
         forward_model_val_size=200,
         forward_model_epochs=10,
-        evaluation_samples=128):
+        evaluation_samples=128,
+        fast=True):
     """Solve a Model-Based Optimization problem using the method:
     Conservative Objective Models (COMs).
 
@@ -205,7 +209,8 @@ def coms_cleaned(
         forward_model_batch_size=forward_model_batch_size,
         forward_model_val_size=forward_model_val_size,
         forward_model_epochs=forward_model_epochs,
-        evaluation_samples=evaluation_samples)
+        evaluation_samples=evaluation_samples,
+        fast=fast)
 
     # create the logger and export the experiment parameters
     logger = Logger(logging_dir)
@@ -288,15 +293,19 @@ def coms_cleaned(
     initial_y = tf.gather(y, indices, axis=0)
     xt = initial_x
 
-    scores = []
-    predictions = []
+    if not fast:
 
-    score = task.predict(xt)
-    if normalize_ys:
-        initial_y = task.denormalize_y(initial_y)
-        score = task.denormalize_y(score)
-    logger.record(f"dataset_score", initial_y, 0, percentile=True)
-    logger.record(f"score", score, 0, percentile=True)
+        scores = []
+        predictions = []
+
+        score = task.predict(xt)
+
+        if normalize_ys:
+            initial_y = task.denormalize_y(initial_y)
+            score = task.denormalize_y(score)
+
+        logger.record(f"dataset_score", initial_y, 0, percentile=True)
+        logger.record(f"score", score, 0, percentile=True)
 
     for step in range(1, 1 + particle_evaluate_gradient_steps):
 
@@ -305,36 +314,42 @@ def coms_cleaned(
         final_xt = trainer.optimize(
             xt, particle_train_gradient_steps, training=False)
 
-        # evaluate the solutions found by the model
-        score = task.predict(xt)
-        prediction = forward_model(xt, training=False).numpy()
-        final_prediction = forward_model(final_xt, training=False).numpy()
-        if normalize_ys:
-            score = task.denormalize_y(score)
-            prediction = task.denormalize_y(prediction)
-            final_prediction = task.denormalize_y(final_prediction)
+        if not fast or step == particle_evaluate_gradient_steps:
+            np.save(os.path.join(logging_dir, "solution.npy"), xt)
 
-        # record the prediction and score to the logger
-        logger.record(f"score", score, step, percentile=True)
-        logger.record(f"solver/model_to_real",
-                      spearman(prediction[:, 0], score[:, 0]), step)
-        logger.record(f"solver/distance",
-                      tf.linalg.norm(xt - initial_x), step)
-        logger.record(f"solver/prediction",
-                      prediction, step)
-        logger.record(f"solver/model_overestimation",
-                      final_prediction - prediction, step)
-        logger.record(f"solver/overestimation",
-                      prediction - score, step)
+            # evaluate the solutions found by the model
+            score = task.predict(xt)
+            prediction = forward_model(xt, training=False).numpy()
+            final_prediction = forward_model(final_xt, training=False).numpy()
 
-        scores.append(score)
-        predictions.append(prediction)
+            if normalize_ys:
+                score = task.denormalize_y(score)
+                prediction = task.denormalize_y(prediction)
+                final_prediction = task.denormalize_y(final_prediction)
 
-        # save the model predictions and scores to be aggregated later
-        np.save(os.path.join(logging_dir, "scores.npy"),
-                np.concatenate(scores, axis=1))
-        np.save(os.path.join(logging_dir, "predictions.npy"),
-                np.stack(predictions, axis=1))
+            # record the prediction and score to the logger
+            logger.record(f"score", score, step, percentile=True)
+            logger.record(f"solver/model_to_real",
+                          spearman(prediction[:, 0], score[:, 0]), step)
+            logger.record(f"solver/distance",
+                          tf.linalg.norm(xt - initial_x), step)
+            logger.record(f"solver/prediction",
+                          prediction, step)
+            logger.record(f"solver/model_overestimation",
+                          final_prediction - prediction, step)
+            logger.record(f"solver/overestimation",
+                          prediction - score, step)
+
+        if not fast:
+
+            scores.append(score)
+            predictions.append(prediction)
+
+            # save the model predictions and scores to be aggregated later
+            np.save(os.path.join(logging_dir, "scores.npy"),
+                    np.concatenate(scores, axis=1))
+            np.save(os.path.join(logging_dir, "predictions.npy"),
+                    np.stack(predictions, axis=1))
 
 
 # run COMs using the command line interface
