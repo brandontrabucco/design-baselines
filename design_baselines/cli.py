@@ -815,7 +815,7 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gfp",
         "tf-bind-8",
         "utr",
-        "chembl",
+        #"chembl",
     ] if group == "A" else [
         "superconductor",
         "ant",
@@ -825,7 +825,7 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gfp",
         "tf-bind-8",
         "utr",
-        "chembl",
+        #"chembl",
         "superconductor",
         "ant",
         "dkitty",
@@ -941,7 +941,8 @@ def make_table(dir, percentile, modifier, group, normalize):
                                 )
 
     final_data = [[None for t in tasks] for b in baselines]
-    final_data_numeric = [[None for t in tasks] for b in baselines]
+    final_data_mean = [[None for t in tasks] for b in baselines]
+    final_data_standard_dev = [[None for t in tasks] for b in baselines]
     for i, task in enumerate(tasks):
         for j, baseline in enumerate(baselines):
             data = np.array(performance[task][baseline])
@@ -952,12 +953,52 @@ def make_table(dir, percentile, modifier, group, normalize):
             if data.shape[0] > 1:
                 standard_dev = np.std(data - mean)
             final_data[j][i] = f"{mean:0.3f} ± {standard_dev:0.3f}"
-            final_data_numeric[j][i] = mean
+            final_data_mean[j][i] = mean
+            final_data_standard_dev[j][i] = standard_dev
+
+    final_data_mean = np.asarray(final_data_mean)
+    final_data_standard_dev = np.asarray(final_data_standard_dev)
 
     final_df = pd.DataFrame(data=final_data, columns=tasks, index=baselines)
-    final_df_numeric = pd.DataFrame(data=final_data_numeric, columns=tasks, index=baselines)
+    final_df_numeric = pd.DataFrame(data=final_data_mean, columns=tasks, index=baselines)
     print(final_df.to_latex())
     final_df_numeric.to_csv(f"performance{modifier}.csv")
+
+    #
+    # average performance only makes sense when data is normalized
+    #
+
+    final_average_perf = final_data_mean.mean(axis=1)
+
+    print()
+    print("Average Performance: ")
+    for baseline_idx, baseline in enumerate(baselines):
+        print(f"{baseline} = ", final_average_perf[baseline_idx])
+
+    #
+    # how many tasks is a particular method optimal (or within 1 sd)
+    #
+
+    final_data_optimality = np.zeros([len(baselines), len(tasks)])
+    for task_idx, task in enumerate(tasks):
+        top_idx = (final_data_mean[:, task_idx] - final_data_standard_dev[:, task_idx]).argmax()
+
+        top_mean = final_data_mean[top_idx, task_idx]
+        top_standard_dev = final_data_standard_dev[top_idx, task_idx]
+        for baseline_idx, baseline in enumerate(baselines):
+            current_mean = final_data_mean[baseline_idx, task_idx]
+            current_standard_dev = final_data_standard_dev[baseline_idx, task_idx]
+
+            if current_mean + current_standard_dev >= top_mean \
+                    or current_mean >= top_mean - top_standard_dev:
+                final_data_optimality[baseline_idx, task_idx] += 1.0
+
+    final_data_optimality = final_data_optimality.sum(axis=1)
+
+    print()
+    print("Number Of Optimal Tasks: ")
+    for baseline_idx, baseline in enumerate(baselines):
+        print(f"{baseline} = ", int(final_data_optimality[baseline_idx]), "/ 7")
 
 
 @cli.command()
