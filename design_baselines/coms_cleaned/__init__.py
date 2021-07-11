@@ -298,7 +298,13 @@ def coms_cleaned(
         scores = []
         predictions = []
 
-        score = task.predict(xt)
+        solution = xt
+        if task.is_discrete and in_latent_space:
+            solution = solution * standard_dev + mean
+            logits = vae_model.decoder_cnn.predict(solution)
+            solution = tf.argmax(logits, axis=2, output_type=tf.int32)
+
+        score = task.predict(solution)
 
         if normalize_ys:
             initial_y = task.denormalize_y(initial_y)
@@ -315,10 +321,17 @@ def coms_cleaned(
             xt, particle_train_gradient_steps, training=False)
 
         if not fast or step == particle_evaluate_gradient_steps:
-            np.save(os.path.join(logging_dir, "solution.npy"), xt)
+
+            solution = xt
+            if task.is_discrete and in_latent_space:
+                solution = solution * standard_dev + mean
+                logits = vae_model.decoder_cnn.predict(solution)
+                solution = tf.argmax(logits, axis=2, output_type=tf.int32)
+
+            np.save(os.path.join(logging_dir, "solution.npy"), solution)
 
             # evaluate the solutions found by the model
-            score = task.predict(xt)
+            score = task.predict(solution)
             prediction = forward_model(xt, training=False).numpy()
             final_prediction = forward_model(final_xt, training=False).numpy()
 

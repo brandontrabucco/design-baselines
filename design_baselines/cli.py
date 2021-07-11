@@ -900,15 +900,10 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gradient-ascent-mean-ensemble": 200,
         "mins": 0,
         "reinforce": 200,
-        "coms": 49
+        "coms": 50
     }
 
-    coms_modifier = [
-        "0.5",
-        "0.2",
-        "0.05",
-        "0.01",
-    ][3]
+    coms_modifier = "0.5"
 
     performance = dict()
     for task in tqdm.tqdm(tasks):
@@ -936,6 +931,7 @@ def make_table(dir, percentile, modifier, group, normalize):
                 for f in event_files:
                     for e in tf.compat.v1.train.summary_iterator(f):
                         for v in e.summary.value:
+
                             if v.tag in baseline_to_tag[baseline]\
                                     and e.step == baseline_to_iteration[baseline]:
                                 score = tf.make_ndarray(v.tensor)
