@@ -27,7 +27,8 @@ for DEVICE in "${DEVICES[@]}"; do
             --forward-model-batch-size 128 \
             --forward-model-val-size 500 \
             --forward-model-epochs 50 \
-            --evaluation-samples 128 & done; done; wait
+            --evaluation-samples 128 \
+	    --not-fast & done; done; wait
 
 for DEVICE in "${DEVICES[@]}"; do
     for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
@@ -54,4 +55,5 @@ for DEVICE in "${DEVICES[@]}"; do
             --forward-model-batch-size 128 \
             --forward-model-val-size 500 \
             --forward-model-epochs 50 \
-            --evaluation-samples 128 & done; done; wait
+            --evaluation-samples 128 \
+	    --not-fast & done; done; wait
