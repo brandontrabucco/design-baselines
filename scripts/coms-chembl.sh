@@ -1,9 +1,9 @@
 #!/bin/bash
 NUM_TRIALS_PER_GPU=2
 IFS=, read -ra DEVICES <<< "$CUDA_VISIBLE_DEVICES"
-for OE_LIMIT in 0.05 0.01 0.2 0.5; do
-for DEVICE in "${DEVICES[@]}"; do
-    for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
+for OE_LIMIT in 0.4 0.5 0.6 0.8 1.0; do
+for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
+    for DEVICE in "${DEVICES[@]}"; do
         CUDA_VISIBLE_DEVICES=$DEVICE coms \
             --logging-dir ~/coms-chembl/coms-chembl-$OE_LIMIT/COMs-ChEMBL-ResNet-v0-$DEVICE-$TRIAL-$RANDOM \
             --task ChEMBL-ResNet-v0 \
@@ -37,5 +37,6 @@ for DEVICE in "${DEVICES[@]}"; do
             --forward-model-batch-size 128 \
             --forward-model-val-size 500 \
             --forward-model-epochs 50 \
-            --evaluation-samples 128 & done; done; wait
+            --evaluation-samples 128 \
+	    --fast & done; wait; done
 done
