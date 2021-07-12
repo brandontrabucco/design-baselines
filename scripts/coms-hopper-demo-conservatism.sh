@@ -5,7 +5,7 @@ IFS=, read -ra DEVICES <<< "$CUDA_VISIBLE_DEVICES"
 for DEVICE in "${DEVICES[@]}"; do
     for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
         CUDA_VISIBLE_DEVICES=$DEVICE coms \
-            --logging-dir ~/coms-hopper-cons/coms-hopper/COMs-HopperController-Exact-v0-$DEVICE-$TRIAL-$RANDOM \
+            --logging-dir ~/coms-hopper-demo/coms-hopper-cons/COMs-HopperController-Exact-v0-$DEVICE-$TRIAL-$RANDOM \
             --task HopperController-Exact-v0 \
             --no-task-relabel \
             --normalize-ys \
@@ -32,7 +32,7 @@ for DEVICE in "${DEVICES[@]}"; do
 for DEVICE in "${DEVICES[@]}"; do
     for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
         CUDA_VISIBLE_DEVICES=$DEVICE coms \
-            --logging-dir ~/coms-hopper-over/coms-hopper/COMs-HopperController-Exact-v0-$DEVICE-$TRIAL-$RANDOM \
+            --logging-dir ~/coms-hopper-demo/coms-hopper-over/COMs-HopperController-Exact-v0-$DEVICE-$TRIAL-$RANDOM \
             --task HopperController-Exact-v0 \
             --no-task-relabel \
             --normalize-ys \

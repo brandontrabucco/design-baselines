@@ -5,7 +5,7 @@ IFS=, read -ra DEVICES <<< "$CUDA_VISIBLE_DEVICES"
 for DEVICE in "${DEVICES[@]}"; do
     for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
         CUDA_VISIBLE_DEVICES=$DEVICE coms \
-            --logging-dir ~/coms-utr-demo-cons/coms-utr/COMs-UTR-ResNet-v0-$DEVICE-$TRIAL-$RANDOM \
+            --logging-dir ~/coms-utr-demo/coms-utr-cons/COMs-UTR-ResNet-v0-$DEVICE-$TRIAL-$RANDOM \
             --task UTR-ResNet-v0 \
             --task-relabel \
             --normalize-ys \
@@ -33,7 +33,7 @@ for DEVICE in "${DEVICES[@]}"; do
 for DEVICE in "${DEVICES[@]}"; do
     for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
         CUDA_VISIBLE_DEVICES=$DEVICE coms \
-            --logging-dir ~/coms-utr-demo-over/coms-utr/COMs-UTR-ResNet-v0-$DEVICE-$TRIAL-$RANDOM \
+            --logging-dir ~/coms-utr-demo/coms-utr-over/COMs-UTR-ResNet-v0-$DEVICE-$TRIAL-$RANDOM \
             --task UTR-ResNet-v0 \
             --task-relabel \
             --normalize-ys \

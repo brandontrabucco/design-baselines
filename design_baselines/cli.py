@@ -1638,57 +1638,38 @@ def plot_two_exp(dir1,
 """
 
 design-baselines compare-runs \
---hopper ~/final-results/online/online-hopper/online/ \
---hopper ~/final-results/online/gradient-ascent-hopper/gradient_ascent/ \
---superconductor ~/final-results/online/online-superconductor/online/ \
---superconductor ~/final-results/online/gradient-ascent-superconductor/gradient_ascent/ \
---gfp ~/final-results/online/online-gfp/online/ \
---gfp ~/final-results/online/gradient-ascent-gfp/gradient_ascent/ \
---molecule ~/final-results/online/online-molecule/online/ \
---molecule ~/final-results/online/gradient-ascent-molecule/gradient_ascent/ \
---names 'Conservative Objective Models' \
---names 'Gradient Ascent' \
---tag 'score/100th' \
---max-iterations 200
-
-design-baselines ablate-architecture \
---hopper ~/final-results/online/gradient-ascent-hopper/gradient_ascent/ \
---superconductor ~/final-results/online/gradient-ascent-superconductor/gradient_ascent/ \
---gfp ~/final-results/online/gradient-ascent-gfp/gradient_ascent/ \
---molecule ~/final-results/online/gradient-ascent-molecule/gradient_ascent/ \
---tag 'score/100th' \
---tag 'score/100th' \
---tag 'score/100th' \
---max-iterations 200
+    --hopper ~/neurips-round1/coms-hopper-demo/coms-hopper-cons/ \
+    --hopper ~/neurips-round1/coms-hopper-demo/coms-hopper-over/ \
+    --utr ~/neurips-round1/coms-utr-demo/coms-utr-cons/ \
+    --utr ~/neurips-round1/coms-utr-demo/coms-utr-over/ \
+    --names "COMs" \
+    --names "Gradient Ascent" \
+    --tag "score/100th" \
+    --max-iterations 50
 
 """
 
 
 @cli.command()
 @click.option('--hopper', multiple=True)
-@click.option('--superconductor', multiple=True)
+@click.option('--utr', multiple=True)
 @click.option('--names', multiple=True)
 @click.option('--tag', type=str)
 @click.option('--max-iterations', type=int)
-@click.option('--beta', type=float, default=0.9)
 def compare_runs(hopper,
-                 superconductor,
+                 utr,
                  names,
                  tag,
-                 max_iterations, beta):
+                 max_iterations):
 
-    from collections import defaultdict
     import seaborn as sns
     import matplotlib
     import matplotlib.pyplot as plt
     import glob
     import os
-    import re
     import pandas as pd
-    import numpy as np
     import tensorflow as tf
     import tqdm
-    import json
 
     plt.rcParams['text.usetex'] = True
     matplotlib.rc('font', family='serif', serif='cm10')
@@ -1705,69 +1686,50 @@ def compare_runs(hopper,
     sns.palplot(palette)
     sns.set_palette(palette)
 
-    pattern = re.compile(
-        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
-        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
-
     name_to_dir = {}
 
     for (hopper_i,
-         superconductor_i,
+         utr_i,
          names_i) in zip(
             hopper,
-            superconductor,
+            utr,
             names):
 
         hopper_dir = [d for d in glob.glob(
-            os.path.join(hopper_i, '*'))
-            if pattern.search(d) is not None]
-        superconductor_dir = [d for d in glob.glob(
-            os.path.join(superconductor_i, '*'))
-            if pattern.search(d) is not None]
+            os.path.join(hopper_i, '*')) if os.path.isdir(d)]
+        utr_dir = [d for d in glob.glob(
+            os.path.join(utr_i, '*')) if os.path.isdir(d)]
 
         name_to_dir[names_i] = {
-            'HopperController-v0': hopper_dir,
-            'Superconductor-v0': superconductor_dir}
+            'hopper': hopper_dir, 'utr': utr_dir}
 
     task_to_ylabel = {
-        'HopperController-v0': "Average return",
-        'Superconductor-v0': "Critical temperature"}
+        'hopper': "Average Return",
+        'utr': "Critical Temperature"}
 
     fig, axes = plt.subplots(
         nrows=1, ncols=2, figsize=(12.5, 5.0))
 
-    task_to_axis = {
-        'HopperController-v0': axes[0],
-        'Superconductor-v0': axes[1]}
+    task_to_axis = {'hopper': axes[0], 'utr': axes[1]}
 
-    for task in [
-            'HopperController-v0',
-            'Superconductor-v0']:
+    for task in ['hopper', 'utr']:
 
         # read data from tensor board
         ylabel = task_to_ylabel[task]
         data = pd.DataFrame(columns=[
-            'Algorithm',
-            'Gradient ascent steps',
-            ylabel])
+            'Algorithm', 'Gradient ascent steps', ylabel])
 
         for name, task_to_dir_i in name_to_dir.items():
             for d in tqdm.tqdm(task_to_dir_i[task]):
-                for f in glob.glob(os.path.join(d, '*/events.out*')):
-                    params = os.path.join(d, 'params.json')
-                    with open(params, "r") as pf:
-                        params = json.load(pf)
+                for f in glob.glob(os.path.join(d, 'events.out*')):
                     for e in tf.compat.v1.train.summary_iterator(f):
                         for v in e.summary.value:
                             if v.tag == tag and e.step < max_iterations:
-                                if "solver_beta" in params \
-                                        and params["solver_beta"] != beta:
-                                    continue
                                 data = data.append({
                                     'Algorithm': name,
                                     'Gradient ascent steps': e.step,
-                                    ylabel: tf.make_ndarray(v.tensor).tolist(),
-                                    }, ignore_index=True)
+                                    ylabel: tf.make_ndarray(
+                                        v.tensor).tolist()}, ignore_index=True)
 
         axis = task_to_axis[task]
 
