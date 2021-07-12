@@ -28,4 +28,5 @@ for OE_LIMIT in 0.1 0.2 0.5 1.0 2.0; do
                 --forward-model-batch-size 128 \
                 --forward-model-val-size 500 \
                 --forward-model-epochs 50 \
-                --evaluation-samples 128 & done; done; wait; done
+                --evaluation-samples 128 \
+	              --not-fast & done; done; wait; done
