@@ -4,7 +4,7 @@ Design-Baselines is a set of **baseline algorithms** for solving automatic desig
 
 These applications have significant potential to accelerate research in biochemistry, chemical engineering, materials science, robotics and many other disciplines. We hope this set of baselines serves as a robust platform to drive these applications and create widespread excitement for model-based optimization.
 
-COMs Website: [link](https://sites.google.com/berkeley.edu/coms/home?authuser=0)    |    COMs Paper: [arXiv](https://arxiv.org/abs/2107.06882)
+<center>**COMs Website**: [link](https://sites.google.com/berkeley.edu/coms/home?authuser=0) | **COMs Paper**: [arXiv](https://arxiv.org/abs/2107.06882)</center>
 
 ## Offline Model-Based Optimization
 
@@ -121,12 +121,11 @@ You may run COMs using the `design-baselines` command line interface in a bash s
 
 ```bash
 coms --logging-dir ./coms-hopper \
-     --fast \
+     --not-fast \
      --task HopperController-Exact-v0 \
      --no-task-relabel \
      --normalize-ys \
      --normalize-xs \
-     --not-in-latent-space \
      --particle-lr 0.05 \
      --particle-train-gradient-steps 50 \
      --particle-evaluate-gradient-steps 50 \
@@ -134,7 +133,6 @@ coms --logging-dir ./coms-hopper \
      --forward-model-activations relu \
      --forward-model-activations relu \
      --forward-model-hidden-size 2048 \
-     --no-forward-model-final-tanh \
      --forward-model-lr 0.0003 \
      --forward-model-alpha 0.1 \
      --forward-model-alpha-lr 0.01 \
