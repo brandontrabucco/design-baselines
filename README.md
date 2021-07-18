@@ -1,47 +1,114 @@
-# Design Baselines for Model-Based Optimization
+# Design-Baselines
 
-This repository contains several design baselines for model-based optimization. Our hope is that a common evaluation protocol will encourage future research and comparability in model-based design.
+Design-Baselines is a set of **baseline algorithms** for solving automatic design problems that involve choosing an input that maximizes a black-box function. This type of optimization is used across scientific and engineering disciplines in ways such as designing proteins and DNA sequences with particular functions, chemical formulas and molecule substructures, the morphology and controllers of robots, and many more applications. 
 
-## Available Baselines
+These applications have significant potential to accelerate research in biochemistry, chemical engineering, materials science, robotics and many other disciplines. We hope this set of baselines serves as a robust platform to drive these applications and create widespread excitement for model-based optimization.
 
-We provide the following list of baseline algorithms.
+## Offline Model-Based Optimization
 
-* Conditioning by Adaptive Sampling: `from design_baselines.cbas import cbas`
-* Model Inversion Networks: `from design_baselines.mins import mins`
-* Forward Ensemble: `from design_baselines.forward_ensemble import forward_ensemble`
+![Offline Model-Based Optimization](https://storage.googleapis.com/design-bench/mbo.png)
 
-## Setup
+The goal of model-based optimization is to find an input **x** that maximizes an unknown black-box function **f**. This function is frequently difficulty or costly to evaluate---such as requiring wet-lab experiments in the case of protein design. In these cases, **f** is described by a set of function evaluations: D = {(x_0, y_0), (x_1, y_1), ... (x_n, y_n)}, and optimization is performed without querying **f** on new data points.
 
-You can install the algorithms by cloning this repository and using anaconda.
+## Installation
+
+Design-Baselines can be downloaded from github and installed using anaconda.
 
 ```bash
-git clone https://github.com/brandontrabucco/design-baselines
-conda env create -f design-baselines/environment.yml
+git clone git@github.com:brandontrabucco/design-baselines.git
+conda create -f design-baselines/environment.yml
 ```
 
-## Usage
+## Performance Of Baselines
 
-Every algorithm is implemented as a function that accepts a dictionary of hyper parameters called `config`. This makes interfacing with hyper parameter tuning platforms such as `ray.tune`, simple. 
+We benchmark a set of 9 methods for solving offline model-based optimization problems. Performance is reported in normalized form, where the 100th percentile score of 128 candidate designs is evaluated and normalized such that a 1.0 corresponds to performance equivalent to the best performing design in the *full unobserved* dataset assoctated with each model-based optimization task. A 0.0 corresponds to performance equivalent to the worst performing design in the *full unobserved* dataset. In circumstances where an exact oracle is not available, this *full unobserved* dataset is used for training the approximate oracle that is used for evaluation of candidate designs proposed by each method. The symbol ± indicates the empirical standard deviation of reported performance across 8 trials.
 
-```python
-from design_baselines.forward_ensemble import forward_ensemble
-forward_ensemble({
-  "logging_dir": "forward-ensemble",
-  "task": "HopperController-v0",
-  "task_kwargs": {},
-  "val_size": 200,
-  "batch_size": 128,
-  "bootstraps": 1,
-  "epochs": 200,
-  "hidden_size": 2048,
-  "initial_max_std": 1.5,
-  "initial_min_std": 0.5,
-  "forward_model_lr": 0.001,
-  "solver_samples": 128,
-  "solver_lr": 0.0005,
-  "solver_steps": 1000})
+### Performance On Continuous Tasks
+
+Method \ Task                 | Superconductor | Ant Morphology | D'Kitty Morphology | Hopper Controller 
+----------------------------- | -------------- | -------------- | ------------------ | -----------------
+D (best)                      |          0.399 |          0.565 |              0.884 |               1.0
+Auto. CbAS                    |  0.421 ± 0.045 |  0.884 ± 0.046 |      0.906 ± 0.006 |     0.137 ± 0.005 
+CbAS                          |  0.503 ± 0.069 |  0.879 ± 0.032 |      0.892 ± 0.008 |     0.141 ± 0.012 
+BO-qEI                        |  0.402 ± 0.034 |  0.820 ± 0.000 |      0.896 ± 0.000 |     0.550 ± 0.118 
+CMA-ES                        |  0.465 ± 0.024 |  1.219 ± 0.738 |      0.724 ± 0.001 |     0.604 ± 0.215 
+Grad.                         |  0.518 ± 0.024 |  0.291 ± 0.023 |      0.874 ± 0.022 |     1.035 ± 0.482 
+Grad. Min                     |  0.506 ± 0.009 |  0.478 ± 0.064 |      0.889 ± 0.011 |     1.391 ± 0.589 
+Grad. Mean                    |  0.499 ± 0.017 |  0.444 ± 0.081 |      0.892 ± 0.011 |     1.586 ± 0.454 
+MINs                          |  0.469 ± 0.023 |  0.916 ± 0.036 |      0.945 ± 0.012 |     0.424 ± 0.166 
+REINFORCE                     |  0.481 ± 0.013 |  0.263 ± 0.032 |      0.562 ± 0.196 |    -0.020 ± 0.067 
+**COMs (Ours)**               |  0.439 ± 0.033 |  0.944 ± 0.016 |      0.949 ± 0.015 |     2.056 ± 0.314
+
+### Performance On Discrete Tasks
+
+Method \ Task                 |            GFP |      TF Bind 8 |            UTR 
+----------------------------- | -------------- | -------------- | -------------- 
+D (best)                      |          0.789 |          0.439 |          0.593
+Auto. CbAS                    |  0.865 ± 0.000 |  0.910 ± 0.044 |  0.691 ± 0.012 
+CbAS                          |  0.865 ± 0.000 |  0.927 ± 0.051 |  0.694 ± 0.010 
+BO-qEI                        |  0.254 ± 0.352 |  0.798 ± 0.083 |  0.684 ± 0.000 
+CMA-ES                        |  0.054 ± 0.002 |  0.953 ± 0.022 |  0.707 ± 0.014 
+Grad.                         |  0.864 ± 0.001 |  0.977 ± 0.025 |  0.695 ± 0.013 
+Grad. Min                     |  0.864 ± 0.000 |  0.984 ± 0.012 |  0.696 ± 0.009 
+Grad. Mean                    |  0.864 ± 0.000 |  0.986 ± 0.012 |  0.693 ± 0.010 
+MINs                          |  0.865 ± 0.001 |  0.905 ± 0.052 |  0.697 ± 0.010 
+REINFORCE                     |  0.865 ± 0.000 |  0.948 ± 0.028 |  0.688 ± 0.010
+**COMs (Ours)**               |  0.864 ± 0.000 |  0.945 ± 0.033 |  0.699 ± 0.011
+
+## Reproducing Baseline Performance
+
+To reproduce the performance of baseline algorithms reported in our work, you may then run the following series of commands in a bash terminal using the command-line interface exposed in design-baselines. Also, please ensure that the conda environment `design-baselines` is activated in the bash session that you run these commands from in order to access the `design-baselines` command-line interface.
+
+```bash
+# set up machine parameters
+NUM_CPUS=32
+NUM_GPUS=8
+
+for TASK_NAME in \
+    superconductor \
+    ant \
+    dkitty \
+    hopper \
+    gfp \
+    tf-bind-8 \
+    utr; do
+    
+  for ALGORITHM_NAME in \
+      autofocused-cbas \
+      cbas \
+      bo-qei \
+      cma-es \
+      gradient-ascent \
+      gradient-ascent-min-ensemble \
+      gradient-ascent-mean-ensemble \
+      mins \
+      reinforce; do
+  
+    # launch several model-based optimization algorithms using the command line interface
+    # for example: 
+    # (design-baselines) name@computer:~/$ cbas gfp \
+    #                                        --local-dir ~/db-results/cbas-gfp \
+    #                                        --cpus 32 \
+    #                                        --gpus 8 \
+    #                                        --num-parallel 8 \
+    #                                        --num-samples 8
+    $ALGORITHM_NAME $TASK_NAME \
+      --local-dir ~/db-results/$ALGORITHM_NAME-$TASK_NAME \
+      --cpus $NUM_CPUS \
+      --gpus $NUM_GPUS \
+      --num-parallel 8 \
+      --num-samples 8
+    
+  done
+  
+done
+
+# generate the main performance table of the paper
+design-baselines make-table --dir ~/db-results/ --percentile 100th
+
+# generate the performance tables in the appendix
+design-baselines make-table --dir ~/db-results/ --percentile 50th
+design-baselines make-table --dir ~/db-results/ --percentile 100th --no-normalize
 ```
 
-## Choosing Which Task
-
-You may notice in the previous example that the `task` parameter is set to `HopperController-v0`. These baselines are tightly integrated with our [design-bench](https://github.com/brandontrabucco/design-bench). These will automatically be installed with anaconda. For more information on which tasks are currently available for use, or how to register new tasks, please check out [design-bench](https://github.com/brandontrabucco/design-bench).
+These commands will run several model-based optimization algorithms (such as [CbAS](http://proceedings.mlr.press/v97/brookes19a.html)) contained in design-baselines on all tasks released with the design-bench benchmark, and will then generate three performance tables from those results, and print a latex rendition of these performance tables to stdout.
