@@ -6,6 +6,8 @@ These applications have significant potential to accelerate research in biochemi
 
 **COMs Website**: [link](https://sites.google.com/berkeley.edu/coms/home?authuser=0) | **COMs Paper**: [arXiv](https://arxiv.org/abs/2107.06882)
 
+If these applications interest you, consider using our benchmark: [design-bench](https://github.com/brandontrabucco/design-bench), which can be installed to python with `pip install design-bench==2.0.12`.
+
 ## Offline Model-Based Optimization
 
 ![Offline Model-Based Optimization](https://storage.googleapis.com/design-bench/mbo.png)
