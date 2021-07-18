@@ -114,3 +114,34 @@ design-baselines make-table --dir ~/db-results/ --percentile 100th --no-normaliz
 ```
 
 These commands will run several model-based optimization algorithms (such as [CbAS](http://proceedings.mlr.press/v97/brookes19a.html)) contained in design-baselines on all tasks released with the design-bench benchmark, and will then generate three performance tables from those results, and print a latex rendition of these performance tables to stdout.
+
+## Running COMs
+
+You may run COMs using the `design-baselines` command line interface in a bash session where the `design-baselines` anaconda environments is activated and the `design-baselines` pip package is installed. Below is an example command that will run COMs on the task `HopperController-Exact-v0` from [design-bench](https://github.com/brandontrabucco/design-bench).
+
+```bash
+coms --logging-dir ./coms-hopper \
+     --fast \
+     --task HopperController-Exact-v0 \
+     --no-task-relabel \
+     --normalize-ys \
+     --normalize-xs \
+     --not-in-latent-space \
+     --particle-lr 0.05 \
+     --particle-train-gradient-steps 50 \
+     --particle-evaluate-gradient-steps 50 \
+     --particle-entropy-coefficient 0.0 \
+     --forward-model-activations relu \
+     --forward-model-activations relu \
+     --forward-model-hidden-size 2048 \
+     --no-forward-model-final-tanh \
+     --forward-model-lr 0.0003 \
+     --forward-model-alpha 0.1 \
+     --forward-model-alpha-lr 0.01 \
+     --forward-model-overestimation-limit 0.5 \
+     --forward-model-noise-std 0.0 \
+     --forward-model-batch-size 128 \
+     --forward-model-val-size 500 \
+     --forward-model-epochs 50 \
+     --evaluation-samples 128
+```
