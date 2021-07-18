@@ -4,7 +4,7 @@ Design-Baselines is a set of **baseline algorithms** for solving automatic desig
 
 These applications have significant potential to accelerate research in biochemistry, chemical engineering, materials science, robotics and many other disciplines. We hope this set of baselines serves as a robust platform to drive these applications and create widespread excitement for model-based optimization.
 
-<center>**COMs Website**: [link](https://sites.google.com/berkeley.edu/coms/home?authuser=0) | **COMs Paper**: [arXiv](https://arxiv.org/abs/2107.06882)</center>
+**COMs Website**: [link](https://sites.google.com/berkeley.edu/coms/home?authuser=0) | **COMs Paper**: [arXiv](https://arxiv.org/abs/2107.06882)
 
 ## Offline Model-Based Optimization
 
