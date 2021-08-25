@@ -811,6 +811,8 @@ def make_table(dir, percentile, modifier, group, normalize):
     from design_bench.datasets.continuous.dkitty_morphology_dataset import DKittyMorphologyDataset
     from design_bench.datasets.continuous.hopper_controller_dataset import HopperControllerDataset
 
+    import design_bench as db
+
     tasks = [
         "gfp",
         "tf-bind-8",
@@ -864,6 +866,24 @@ def make_table(dir, percentile, modifier, group, normalize):
         "hopper": hopper_dataset.y.max(),
     }
 
+    task_to_best = {
+        "gfp": db.make("GFP-Transformer-v0").y.max(),
+        "tf-bind-8": db.make("TFBind8-Exact-v0").y.max(),
+        "utr": db.make("UTR-ResNet-v0").y.max(),
+        #"chembl": db.make("ChEMBL-ResNet-v0").y.max(),
+        "superconductor": db.make("Superconductor-RandomForest-v0").y.max(),
+        "ant": db.make("AntMorphology-Exact-v0").y.max(),
+        "dkitty": db.make("DKittyMorphology-Exact-v0").y.max(),
+        "hopper": db.make("HopperController-Exact-v0").y.max(),
+    }
+
+    for task_name, task_best in task_to_best.items():
+        task_to_best[task_name] = (task_to_best[task_name] -
+                                   task_to_min[task_name]) / (
+                task_to_max[task_name] - task_to_min[task_name])
+        
+    print("D(Best) = ", task_to_best)
+
     baselines = [
         "autofocused-cbas",
         "cbas",
@@ -903,8 +923,6 @@ def make_table(dir, percentile, modifier, group, normalize):
         "coms": 50
     }
 
-    coms_modifier = "0.5"
-
     performance = dict()
     for task in tqdm.tqdm(tasks):
         task_min = task_to_min[task]
@@ -916,12 +934,16 @@ def make_table(dir, percentile, modifier, group, normalize):
             if baseline == "coms":
 
                 dirs = [d for d in glob.glob(os.path.join(
-                    dir, f"coms-{task}/coms-{task}-{coms_modifier}/*")) if os.path.isdir(d)]
+                    dir, f"coms-{task}/coms-{task}-*/*")) if os.path.isdir(d)]
 
             else:
 
-                dirs = [d for d in glob.glob(os.path.join(
-                    dir, f"{baseline}{modifier}-{task}/*/*")) if os.path.isdir(d)]
+                dirs = f"{baseline}{modifier}-{task}/*/*"
+                if task == "utr":
+                    dirs = f"{baseline}-relabelled-{task}/*/*"
+
+                dirs = [d for d in glob.glob(
+                    os.path.join(dir, dirs)) if os.path.isdir(d)]
 
             for d in dirs:
                 event_files = (
@@ -978,6 +1000,9 @@ def make_table(dir, percentile, modifier, group, normalize):
     #
     # how many tasks is a particular method optimal (or within 1 sd)
     #
+    optimal_tasks = dict()
+    for baseline in baselines:
+        optimal_tasks[baseline] = list()
 
     final_data_optimality = np.zeros([len(baselines), len(tasks)])
     for task_idx, task in enumerate(tasks):
@@ -992,13 +1017,14 @@ def make_table(dir, percentile, modifier, group, normalize):
             if current_mean + current_standard_dev >= top_mean \
                     or current_mean >= top_mean - top_standard_dev:
                 final_data_optimality[baseline_idx, task_idx] += 1.0
+                optimal_tasks[baseline].append(task)
 
     final_data_optimality = final_data_optimality.sum(axis=1)
 
     print()
     print("Number Of Optimal Tasks: ")
     for baseline_idx, baseline in enumerate(baselines):
-        print(f"{baseline} = ", int(final_data_optimality[baseline_idx]), "/ 7")
+        print(f"{baseline} = ", int(final_data_optimality[baseline_idx]), "/ 7", optimal_tasks[baseline])
 
 
 @cli.command()
@@ -1705,7 +1731,11 @@ def compare_runs(hopper,
 
     task_to_ylabel = {
         'hopper': "Average Return",
-        'utr': "Critical Temperature"}
+        'utr': "Ribosome Loading"}
+
+    task_to_title = {
+        'hopper': "Hopper Controller",
+        'utr': "UTR"}
 
     fig, axes = plt.subplots(
         nrows=1, ncols=2, figsize=(12.5, 5.0))
@@ -1713,6 +1743,7 @@ def compare_runs(hopper,
     task_to_axis = {'hopper': axes[0], 'utr': axes[1]}
 
     for task in ['hopper', 'utr']:
+        title = task_to_title[task]
 
         # read data from tensor board
         ylabel = task_to_ylabel[task]
@@ -1751,7 +1782,7 @@ def compare_runs(hopper,
 
         axis.set_xlabel(r'\textbf{Gradient ascent steps}', fontsize=24)
         axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
-        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + title + '}', fontsize=24)
         axis.grid(color='grey',
                   linestyle='dotted',
                   linewidth=2)
@@ -1918,16 +1949,13 @@ def ablate_beta(hopper,
     fig.savefig('ablate_beta.pdf')
 
 
-
-
-
 @cli.command()
 @click.option('--hopper')
-@click.option('--superconductor')
+@click.option('--utr')
 @click.option('--tag', type=str)
 @click.option('--max-iterations', type=int)
 def ablate_tau(hopper,
-               superconductor,
+               utr,
                tag,
                max_iterations):
 
@@ -1959,35 +1987,35 @@ def ablate_tau(hopper,
     sns.palplot(palette)
     sns.set_palette(palette)
 
-    pattern = re.compile(
-        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
-        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
-
     hopper_dir = [d for d in glob.glob(
         os.path.join(hopper, '*'))
-        if pattern.search(d) is not None]
-    superconductor_dir = [d for d in glob.glob(
-        os.path.join(superconductor, '*'))
-        if pattern.search(d) is not None]
+        if os.path.isdir(d)]
+    utr_dir = [d for d in glob.glob(
+        os.path.join(utr, '*'))
+        if os.path.isdir(d)]
 
     name_to_dir = {
-        'HopperController-v0': hopper_dir,
-        'Superconductor-v0': superconductor_dir}
+        'hopper': hopper_dir,
+        'utr': utr_dir}
 
     task_to_ylabel = {
-        'HopperController-v0': "Average return",
-        'Superconductor-v0': "Critical temperature"}
+        'hopper': "Average Return",
+        'utr': "Ribosome Loading"}
 
     fig, axes = plt.subplots(
         nrows=1, ncols=2, figsize=(12.5, 5.0))
 
     task_to_axis = {
-        'HopperController-v0': axes[0],
-        'Superconductor-v0': axes[1]}
+        'hopper': axes[0],
+        'utr': axes[1]}
+
+    task_to_name = {
+        'hopper': 'Hopper Controller',
+        'utr': 'UTR'}
 
     for task in [
-            'HopperController-v0',
-            'Superconductor-v0']:
+            'hopper',
+            'utr']:
 
         # read data from tensor board
         ylabel = task_to_ylabel[task]
@@ -1998,22 +2026,19 @@ def ablate_tau(hopper,
 
         for d in tqdm.tqdm(name_to_dir[task]):
             for f in glob.glob(os.path.join(d, '*/events.out*')):
-                params = os.path.join(d, 'params.json')
+                params = os.path.join(os.path.dirname(f), 'params.json')
                 with open(params, "r") as pf:
                     params = json.load(pf)
                 for e in tf.compat.v1.train.summary_iterator(f):
                     for v in e.summary.value:
                         if v.tag == tag and e.step < max_iterations:
                             data = data.append({
-                                'Tau': f'{params["target_conservatism"]}',
+                                'Tau': f'{params["forward_model_overestimation_limit"]}',
                                 'Gradient ascent steps': e.step,
                                 ylabel: tf.make_ndarray(v.tensor).tolist(),
                                 }, ignore_index=True)
 
         axis = task_to_axis[task]
-
-        palette = {"0.5": "C0", "0.4": "C1", "0.2": "C2", "0.1": "C3",
-                   "0.05": "C4", "0.01": "C5", "0.005": "C6", "0.001": "C7"}
 
         axis = sns.lineplot(
             x='Gradient ascent steps',
@@ -2021,9 +2046,7 @@ def ablate_tau(hopper,
             hue='Tau',
             data=data,
             ax=axis,
-            linewidth=2,
-            legend=False,
-            palette=palette)
+            linewidth=2)
 
         axis.spines['right'].set_visible(False)
         axis.spines['top'].set_visible(False)
@@ -2034,37 +2057,11 @@ def ablate_tau(hopper,
 
         axis.set_xlabel(r'\textbf{Gradient ascent steps}', fontsize=24)
         axis.set_ylabel(r'\textbf{' + ylabel + '}', fontsize=24)
-        axis.set_title(r'\textbf{' + task + '}', fontsize=24)
+        axis.set_title(r'\textbf{' + task_to_name[task] + '}', fontsize=24)
         axis.grid(color='grey',
                   linestyle='dotted',
                   linewidth=2)
 
-    new_axes = fig.add_axes([0.0, 0.0, 1.0, 1.0])
-    for x in [0.5, 0.4, 0.2, 0.1, 0.05, 0.01, 0.005, 0.001]:
-        new_axes.plot([0], [0], color=(1.0, 1.0, 1.0, 0.0), label=r"$\tau$" + f" = {x}")
-    leg = new_axes.legend([r"$\tau$" + f" = {x}" for x in [0.5, 0.4, 0.2, 0.1, 0.05, 0.01, 0.005, 0.001]],
-                          ncol=4,
-                          loc='lower center',
-                          bbox_to_anchor=(0.5, 0.0, 0.0, 0.0),
-                          fontsize=20,
-                          fancybox=True)
-    leg.legendHandles[0].set_color(color_palette[0])
-    leg.legendHandles[0].set_linewidth(2.0)
-    leg.legendHandles[1].set_color(color_palette[1])
-    leg.legendHandles[1].set_linewidth(2.0)
-    leg.legendHandles[2].set_color(color_palette[2])
-    leg.legendHandles[2].set_linewidth(2.0)
-    leg.legendHandles[3].set_color(color_palette[3])
-    leg.legendHandles[3].set_linewidth(2.0)
-    leg.legendHandles[4].set_color(color_palette[4])
-    leg.legendHandles[4].set_linewidth(2.0)
-    leg.legendHandles[5].set_color(color_palette[5])
-    leg.legendHandles[5].set_linewidth(2.0)
-    leg.legendHandles[6].set_color(color_palette[6])
-    leg.legendHandles[6].set_linewidth(2.0)
-    leg.legendHandles[7].set_color(color_palette[7])
-    leg.legendHandles[7].set_linewidth(2.0)
-    new_axes.patch.set_alpha(0.0)
     fig.subplots_adjust(bottom=0.4)
     fig.savefig('ablate_tau.pdf')
 
@@ -3493,17 +3490,15 @@ design-baselines compare-budget --hopper ~/grad-kun-final/hopper/gradient_ascent
 
 @cli.command()
 @click.option('--hopper', multiple=True)
-@click.option('--superconductor', multiple=True)
+@click.option('--utr', multiple=True)
 @click.option('--names', multiple=True)
 @click.option('--iteration', type=int)
 @click.option('--upper-k', type=int, default=128)
-@click.option('--beta', type=float, default=0.9)
 def compare_budget(hopper,
-                   superconductor,
+                   utr,
                    names,
                    iteration,
-                   upper_k,
-                   beta):
+                   upper_k):
 
     from collections import defaultdict
     import seaborn as sns
@@ -3533,44 +3528,40 @@ def compare_budget(hopper,
     sns.palplot(palette)
     sns.set_palette(palette)
 
-    pattern = re.compile(
-        r'.*/(\w+)_(\d+)_(\w+=[\w.+-]+[,_])*'
-        r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\w{10})$')
-
     name_to_dir = {}
 
     for (hopper_i,
-         superconductor_i,
+         utr_i,
          names_i) in zip(
             hopper,
-            superconductor,
+            utr,
             names):
 
         hopper_dir = [d for d in glob.glob(
             os.path.join(hopper_i, '*'))
-            if pattern.search(d) is not None]
-        superconductor_dir = [d for d in glob.glob(
-            os.path.join(superconductor_i, '*'))
-            if pattern.search(d) is not None]
+            if os.path.isdir(d)]
+        utr_dir = [d for d in glob.glob(
+            os.path.join(utr_i, '*'))
+            if os.path.isdir(d)]
 
         name_to_dir[names_i] = {
-            'HopperController-v0': hopper_dir,
-            'Superconductor-v0': superconductor_dir}
+            'Hopper Controller': hopper_dir,
+            'UTR': utr_dir}
 
     task_to_ylabel = {
-        'HopperController-v0': "Average return",
-        'Superconductor-v0': "Critical temperature"}
+        'Hopper Controller': "Average Return",
+        'UTR': "Ribosome Loading"}
 
     fig, axes = plt.subplots(
         nrows=1, ncols=2, figsize=(12.5, 5.0))
 
     task_to_axis = {
-        'HopperController-v0': axes[0],
-        'Superconductor-v0': axes[1]}
+        'Hopper Controller': axes[0],
+        'UTR': axes[1]}
 
     for task in [
-            'HopperController-v0',
-            'Superconductor-v0']:
+            'Hopper Controller',
+            'UTR']:
 
         # read data from tensor board
         ylabel = task_to_ylabel[task]
@@ -3581,23 +3572,16 @@ def compare_budget(hopper,
 
         for name, task_to_dir_i in name_to_dir.items():
             for d in tqdm.tqdm(task_to_dir_i[task]):
-                for f in glob.glob(os.path.join(d, '*/events.out*')):
-                    params = os.path.join(d, 'params.json')
-                    with open(params, "r") as pf:
-                        params = json.load(pf)
-
-                    if "solver_beta" in params \
-                            and params["solver_beta"] != beta:
-                        continue
+                for f in glob.glob(os.path.join(d, 'events.out*')):
 
                     try:
 
                         scores = np.load(os.path.join(os.path.dirname(f), 'scores.npy'))
                         predictions = np.load(os.path.join(os.path.dirname(f), 'predictions.npy'))
+
                         if len(predictions.shape) > 2:
                             predictions = predictions[:, :, 0]
-                        print(predictions.shape)
-                        print(scores.shape)
+
                         for limit in range(1, upper_k):
                             top_k = np.argsort(predictions[:, iteration])[::-1][:limit]
                             data = data.append({"Budget": limit,

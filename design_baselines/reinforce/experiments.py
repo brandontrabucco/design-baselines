@@ -370,3 +370,91 @@ def utr(local_dir, cpus, gpus, num_parallel, num_samples):
         local_dir=local_dir,
         resources_per_trial={'cpu': cpus // num_parallel,
                              'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='reinforce-tf_bind_10')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def tf_bind_10(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate reinforce on TFBind10-Exact-v0
+    """
+
+    # Final Version
+
+    from design_baselines.reinforce import reinforce
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             include_dashboard=False,
+             _temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(reinforce, config={
+        "logging_dir": "data",
+        "normalize_ys": True,
+        "normalize_xs": False,
+        "task": "TFBind10-Exact-v0",
+        "task_kwargs": {"relabel": False},
+        "optimize_ground_truth": False,
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "embedding_size": 256,
+        "hidden_size": 256,
+        "num_layers": 1,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "reinforce_lr": 0.01,
+        "reinforce_batch_size": 256,
+        "iterations": 200,
+        "solver_samples": 128},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
+
+
+@cli.command()
+@click.option('--local-dir', type=str, default='reinforce-nas')
+@click.option('--cpus', type=int, default=24)
+@click.option('--gpus', type=int, default=1)
+@click.option('--num-parallel', type=int, default=1)
+@click.option('--num-samples', type=int, default=1)
+def nas(local_dir, cpus, gpus, num_parallel, num_samples):
+    """Evaluate reinforce on CIFARNAS-Exact-v0
+    """
+
+    # Final Version
+
+    from design_baselines.reinforce import reinforce
+    ray.init(num_cpus=cpus,
+             num_gpus=gpus,
+             include_dashboard=False,
+             _temp_dir=os.path.expanduser('~/tmp'))
+    tune.run(reinforce, config={
+        "logging_dir": "data",
+        "normalize_ys": True,
+        "normalize_xs": False,
+        "task": "CIFARNAS-Exact-v0",
+        "task_kwargs": {"relabel": False},
+        "optimize_ground_truth": False,
+        "bootstraps": 5,
+        "val_size": 200,
+        "ensemble_batch_size": 100,
+        "embedding_size": 256,
+        "hidden_size": 256,
+        "num_layers": 1,
+        "initial_max_std": 0.2,
+        "initial_min_std": 0.1,
+        "ensemble_lr": 0.001,
+        "ensemble_epochs": 100,
+        "reinforce_lr": 0.01,
+        "reinforce_batch_size": 256,
+        "iterations": 200,
+        "solver_samples": 128},
+        num_samples=num_samples,
+        local_dir=local_dir,
+        resources_per_trial={'cpu': cpus // num_parallel,
+                             'gpu': gpus / num_parallel - 0.01})
