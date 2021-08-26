@@ -4,23 +4,25 @@ import argparse as ap
 if __name__ == "__main__":
 
     parser = ap.ArgumentParser("Generate MBO Scripts")
-    parser.add_argument("--image-dir", type=str,
-                        default='/global/scratch/btrabucco/mbo.img')
+
     parser.add_argument("--image-dir", type=str,
                         default='/global/scratch/btrabucco/mbo.img')
     parser.add_argument("--scripts-dir", type=str,
                         default='/global/scratch/btrabucco/scripts')
     parser.add_argument("--results-dir", type=str,
                         default='/global/scratch/btrabucco/mbo-results')
+
     parser.add_argument("--slurm-account", type=str, default='co_rail')
     parser.add_argument("--slurm-partition", type=str, default='savio3_gpu')
     parser.add_argument("--slurm-qos", type=str, default='rail_gpu3_normal')
     parser.add_argument("--slurm-hours", type=int, default=24)
     parser.add_argument("--slurm-memory", type=int, default=80)
+
     parser.add_argument("--cpus", type=int, default=8)
     parser.add_argument("--gpus", type=int, default=4)
     parser.add_argument("--num-parallel", type=int, default=8)
     parser.add_argument("--num-samples", type=int, default=8)
+
     args = parser.parse_args()
 
     for baseline in ["autofocused-cbas",
@@ -75,3 +77,5 @@ singularity exec --nv -B /usr/lib64 -B /var/lib/dcv-gl -w \
             with open(f"{args.scripts_dir}/"
                       f"launch_{baseline}_{task}.sh", "w") as f:
                 f.write(launch_script)
+
+            print(f"sbatch {args.scripts_dir}/launch_{baseline}_{task}.sh")
