@@ -1,4 +1,5 @@
 import argparse as ap
+import os
 
 
 if __name__ == "__main__":
@@ -24,6 +25,9 @@ if __name__ == "__main__":
     parser.add_argument("--num-samples", type=int, default=8)
 
     args = parser.parse_args()
+
+    os.makedirs(args.scripts_dir, exist_ok=True)
+    os.makedirs(args.results_dir, exist_ok=True)
 
     for baseline in ["autofocused-cbas",
                      "bo-qei",
