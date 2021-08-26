@@ -6,8 +6,6 @@ if __name__ == "__main__":
     parser = ap.ArgumentParser("Generate MBO Scripts")
     parser.add_argument("--image-dir", type=str,
                         default='/global/scratch/btrabucco/mbo.img')
-    parser.add_argument("--image-dir", type=str,
-                        default='/global/scratch/btrabucco/mbo.img')
     parser.add_argument("--scripts-dir", type=str,
                         default='/global/scratch/btrabucco/scripts')
     parser.add_argument("--results-dir", type=str,
