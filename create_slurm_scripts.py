@@ -19,6 +19,8 @@ if __name__ == "__main__":
     parser.add_argument("--slurm-hours", type=int, default=24)
     parser.add_argument("--slurm-memory", type=int, default=80)
 
+    parser.add_argument("--singularity-args", type=str, default="")
+
     parser.add_argument("--cpus", type=int, default=8)
     parser.add_argument("--gpus", type=int, default=4)
     parser.add_argument("--num-parallel", type=int, default=8)
@@ -73,7 +75,7 @@ conda activate design-baselines
 #SBATCH --mem={args.slurm_memory}G
 #SBATCH --gres=gpu:TITAN:{args.gpus}
 
-singularity exec --nv -w \
+singularity exec --nv -w {args.singularity_args} \
     {args.image_dir} \
     /bin/bash \
     {args.scripts_dir}/run_{baseline}_{task}.sh"""
