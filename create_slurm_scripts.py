@@ -73,7 +73,7 @@ conda activate design-baselines
 #SBATCH --mem={args.slurm_memory}G
 #SBATCH --gres=gpu:TITAN:{args.gpus}
 
-singularity exec --nv -B /usr/lib64 -B /var/lib/dcv-gl -w \
+singularity exec --nv -w \
     {args.image_dir} \
     /bin/bash \
     {args.scripts_dir}/run_{baseline}_{task}.sh"""
