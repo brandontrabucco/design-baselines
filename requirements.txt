@@ -127,7 +127,6 @@ seaborn==0.11.0
 Send2Trash==1.5.0
 soupsieve==2.0.1
 tabulate==0.8.7
-tape-proteins==0.3
 tensorboard==2.5.0
 tensorboard-data-server==0.6.1
 tensorboard-plugin-wit==1.7.0
@@ -156,6 +155,6 @@ widgetsnbextension==3.5.1
 wrapt==1.12.1
 yarl==1.4.2
 zipp==3.1.0
-design-bench[all]==2.0.13
+design-bench[all]==2.0.14
 morphing-agents==1.5.1
 -e .
