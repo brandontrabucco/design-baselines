@@ -394,7 +394,7 @@ def tf_bind_10(local_dir, cpus, gpus, num_parallel, num_samples):
         "normalize_ys": True,
         "normalize_xs": False,
         "task": "TFBind10-Exact-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": False, "dataset_kwargs": {"max_samples": 10000}},
         "optimize_ground_truth": False,
         "bootstraps": 5,
         "val_size": 200,

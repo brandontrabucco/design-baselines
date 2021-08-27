@@ -540,7 +540,7 @@ def tf_bind_10(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(mins, config={
         "logging_dir": "data",
         "task": "TFBind10-Exact-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": False, "dataset_kwargs": {"max_samples": 10000}},
         "val_size": 200,
         "offline": True,
         "normalize_ys": True,
@@ -571,7 +571,7 @@ def tf_bind_10(local_dir, cpus, gpus, num_parallel, num_samples):
         "discriminator_lr": 2e-4,
         "discriminator_beta_1": 0.0,
         "discriminator_beta_2": 0.9,
-        "initial_epochs": 200,
+        "initial_epochs": 100,
         "epochs_per_iteration": 0,
         "iterations": 0,
         "exploration_samples": 0,

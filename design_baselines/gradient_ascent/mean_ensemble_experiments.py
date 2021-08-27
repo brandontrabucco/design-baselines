@@ -412,7 +412,7 @@ def tf_bind_10(local_dir, cpus, gpus, num_parallel, num_samples):
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
         "task": "TFBind10-Exact-v0",
-        "task_kwargs": {"relabel": False},
+        "task_kwargs": {"relabel": False, "dataset_kwargs": {"max_samples": 10000}},
         "normalize_ys": True,
         "normalize_xs": True,
         "model_noise_std": 0.0,
