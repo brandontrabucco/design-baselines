@@ -487,7 +487,7 @@ def nas(local_dir, cpus, gpus, num_parallel, num_samples):
         "initial_min_std": 0.1,
         "forward_model_lr": 0.0003,
         "aggregation_method": 'min',
-        "solver_samples": 128, "do_evaluation": True,
+        "solver_samples": 128, "do_evaluation": False,
         "solver_lr": 0.01,
         "solver_steps": 200},
         num_samples=num_samples,
