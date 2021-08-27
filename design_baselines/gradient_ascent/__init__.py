@@ -177,9 +177,10 @@ def gradient_ascent(config):
     # save the current solution to the disk
     np.save(os.path.join(config["logging_dir"],
                          f"solution.npy"), solution.numpy())
+    if config["do_evaluation"]:
 
-    # evaluate the found solution and record a video
-    score = task.predict(solution)
-    if task.is_normalized_y:
-        score = task.denormalize_y(score)
-    logger.record("score", score, config['solver_steps'], percentile=True)
+        # evaluate the found solution and record a video
+        score = task.predict(solution)
+        if task.is_normalized_y:
+            score = task.denormalize_y(score)
+        logger.record("score", score, config['solver_steps'], percentile=True)

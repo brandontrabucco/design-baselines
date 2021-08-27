@@ -116,10 +116,11 @@ def reinforce(config):
     # save the current solution to the disk
     np.save(os.path.join(config["logging_dir"],
                          f"solution.npy"), solution.numpy())
+    if config["do_evaluation"]:
 
-    # evaluate the found solution and record a video
-    score = task.predict(solution)
-    if config['normalize_ys']:
-        score = task.denormalize_y(score)
-    logger.record(
-        "score", score, config['iterations'], percentile=True)
+        # evaluate the found solution and record a video
+        score = task.predict(solution)
+        if config['normalize_ys']:
+            score = task.denormalize_y(score)
+        logger.record(
+            "score", score, config['iterations'], percentile=True)

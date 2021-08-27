@@ -154,10 +154,11 @@ def cbas(config):
     x_t = q_dx.sample()
     np.save(os.path.join(config["logging_dir"],
                          f"solution.npy"), x_t.numpy())
-    score = task.predict(x_t)
-    if task.is_normalized_y:
-        score = task.denormalize_y(score)
-    logger.record("score",
-                  score,
-                  config['iterations'],
-                  percentile=True)
+    if config["do_evaluation"]:
+        score = task.predict(x_t)
+        if task.is_normalized_y:
+            score = task.denormalize_y(score)
+        logger.record("score",
+                      score,
+                      config['iterations'],
+                      percentile=True)
