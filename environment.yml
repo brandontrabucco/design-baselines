@@ -8,5 +8,6 @@ dependencies:
 - conda>=4.7
 - cudatoolkit=10.1
 - cudnn=7.6
+- rdkit
 - pip:
     - -r ./requirements.txt

@@ -26,6 +26,7 @@ colorful==0.5.4
 cycler==0.10.0
 Cython==0.29.21
 decorator==4.4.2
+deepchem==2.5.0
 defusedxml==0.6.0
 dm-tree==0.1.5
 docker==4.3.0
@@ -138,13 +139,13 @@ termcolor==1.1.0
 terminado==0.8.3
 testpath==0.4.4
 threadpoolctl==2.1.0
-tokenizers==0.10.2
+tokenizers==0.9.3
 torch==1.7.1
 torchvision==0.8.2
 tornado==6.0.4
 tqdm==4.56.0
 traitlets==4.3.3
-transformers==4.6.1
+transformers==3.5.1
 transforms3d==0.3.1
 typing-extensions==3.7.4.3
 wcwidth==0.2.5
