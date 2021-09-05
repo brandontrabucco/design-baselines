@@ -189,7 +189,10 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples, oracle):
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
+@click.option('--assay-chembl-id', type=str, default='CHEMBL3885882')
+@click.option('--standard-type', type=str, default='MCHC')
+def chembl(local_dir, cpus, gpus, num_parallel, num_samples,
+           assay_chembl_id, standard_type):
     """Evaluate Naive Gradient Ascent on ChEMBL-ResNet-v0
     """
 
@@ -202,8 +205,12 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
              _temp_dir=os.path.expanduser('~/tmp'))
     tune.run(gradient_ascent, config={
         "logging_dir": "data",
-        "task": "ChEMBL-ResNet-v0",
-        "task_kwargs": {"relabel": False},
+        "task": f"ChEMBL_{standard_type}_{assay_chembl_id}"
+                f"_MorganFingerprint-RandomForest-v0",
+        "task_kwargs": {"relabel": False,
+                        "dataset_kwargs": dict(
+                            assay_chembl_id=assay_chembl_id,
+                            standard_type=standard_type)},
         "normalize_ys": True,
         "normalize_xs": False,
         "model_noise_std": 0.0,

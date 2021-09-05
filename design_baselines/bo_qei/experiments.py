@@ -221,7 +221,10 @@ def superconductor(local_dir, cpus, gpus, num_parallel, num_samples, oracle):
 @click.option('--gpus', type=int, default=1)
 @click.option('--num-parallel', type=int, default=1)
 @click.option('--num-samples', type=int, default=1)
-def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
+@click.option('--assay-chembl-id', type=str, default='CHEMBL3885882')
+@click.option('--standard-type', type=str, default='MCHC')
+def chembl(local_dir, cpus, gpus, num_parallel, num_samples,
+           assay_chembl_id, standard_type):
     """Evaluate BO-QEI on ChEMBL-ResNet-v0
     """
 
@@ -236,10 +239,14 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
         "logging_dir": "data",
         "normalize_ys": True,
         "normalize_xs": False,
-        "task": "ChEMBL-ResNet-v0",
-        "task_kwargs": {"relabel": False},
+        "task": f"ChEMBL_{standard_type}_{assay_chembl_id}"
+                f"_MorganFingerprint-RandomForest-v0",
+        "task_kwargs": {"relabel": False,
+                        "dataset_kwargs": dict(
+                            assay_chembl_id=assay_chembl_id,
+                            standard_type=standard_type)},
         "bootstraps": 5,
-        "val_size": 200,
+        "val_size": 128,
         "optimize_ground_truth": False,
         "use_vae": True,
         "vae_beta": 0.01,
@@ -260,7 +267,7 @@ def chembl(local_dir, cpus, gpus, num_parallel, num_samples):
         "ensemble_lr": 0.001,
         "ensemble_epochs": 50,
         "bo_noise_se": 0.1,
-        "bo_gp_samples": 500,
+        "bo_gp_samples": 128,
         "bo_batch_size": 32,
         "bo_num_restarts": 10,
         "bo_raw_samples": 128,

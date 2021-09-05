@@ -804,7 +804,7 @@ def make_table(dir, percentile, modifier, group, normalize):
     from design_bench.datasets.discrete.gfp_dataset import GFPDataset
     from design_bench.datasets.discrete.tf_bind_8_dataset import TFBind8Dataset
     from design_bench.datasets.discrete.utr_dataset import UTRDataset
-    from design_bench.datasets.discrete.chembl_dataset import ChEMBLDataset
+    from design_bench.datasets.discrete.tf_bind_10_dataset import TFBind10Dataset
 
     from design_bench.datasets.continuous.superconductor_dataset import SuperconductorDataset
     from design_bench.datasets.continuous.ant_morphology_dataset import AntMorphologyDataset
@@ -817,7 +817,7 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gfp",
         "tf-bind-8",
         "utr",
-        #"chembl",
+        "tf-bind-10",
     ] if group == "A" else [
         "superconductor",
         "ant",
@@ -826,8 +826,8 @@ def make_table(dir, percentile, modifier, group, normalize):
     ] if group == "B" else [
         "gfp",
         "tf-bind-8",
+        "tf-bind-10",
         "utr",
-        #"chembl",
         "superconductor",
         "ant",
         "dkitty",
@@ -837,7 +837,7 @@ def make_table(dir, percentile, modifier, group, normalize):
     gfp_dataset = GFPDataset()
     tf_bind_8_dataset = TFBind8Dataset()
     utr_dataset = UTRDataset()
-    chembl_dataset = ChEMBLDataset(max_percentile=53)
+    tf_bind_10_dataset = TFBind10Dataset()
 
     superconductor_dataset = SuperconductorDataset()
     ant_dataset = AntMorphologyDataset()
@@ -848,7 +848,7 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gfp": gfp_dataset.y.min(),
         "tf-bind-8": tf_bind_8_dataset.y.min(),
         "utr": utr_dataset.y.min(),
-        "chembl": chembl_dataset.y.min(),
+        "tf-bind-10": tf_bind_10_dataset.y.min(),
         "superconductor": superconductor_dataset.y.min(),
         "ant": ant_dataset.y.min(),
         "dkitty": dkitty_dataset.y.min(),
@@ -859,7 +859,7 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gfp": gfp_dataset.y.max(),
         "tf-bind-8": tf_bind_8_dataset.y.max(),
         "utr": utr_dataset.y.max(),
-        "chembl": chembl_dataset.y.max(),
+        "tf-bind-10": tf_bind_10_dataset.y.max(),
         "superconductor": superconductor_dataset.y.max(),
         "ant": ant_dataset.y.max(),
         "dkitty": dkitty_dataset.y.max(),
@@ -870,7 +870,7 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gfp": db.make("GFP-Transformer-v0").y.max(),
         "tf-bind-8": db.make("TFBind8-Exact-v0").y.max(),
         "utr": db.make("UTR-ResNet-v0").y.max(),
-        #"chembl": db.make("ChEMBL-ResNet-v0").y.max(),
+        "tf-bind-10": db.make("TFBind10-Exact-v0", dataset_kwargs=dict(max_samples=10000)).y.max(),
         "superconductor": db.make("Superconductor-RandomForest-v0").y.max(),
         "ant": db.make("AntMorphology-Exact-v0").y.max(),
         "dkitty": db.make("DKittyMorphology-Exact-v0").y.max(),
