@@ -156,6 +156,6 @@ widgetsnbextension==3.5.1
 wrapt==1.12.1
 yarl==1.4.2
 zipp==3.1.0
-design-bench[all]==2.0.14
+design-bench[all]==2.0.18
 morphing-agents==1.5.1
 -e .

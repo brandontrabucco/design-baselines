@@ -801,10 +801,12 @@ def make_table(dir, percentile, modifier, group, normalize):
     import numpy as np
     import pandas as pd
 
-    from design_bench.datasets.discrete.gfp_dataset import GFPDataset
     from design_bench.datasets.discrete.tf_bind_8_dataset import TFBind8Dataset
-    from design_bench.datasets.discrete.utr_dataset import UTRDataset
     from design_bench.datasets.discrete.tf_bind_10_dataset import TFBind10Dataset
+    from design_bench.datasets.discrete.chembl_dataset import ChEMBLDataset
+    from design_bench.datasets.discrete.cifar_nas_dataset import CIFARNASDataset
+    from design_bench.datasets.discrete.utr_dataset import UTRDataset
+    from design_bench.datasets.discrete.gfp_dataset import GFPDataset
 
     from design_bench.datasets.continuous.superconductor_dataset import SuperconductorDataset
     from design_bench.datasets.continuous.ant_morphology_dataset import AntMorphologyDataset
@@ -814,66 +816,77 @@ def make_table(dir, percentile, modifier, group, normalize):
     import design_bench as db
 
     tasks = [
-        "gfp",
         "tf-bind-8",
-        "utr",
         "tf-bind-10",
+        "chembl",
+        "cifar-nas",
     ] if group == "A" else [
         "superconductor",
         "ant",
         "dkitty",
-        "hopper",
     ] if group == "B" else [
         "gfp",
+        "utr",
+        "hopper",
+    ] if group == "C" else [
         "tf-bind-8",
         "tf-bind-10",
-        "utr",
+        "chembl",
+        "cifar-nas",
         "superconductor",
         "ant",
         "dkitty",
-        "hopper",
     ]
 
-    gfp_dataset = GFPDataset()
     tf_bind_8_dataset = TFBind8Dataset()
-    utr_dataset = UTRDataset()
     tf_bind_10_dataset = TFBind10Dataset()
+    chembl_dataset = ChEMBLDataset()
+    cifar_nas_dataset = CIFARNASDataset()
 
     superconductor_dataset = SuperconductorDataset()
     ant_dataset = AntMorphologyDataset()
     dkitty_dataset = DKittyMorphologyDataset()
-    hopper_dataset = HopperControllerDataset()
+
+    utr_dataset = UTRDataset()
+    gfp_dataset = GFPDataset()
+    hopper_controller_dataset = HopperControllerDataset()
 
     task_to_min = {
-        "gfp": gfp_dataset.y.min(),
         "tf-bind-8": tf_bind_8_dataset.y.min(),
-        "utr": utr_dataset.y.min(),
         "tf-bind-10": tf_bind_10_dataset.y.min(),
+        "chembl": chembl_dataset.y.min(),
+        "cifar-nas": cifar_nas_dataset.y.min(),
         "superconductor": superconductor_dataset.y.min(),
         "ant": ant_dataset.y.min(),
         "dkitty": dkitty_dataset.y.min(),
-        "hopper": hopper_dataset.y.min(),
+        "gfp": utr_dataset.y.min(),
+        "utr": gfp_dataset.y.min(),
+        "hopper": hopper_controller_dataset.y.min(),
     }
 
     task_to_max = {
-        "gfp": gfp_dataset.y.max(),
         "tf-bind-8": tf_bind_8_dataset.y.max(),
-        "utr": utr_dataset.y.max(),
         "tf-bind-10": tf_bind_10_dataset.y.max(),
+        "chembl": chembl_dataset.y.max(),
+        "cifar-nas": cifar_nas_dataset.y.max(),
         "superconductor": superconductor_dataset.y.max(),
         "ant": ant_dataset.y.max(),
         "dkitty": dkitty_dataset.y.max(),
-        "hopper": hopper_dataset.y.max(),
+        "gfp": utr_dataset.y.max(),
+        "utr": gfp_dataset.y.max(),
+        "hopper": hopper_controller_dataset.y.max(),
     }
 
     task_to_best = {
-        "gfp": db.make("GFP-Transformer-v0").y.max(),
         "tf-bind-8": db.make("TFBind8-Exact-v0").y.max(),
-        "utr": db.make("UTR-ResNet-v0").y.max(),
         "tf-bind-10": db.make("TFBind10-Exact-v0", dataset_kwargs=dict(max_samples=10000)).y.max(),
+        "chembl": db.make("ChEMBL_MCHC_CHEMBL3885882_MorganFingerprint-RandomForest-v0").y.max(),
+        "cifar-nas": db.make("CIFARNAS-Exact-v0").y.max(),
         "superconductor": db.make("Superconductor-RandomForest-v0").y.max(),
         "ant": db.make("AntMorphology-Exact-v0").y.max(),
         "dkitty": db.make("DKittyMorphology-Exact-v0").y.max(),
+        "gfp": db.make("GFP-RandomForest-v0").y.max(),
+        "utr": db.make("GFP-RandomForest-v0").y.max(),
         "hopper": db.make("HopperController-Exact-v0").y.max(),
     }
 
@@ -893,8 +906,7 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gradient-ascent-min-ensemble",
         "gradient-ascent-mean-ensemble",
         "mins",
-        "reinforce",
-        "coms"
+        "reinforce"
     ]
 
     baseline_to_tag = {
