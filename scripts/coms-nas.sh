@@ -5,8 +5,8 @@ for OE_LIMIT in 0.4 0.5 0.6 0.8 1.0; do
 for DEVICE in "${DEVICES[@]}"; do
     for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
         CUDA_VISIBLE_DEVICES=$DEVICE coms \
-            --logging-dir ./coms-chembl/coms-chembl-$OE_LIMIT/COMs-ChEMBL_MCHC_CHEMBL3885882_MorganFingerprint-RandomForest-v0-$DEVICE-$TRIAL-$RANDOM \
-            --task ChEMBL_MCHC_CHEMBL3885882_MorganFingerprint-RandomForest-v0 \
+            --logging-dir ./coms-nas/coms-nas-$OE_LIMIT/COMs-CIFARNAS-Exact-v0-$DEVICE-$TRIAL-$RANDOM \
+            --task CIFARNAS-Exact-v0 \
             --no-task-relabel \
             --normalize-ys \
             --no-normalize-xs \
