@@ -1,4 +1,8 @@
 #!/bin/bash
+
+. /packages/anaconda3/etc/profile.d/conda.shi
+conda activate design-baselines
+
 NUM_TRIALS_PER_GPU=2
 IFS=, read -ra DEVICES <<< "$CUDA_VISIBLE_DEVICES"
 for OE_LIMIT in 0.4 0.5 0.6 0.8 1.0; do
