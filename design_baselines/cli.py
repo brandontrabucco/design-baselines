@@ -906,7 +906,8 @@ def make_table(dir, percentile, modifier, group, normalize):
         "gradient-ascent-min-ensemble",
         "gradient-ascent-mean-ensemble",
         "mins",
-        "reinforce"
+        "reinforce",
+        "coms"
     ]
 
     baseline_to_tag = {

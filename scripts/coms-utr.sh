@@ -1,7 +1,7 @@
 #!/bin/bash
 NUM_TRIALS_PER_GPU=2
 IFS=, read -ra DEVICES <<< "$CUDA_VISIBLE_DEVICES"
-for OE_LIMIT in 0.4 0.5 0.6 0.8 1.0; do
+for OE_LIMIT in 2.0; do
 for DEVICE in "${DEVICES[@]}"; do
     for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
         CUDA_VISIBLE_DEVICES=$DEVICE coms \
@@ -21,7 +21,7 @@ for DEVICE in "${DEVICES[@]}"; do
             --vae-batch-size 128 \
             --vae-val-size 500 \
             --vae-epochs 10 \
-            --particle-lr 0.05 \
+            --particle-lr 2.0 \
             --particle-train-gradient-steps 50 \
             --particle-evaluate-gradient-steps 50 \
             --particle-entropy-coefficient 0.0 \
