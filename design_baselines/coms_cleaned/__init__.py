@@ -14,129 +14,140 @@ import json
 
 @click.command()
 @click.option('--logging-dir',
-              default='coms-cleaned',
+              default='coms-cleaned', type=str,
               help='The directory in which tensorboard data is logged '
                    'during the experiment.')
-@click.option('--task',
+@click.option('--task', type=str,
               default='HopperController-Exact-v0',
               help='The name of the design-bench task to use during '
                    'the experiment.')
 @click.option('--task-relabel/--no-task-relabel',
-              default=True,
+              default=True, type=bool,
               help='Whether to relabel the real Offline MBO data with '
                    'predictions made by the oracle (this eliminates a '
                    'train-test discrepency if the oracle is not an '
                    'adequate model of the data).')
+@click.option('--task-max-samples',
+              default=None, type=int,
+              help='The maximum number of samples to include in the task '
+                   'visible training set, which can be left as None to not '
+                   'further subsample the training set.')
+@click.option('--task-distribution',
+              default=None, type=str,
+              help='The empirical distribution to be used when further '
+                   'subsampling the training set to the specific '
+                   'task_max_samples from the previous run argument.')
 @click.option('--normalize-ys/--no-normalize-ys',
-              default=True,
+              default=True, type=bool,
               help='Whether to normalize the y values in the Offline MBO '
                    'dataset before performing model-based optimization.')
 @click.option('--normalize-xs/--no-normalize-xs',
-              default=True,
+              default=True, type=bool,
               help='Whether to normalize the x values in the Offline MBO '
                    'dataset before performing model-based optimization. '
                    '(note that x must not be discrete)')
 @click.option('--in-latent-space/--not-in-latent-space',
-              default=False,
+              default=False, type=bool,
               help='Whether to embed the designs into the latent space of '
                    'a VAE before performing model-based optimization '
                    '(based on Gomez-Bombarelli et al. 2018).')
 @click.option('--vae-hidden-size',
-              default=64,
+              default=64, type=int,
               help='The hidden size of the neural network encoder '
                    'and decoder models used in the VAE.')
 @click.option('--vae-latent-size',
-              default=256,
+              default=256, type=int,
               help='The size of the VAE latent vector space.')
 @click.option('--vae-activation',
-              default='relu',
+              default='relu', type=str,
               help='The activation function used in the VAE.')
 @click.option('--vae-kernel-size',
-              default=3,
+              default=3, type=int,
               help='When the VAE is a CNN the kernel size of kernel '
                    'tensor in convolution layers.')
 @click.option('--vae-num-blocks',
-              default=4,
+              default=4, type=int,
               help='The number of convolution blocks operating at '
                    'different spatial resolutions.')
 @click.option('--vae-lr',
-              default=0.0003,
+              default=0.0003, type=float,
               help='The learning rate of the VAE.')
 @click.option('--vae-beta',
-              default=1.0,
+              default=1.0, type=float,
               help='The weight of the KL loss when training the VAE.')
 @click.option('--vae-batch-size',
-              default=32,
+              default=32, type=int,
               help='The batch size used to train the VAE.')
 @click.option('--vae-val-size',
-              default=200,
+              default=200, type=int,
               help='The number of samples in the VAE validation set.')
 @click.option('--vae-epochs',
-              default=10,
+              default=10, type=int,
               help='The number of epochs to train the VAE.')
 @click.option('--particle-lr',
-              default=0.05,
+              default=0.05, type=float,
               help='The learning rate used in the COMs inner loop.')
 @click.option('--particle-train-gradient-steps',
-              default=50,
+              default=50, type=int,
               help='The number of gradient ascent steps used in the '
                    'COMs inner loop.')
 @click.option('--particle-evaluate-gradient-steps',
-              default=50,
+              default=50, type=int,
               help='The number of gradient ascent steps used in the '
                    'COMs inner loop.')
 @click.option('--particle-entropy-coefficient',
-              default=0.0,
+              default=0.0, type=float,
               help='The entropy bonus when solving the optimization problem.')
 @click.option('--forward-model-activations',
-              default=['relu', 'relu'],
-              multiple=True,
+              default=['relu', 'relu'], multiple=True, type=str,
               help='The series of activation functions for every layer '
                    'in the forward model.')
 @click.option('--forward-model-hidden-size',
-              default=2048,
+              default=2048, type=int,
               help='The hidden size of the forward model.')
 @click.option('--forward-model-final-tanh/--no-forward-model-final-tanh',
-              default=False,
+              default=False, type=bool,
               help='Whether to use a final tanh activation as the final '
                    'layer of the forward model.')
 @click.option('--forward-model-lr',
-              default=0.0003,
+              default=0.0003, type=float,
               help='The learning rate of the forward model.')
 @click.option('--forward-model-alpha',
-              default=1.0,
+              default=1.0, type=float,
               help='The initial lagrange multiplier of the forward model.')
 @click.option('--forward-model-alpha-lr',
-              default=0.01,
+              default=0.01, type=float,
               help='The learning rate of the lagrange multiplier.')
 @click.option('--forward-model-overestimation-limit',
-              default=0.5,
+              default=0.5, type=float,
               help='The target used when tuning the lagrange multiplier.')
 @click.option('--forward-model-noise-std',
-              default=0.0,
+              default=0.0, type=float,
               help='Standard deviation of continuous noise added to '
                    'designs when training the forward model.')
 @click.option('--forward-model-batch-size',
-              default=32,
+              default=32, type=int,
               help='The batch size used when training the forward model.')
 @click.option('--forward-model-val-size',
-              default=200,
+              default=200, type=int,
               help='The number of samples in the forward model '
                    'validation set.')
 @click.option('--forward-model-epochs',
-              default=50,
+              default=50, type=int,
               help='The number of epochs to train the forward model.')
 @click.option('--evaluation-samples',
-              default=128,
+              default=128, type=int,
               help='The samples to generate when solving the model-based '
                    'optimization problem.')
 @click.option('--fast/--not-fast',
-              default=True,
+              default=True, type=bool,
               help='Whether to run experiment quickly and only log once.')
 def coms_cleaned(
         logging_dir,
         task,
         task_relabel,
+        task_max_samples,
+        task_distribution,
         normalize_ys,
         normalize_xs,
         in_latent_space,
@@ -177,6 +188,8 @@ def coms_cleaned(
         logging_dir=logging_dir,
         task=task,
         task_relabel=task_relabel,
+        task_max_samples=task_max_samples,
+        task_distribution=task_distribution,
         normalize_ys=normalize_ys,
         normalize_xs=normalize_xs,
         in_latent_space=in_latent_space,
@@ -218,7 +231,10 @@ def coms_cleaned(
         json.dump(params, f, indent=4)
 
     # create a model-based optimization task
-    task = StaticGraphTask(task, relabel=task_relabel)
+    task = StaticGraphTask(task, relabel=task_relabel,
+                           dataset_kwargs=dict(
+                               max_samples=task_max_samples,
+                               distribution=task_distribution))
 
     if normalize_ys:
         task.map_normalize_y()

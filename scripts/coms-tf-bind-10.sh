@@ -10,6 +10,8 @@ for DEVICE in "${DEVICES[@]}"; do
             --logging-dir ./coms-tf-bind-10/coms-tf-bind-10-$OE_LIMIT/COMs-TFBind10-Exact-v0-$DEVICE-$TRIAL-$RANDOM \
             --task TFBind10-Exact-v0 \
             --no-task-relabel \
+            --task-max-samples 10000 \
+            --task-distribution uniform \
             --normalize-ys \
             --no-normalize-xs \
             --not-in-latent-space \
