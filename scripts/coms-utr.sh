@@ -6,8 +6,8 @@ for DEVICE in "${DEVICES[@]}"; do
     for TRIAL in $(seq $NUM_TRIALS_PER_GPU); do
         CUDA_VISIBLE_DEVICES=$DEVICE coms \
             --logging-dir ~/coms-utr/coms-utr-$OE_LIMIT/COMs-UTR-Transformer-v0-$DEVICE-$TRIAL-$RANDOM \
-            --task UTR-Transformer-v0 \
-            --no-task-relabel \
+            --task UTR-ResNet-v0 \
+            --task-relabel \
             --normalize-ys \
             --no-normalize-xs \
             --not-in-latent-space \
