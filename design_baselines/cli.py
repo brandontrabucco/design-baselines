@@ -840,7 +840,7 @@ def make_table(dir, percentile, modifier, group, normalize):
 
     tf_bind_8_dataset = TFBind8Dataset()
     tf_bind_10_dataset = TFBind10Dataset()
-    chembl_dataset = ChEMBLDataset()
+    chembl_dataset = ChEMBLDataset(assay_chembl_id="CHEMBL3885882", standard_type="MCHC")
     cifar_nas_dataset = CIFARNASDataset()
 
     superconductor_dataset = SuperconductorDataset()
