@@ -859,8 +859,8 @@ def make_table(dir, percentile, modifier, group, normalize):
         "superconductor": superconductor_dataset.y.min(),
         "ant": ant_dataset.y.min(),
         "dkitty": dkitty_dataset.y.min(),
-        "gfp": utr_dataset.y.min(),
-        "utr": gfp_dataset.y.min(),
+        "utr": utr_dataset.y.min(),
+        "gfp": gfp_dataset.y.min(),
         "hopper": hopper_controller_dataset.y.min(),
     }
 
@@ -872,8 +872,8 @@ def make_table(dir, percentile, modifier, group, normalize):
         "superconductor": superconductor_dataset.y.max(),
         "ant": ant_dataset.y.max(),
         "dkitty": dkitty_dataset.y.max(),
-        "gfp": utr_dataset.y.max(),
-        "utr": gfp_dataset.y.max(),
+        "utr": utr_dataset.y.max(),
+        "gfp": gfp_dataset.y.max(),
         "hopper": hopper_controller_dataset.y.max(),
     }
 
@@ -885,8 +885,8 @@ def make_table(dir, percentile, modifier, group, normalize):
         "superconductor": db.make("Superconductor-RandomForest-v0").y.max(),
         "ant": db.make("AntMorphology-Exact-v0").y.max(),
         "dkitty": db.make("DKittyMorphology-Exact-v0").y.max(),
-        "gfp": db.make("GFP-RandomForest-v0").y.max(),
-        "utr": db.make("GFP-RandomForest-v0").y.max(),
+        "gfp": db.make("GFP-Transformer-v0").y.max(),
+        "utr": db.make("UTR-ResNet-v0", relabel=True).y.max(),
         "hopper": db.make("HopperController-Exact-v0").y.max(),
     }
 
@@ -947,7 +947,7 @@ def make_table(dir, percentile, modifier, group, normalize):
             if baseline == "coms":
 
                 dirs = [d for d in glob.glob(os.path.join(
-                    dir, f"coms-{task}/coms-{task}-*/*")) if os.path.isdir(d)]
+                    dir, f"coms-{task}/coms-{task}-{modifier}*/*")) if os.path.isdir(d)]
 
             else:
 
